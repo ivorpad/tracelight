@@ -1,0 +1,1253 @@
+{
+ "tour": 1,
+ "run": {
+  "file": "demo.ts",
+  "steps": 266,
+  "exitCode": 0,
+  "durationMs": 363,
+  "http": 0,
+  "llm": 0,
+  "io": {
+   "http": "recorded",
+   "fileWrites": "from the statements' source; the recording has no file event",
+   "subprocess": "from the statements' source; the recording has no process event"
+  }
+ },
+ "goal": {
+  "kind": "output",
+  "step": 265,
+  "text": "  TOTAL     : 0.016129"
+ },
+ "small": false,
+ "budget": {
+  "tokens": 40000,
+  "estimate": 4259,
+  "found": 33,
+  "kept": 33,
+  "dropped": 0
+ },
+ "chapters": [
+  {
+   "id": "c1",
+   "title": "printRanking",
+   "opens": [
+    "printRanking"
+   ],
+   "kind": "call",
+   "steps": [
+    0,
+    23
+   ],
+   "share": 0.0902,
+   "http": 0,
+   "llm": 0,
+   "candidates": 3,
+   "prose": {
+    "title": "Two rankings",
+    "text": "The input: a BM25 list and a vector list over the same documents."
+   }
+  },
+  {
+   "id": "c2",
+   "title": "printRanking",
+   "opens": [
+    "printRanking"
+   ],
+   "kind": "call",
+   "steps": [
+    24,
+    39
+   ],
+   "share": 0.0602,
+   "http": 0,
+   "llm": 0,
+   "candidates": 1
+  },
+  {
+   "id": "c3",
+   "title": "rrf",
+   "opens": [
+    "rrf"
+   ],
+   "kind": "phase",
+   "steps": [
+    40,
+    50
+   ],
+   "share": 0.0414,
+   "http": 0,
+   "llm": 0,
+   "candidates": 3
+  },
+  {
+   "id": "c4",
+   "title": "reciprocalRank",
+   "opens": [
+    "reciprocalRank"
+   ],
+   "kind": "phase",
+   "steps": [
+    51,
+    108
+   ],
+   "share": 0.218,
+   "http": 0,
+   "llm": 0,
+   "candidates": 3,
+   "prose": {
+    "title": "Scoring each rank",
+    "text": "`reciprocalRank` turns each rank into a small fraction that is added to that document's score."
+   }
+  },
+  {
+   "id": "c5",
+   "title": "main",
+   "opens": [
+    "main"
+   ],
+   "kind": "statements",
+   "steps": [
+    109,
+    175
+   ],
+   "share": 0.2519,
+   "http": 0,
+   "llm": 0,
+   "candidates": 13,
+   "prose": {
+    "title": "The fused order",
+    "text": "Sorting by score puts 'C' first, ahead of the BM25 leader."
+   }
+  },
+  {
+   "id": "c6",
+   "title": "reciprocalRank x8",
+   "opens": [
+    "reciprocalRank x8"
+   ],
+   "kind": "call",
+   "steps": [
+    176,
+    265
+   ],
+   "share": 0.3383,
+   "http": 0,
+   "llm": 0,
+   "candidates": 10,
+   "prose": {
+    "title": "One document explained",
+    "text": "The breakdown for a document missing from one list."
+   }
+  }
+ ],
+ "candidates": [
+  {
+   "id": "s0-5bd7d8",
+   "key": "5bd7d8",
+   "step": 0,
+   "chapter": "c1",
+   "file": "demo.ts",
+   "line": 15,
+   "function": "<module>",
+   "scopeId": 0,
+   "signals": [
+    {
+     "signal": "chapter:start",
+     "reason": "chapter opened by printRanking"
+    },
+    {
+     "signal": "spine:why",
+     "reason": "DOCUMENTS = { A: { id: 'A', text: 'Button component with primary and se…"
+    }
+   ],
+   "statement": "const DOCUMENTS: Record<string, Doc> = {\n  A: { id: 'A', text: 'Button component with primary and secondary variants' },\n  B: { id: 'B', text: 'Form input component with validation' },\n  C: { id: 'C', text: 'Primary button used for importa…",
+   "score": 4.5,
+   "values": [
+    {
+     "id": "s0-5bd7d8.v1",
+     "role": "set",
+     "name": "DOCUMENTS",
+     "length": 132,
+     "text": "{ A: { id: 'A', text: 'Button component with primary and secondary variants' }, B: { id: 'B', text: 'Form input compone…(+203 chars)"
+    }
+   ]
+  },
+  {
+   "id": "s1-ea11b9",
+   "key": "ea11b9",
+   "step": 1,
+   "chapter": "c1",
+   "file": "demo.ts",
+   "line": 28,
+   "function": "<module>",
+   "scopeId": 0,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "bm25Ranking = [ 'A', 'C', 'B', 'D' ]"
+    }
+   ],
+   "statement": "const bm25Ranking = [\n  'A', // rank 1\n  'C', // rank 2\n  'B', // rank 3\n  'D', // rank 4\n];",
+   "score": 3,
+   "values": [
+    {
+     "id": "s1-ea11b9.v1",
+     "role": "set",
+     "name": "bm25Ranking",
+     "length": 22,
+     "text": "[ 'A', 'C', 'B', 'D' ]"
+    }
+   ],
+   "prose": {
+    "title": "BM25 puts A first",
+    "text": "The keyword ranking is the first input; 'A' leads it and 'C' is second.",
+    "order": 1
+   }
+  },
+  {
+   "id": "s2-eca00c",
+   "key": "eca00c",
+   "step": 2,
+   "chapter": "c1",
+   "file": "demo.ts",
+   "line": 35,
+   "function": "<module>",
+   "scopeId": 0,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "vectorRanking = [ 'C', 'E', 'A', 'B' ]"
+    }
+   ],
+   "statement": "const vectorRanking = [\n  'C', // rank 1\n  'E', // rank 2\n  'A', // rank 3\n  'B', // rank 4\n];",
+   "score": 3,
+   "values": [
+    {
+     "id": "s2-eca00c.v1",
+     "role": "set",
+     "name": "vectorRanking",
+     "length": 22,
+     "text": "[ 'C', 'E', 'A', 'B' ]"
+    }
+   ]
+  },
+  {
+   "id": "s24-758180",
+   "key": "758180",
+   "step": 24,
+   "chapter": "c2",
+   "file": "demo.ts",
+   "line": 86,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "chapter:start",
+     "reason": "chapter opened by printRanking"
+    }
+   ],
+   "statement": "printRanking('Vector ranking', vectorRanking);",
+   "score": 4,
+   "values": []
+  },
+  {
+   "id": "s40-2e88b5",
+   "key": "2e88b5",
+   "step": 40,
+   "chapter": "c3",
+   "file": "demo.ts",
+   "line": 88,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "chapter:start",
+     "reason": "chapter opened by rrf"
+    },
+    {
+     "signal": "spine:why",
+     "reason": "rankings = { BM25: [ 'A', 'C', 'B', 'D' ], Vector: [ 'C', 'E', 'A', 'B…"
+    }
+   ],
+   "statement": "const rankings = {\n    BM25: bm25Ranking,\n    Vector: vectorRanking,\n  };",
+   "score": 4.5,
+   "values": [
+    {
+     "id": "s40-2e88b5.v1",
+     "role": "set",
+     "name": "rankings",
+     "length": 64,
+     "text": "{ BM25: [ 'A', 'C', 'B', 'D' ], Vector: [ 'C', 'E', 'A', 'B' ] }"
+    }
+   ]
+  },
+  {
+   "id": "s42-110aab",
+   "key": "110aab",
+   "step": 42,
+   "chapter": "c3",
+   "file": "demo.ts",
+   "line": 95,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "narrative:binds",
+     "reason": "main keeps a call's result"
+    },
+    {
+     "signal": "spine:why",
+     "reason": "scores = { A: 0.032266458495966696, C: 0.03252247488101534, B: 0.031…"
+    }
+   ],
+   "statement": "const scores = rrf(rankings, 60);",
+   "score": 3.5,
+   "values": [
+    {
+     "id": "s42-110aab.v1",
+     "role": "set",
+     "name": "scores",
+     "length": 113,
+     "text": "{ A: 0.032266458495966696, C: 0.03252247488101534, B: 0.03149801587301587, D: 0.015625, E: 0.016129032258064516 }"
+    }
+   ],
+   "prose": {
+    "title": "Scores after both lists",
+    "text": "C ends highest because it is near the top of both lists.",
+    "order": 2,
+    "quote": {
+     "field": "s42-110aab.v1",
+     "name": "scores",
+     "from": 27,
+     "to": 49,
+     "text": "C: 0.03252247488101534",
+     "length": 113
+    }
+   }
+  },
+  {
+   "id": "s44-2aac69",
+   "key": "2aac69",
+   "step": 44,
+   "chapter": "c3",
+   "file": "demo.ts",
+   "line": 53,
+   "function": "rrf",
+   "scopeId": 4,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "scores = {}"
+    }
+   ],
+   "statement": "const scores: Record<string, number> = {};",
+   "score": 3,
+   "values": [
+    {
+     "id": "s44-2aac69.v1",
+     "role": "set",
+     "name": "scores",
+     "length": 2,
+     "text": "{}"
+    }
+   ]
+  },
+  {
+   "id": "s51-cd1dc2",
+   "key": "cd1dc2",
+   "step": 51,
+   "chapter": "c4",
+   "file": "demo.ts",
+   "line": 60,
+   "function": "rrf",
+   "scopeId": 4,
+   "signals": [
+    {
+     "signal": "chapter:start",
+     "reason": "chapter opened by reciprocalRank"
+    },
+    {
+     "signal": "narrative:binds",
+     "reason": "rrf keeps a call's result"
+    }
+   ],
+   "statement": "const contribution = reciprocalRank(rank, k);",
+   "score": 4.5,
+   "values": [
+    {
+     "id": "s51-cd1dc2.v1",
+     "role": "set",
+     "name": "contribution",
+     "length": 19,
+     "text": "0.01639344262295082"
+    },
+    {
+     "id": "s51-cd1dc2.v2",
+     "role": "call",
+     "name": "reciprocalRank()",
+     "length": 19,
+     "text": "0.01639344262295082"
+    }
+   ],
+   "prose": {
+    "title": "The top rank is worth 0.01639344262295082",
+    "text": "`reciprocalRank` gives the top rank 0.01639344262295082, so a first place is worth little more than a second.",
+    "order": 3
+   }
+  },
+  {
+   "id": "s54-8c1e3f",
+   "key": "8c1e3f",
+   "step": 54,
+   "chapter": "c4",
+   "file": "demo.ts",
+   "line": 62,
+   "function": "rrf",
+   "scopeId": 4,
+   "signals": [
+    {
+     "signal": "chapter:result",
+     "reason": "what reciprocalRank produced lands"
+    }
+   ],
+   "statement": "console.log(`${documentId}: rank=${rank} => 1 / (${k} + ${rank}) = ${contribution.toFixed(6)}`);",
+   "score": 3,
+   "values": [
+    {
+     "id": "s54-8c1e3f.v1",
+     "role": "printed",
+     "name": "output",
+     "length": 36,
+     "text": "A: rank=1 => 1 / (60 + 1) = 0.016393"
+    },
+    {
+     "id": "s54-8c1e3f.v2",
+     "role": "set",
+     "name": "contribution",
+     "length": 19,
+     "text": "0.01639344262295082"
+    },
+    {
+     "id": "s54-8c1e3f.v3",
+     "role": "call",
+     "name": "reciprocalRank()",
+     "length": 19,
+     "text": "0.01639344262295082"
+    }
+   ]
+  },
+  {
+   "id": "s108-c7a0dc",
+   "key": "c7a0dc",
+   "step": 108,
+   "chapter": "c4",
+   "file": "demo.ts",
+   "line": 68,
+   "function": "rrf",
+   "scopeId": 4,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "on the way to the goal"
+    }
+   ],
+   "statement": "return scores;",
+   "score": 3,
+   "values": [
+    {
+     "id": "s108-c7a0dc.v1",
+     "role": "returned",
+     "name": "rrf returned",
+     "length": 113,
+     "sameAs": "s42-110aab.v1"
+    }
+   ]
+  },
+  {
+   "id": "s109-dd7111",
+   "key": "dd7111",
+   "step": 109,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 97,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "chapter:start",
+     "reason": "chapter opened by main"
+    },
+    {
+     "signal": "narrative:binds",
+     "reason": "main keeps a call's result"
+    },
+    {
+     "signal": "spine:why",
+     "reason": "fusedRanking = [ [ 'C', 0.03252247488101534 ], [ 'A', 0.032266458495966696…"
+    }
+   ],
+   "statement": "const fusedRanking = Object.entries(scores).sort((a, b) => b[1] - a[1]);",
+   "score": 5,
+   "values": [
+    {
+     "id": "s109-dd7111.v1",
+     "role": "set",
+     "name": "fusedRanking",
+     "length": 131,
+     "text": "[ [ 'C', 0.03252247488101534 ], [ 'A', 0.032266458495966696 ], [ 'B', 0.03149801587301587 ], [ 'E', 0.01612903225806451…(+24 chars)"
+    },
+    {
+     "id": "s109-dd7111.v2",
+     "role": "call",
+     "name": "<arrow>()",
+     "length": 23,
+     "text": "-0.00025601638504864355"
+    }
+   ],
+   "prose": {
+    "title": "Sorted by fused score",
+    "text": "The sort puts C at 0.03252247488101534 ahead of A.",
+    "order": 4
+   }
+  },
+  {
+   "id": "s117-0923b2",
+   "key": "0923b2",
+   "step": 117,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 99,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "chapter:result",
+     "reason": "what main produced lands"
+    }
+   ],
+   "statement": "console.log('\\n');",
+   "score": 3,
+   "values": [
+    {
+     "id": "s117-0923b2.v1",
+     "role": "printed",
+     "name": "output",
+     "length": 2,
+     "text": "\\n"
+    },
+    {
+     "id": "s117-0923b2.v2",
+     "role": "set",
+     "name": "fusedRanking",
+     "length": 131,
+     "text": "[ [ 'C', 0.03252247488101534 ], [ 'A', 0.032266458495966696 ], [ 'B', 0.03149801587301587 ], [ 'E', 0.01612903225806451…(+24 chars)"
+    },
+    {
+     "id": "s117-0923b2.v3",
+     "role": "call",
+     "name": "<arrow>()",
+     "length": 23,
+     "text": "-0.00025601638504864355"
+    }
+   ]
+  },
+  {
+   "id": "s122-b59ba7",
+   "key": "b59ba7",
+   "step": 122,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 104,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "documentId = 'C'"
+    }
+   ],
+   "statement": "for (const [index, [documentId, score]] of fusedRanking.entries()) {",
+   "score": 3,
+   "values": [
+    {
+     "id": "s122-b59ba7.v1",
+     "role": "set",
+     "name": "index",
+     "length": 1,
+     "text": "0"
+    },
+    {
+     "id": "s122-b59ba7.v2",
+     "role": "set",
+     "name": "documentId",
+     "length": 3,
+     "text": "'C'"
+    },
+    {
+     "id": "s122-b59ba7.v3",
+     "role": "set",
+     "name": "score",
+     "length": 19,
+     "text": "0.03252247488101534"
+    }
+   ]
+  },
+  {
+   "id": "s123-19a86e",
+   "key": "19a86e",
+   "step": 123,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 105,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "document = { id: 'C', text: 'Primary button used for important actions…"
+    }
+   ],
+   "statement": "const document = DOCUMENTS[documentId];",
+   "score": 3,
+   "values": [
+    {
+     "id": "s123-19a86e.v1",
+     "role": "set",
+     "name": "document",
+     "length": 62,
+     "text": "{ id: 'C', text: 'Primary button used for important actions' }"
+    }
+   ]
+  },
+  {
+   "id": "s124-81727e",
+   "key": "81727e",
+   "step": 124,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 106,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "on the way to the goal"
+    }
+   ],
+   "statement": "console.log(`${index + 1}. ${documentId} RRF=${score.toFixed(6)}`);",
+   "score": 3,
+   "values": [
+    {
+     "id": "s124-81727e.v1",
+     "role": "printed",
+     "name": "output",
+     "length": 17,
+     "text": "1. C RRF=0.032522"
+    }
+   ],
+   "prose": {
+    "title": "The winner printed",
+    "text": "The report rounds the score to 0.032522.",
+    "order": 5
+   }
+  },
+  {
+   "id": "s125-54e72c",
+   "key": "54e72c",
+   "step": 125,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 107,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "on the way to the goal"
+    }
+   ],
+   "statement": "console.log(`   ${document.text}`);",
+   "score": 3,
+   "values": [
+    {
+     "id": "s125-54e72c.v1",
+     "role": "printed",
+     "name": "output",
+     "length": 44,
+     "text": "   Primary button used for important actions"
+    }
+   ]
+  },
+  {
+   "id": "s146-52e8a3",
+   "key": "52e8a3",
+   "step": 146,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 115,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "narrative:binds",
+     "reason": "main keeps a call's result"
+    }
+   ],
+   "statement": "const allDocuments = new Set<string>();",
+   "score": 3,
+   "values": [
+    {
+     "id": "s146-52e8a3.v1",
+     "role": "set",
+     "name": "allDocuments",
+     "length": 9,
+     "text": "Set(0) {}"
+    }
+   ]
+  },
+  {
+   "id": "s158-68aae8",
+   "key": "68aae8",
+   "step": 158,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 117,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "ranking = [ 'C', 'E', 'A', 'B' ]"
+    }
+   ],
+   "statement": "for (const ranking of Object.values(rankings)) {",
+   "score": 3,
+   "values": [
+    {
+     "id": "s158-68aae8.v1",
+     "role": "set",
+     "name": "allDocuments",
+     "length": 29,
+     "text": "Set(4) { 'A', 'C', 'B', 'D' }"
+    },
+    {
+     "id": "s158-68aae8.v2",
+     "role": "set",
+     "name": "ranking",
+     "length": 22,
+     "text": "[ 'C', 'E', 'A', 'B' ]"
+    }
+   ]
+  },
+  {
+   "id": "s164-c23ce2",
+   "key": "c23ce2",
+   "step": 164,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 118,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "allDocuments = Set(5) { 'A', 'C', 'B', 'D', 'E' }"
+    }
+   ],
+   "statement": "for (const documentId of ranking) allDocuments.add(documentId);",
+   "score": 3,
+   "values": [
+    {
+     "id": "s164-c23ce2.v1",
+     "role": "set",
+     "name": "allDocuments",
+     "length": 34,
+     "text": "Set(5) { 'A', 'C', 'B', 'D', 'E' }"
+    },
+    {
+     "id": "s164-c23ce2.v2",
+     "role": "set",
+     "name": "documentId",
+     "length": 3,
+     "text": "'A'"
+    }
+   ]
+  },
+  {
+   "id": "s169-58e7fc",
+   "key": "58e7fc",
+   "step": 169,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 121,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "documentId = 'A'"
+    }
+   ],
+   "statement": "for (const documentId of [...allDocuments].sort()) {",
+   "score": 3,
+   "values": [
+    {
+     "id": "s169-58e7fc.v1",
+     "role": "set",
+     "name": "documentId",
+     "length": 3,
+     "text": "'A'"
+    }
+   ]
+  },
+  {
+   "id": "s170-8de5b8",
+   "key": "8de5b8",
+   "step": 170,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 122,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "on the way to the goal"
+    }
+   ],
+   "statement": "console.log(`\\nDocument ${documentId}`);",
+   "score": 3,
+   "values": [
+    {
+     "id": "s170-8de5b8.v1",
+     "role": "printed",
+     "name": "output",
+     "length": 12,
+     "text": "\\nDocument A"
+    }
+   ]
+  },
+  {
+   "id": "s173-f48554",
+   "key": "f48554",
+   "step": 173,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 126,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "rankingName = 'BM25'"
+    }
+   ],
+   "statement": "for (const [rankingName, ranking] of Object.entries(rankings)) {",
+   "score": 3,
+   "values": [
+    {
+     "id": "s173-f48554.v1",
+     "role": "set",
+     "name": "rankingName",
+     "length": 6,
+     "text": "'BM25'"
+    },
+    {
+     "id": "s173-f48554.v2",
+     "role": "set",
+     "name": "ranking",
+     "length": 22,
+     "text": "[ 'A', 'C', 'B', 'D' ]"
+    }
+   ]
+  },
+  {
+   "id": "s175-b6768e",
+   "key": "b6768e",
+   "step": 175,
+   "chapter": "c5",
+   "file": "demo.ts",
+   "line": 132,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "narrative:binds",
+     "reason": "main keeps a call's result"
+    },
+    {
+     "signal": "spine:why",
+     "reason": "rank = 1"
+    }
+   ],
+   "statement": "const rank = ranking.indexOf(documentId) + 1;",
+   "score": 3.5,
+   "values": [
+    {
+     "id": "s175-b6768e.v1",
+     "role": "set",
+     "name": "rank",
+     "length": 1,
+     "text": "1"
+    }
+   ]
+  },
+  {
+   "id": "s176-42475a",
+   "key": "42475a",
+   "step": 176,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 133,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "chapter:start",
+     "reason": "chapter opened by reciprocalRank x8"
+    },
+    {
+     "signal": "narrative:binds",
+     "reason": "main keeps a call's result"
+    },
+    {
+     "signal": "spine:why",
+     "reason": "contribution = 0.01639344262295082"
+    }
+   ],
+   "statement": "const contribution = reciprocalRank(rank, 60);",
+   "score": 5,
+   "values": [
+    {
+     "id": "s176-42475a.v1",
+     "role": "set",
+     "name": "contribution",
+     "length": 19,
+     "text": "0.01639344262295082"
+    },
+    {
+     "id": "s176-42475a.v2",
+     "role": "call",
+     "name": "reciprocalRank()",
+     "length": 19,
+     "text": "0.01639344262295082"
+    }
+   ]
+  },
+  {
+   "id": "s178-e8e880",
+   "key": "e8e880",
+   "step": 178,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 49,
+   "function": "reciprocalRank",
+   "scopeId": 20,
+   "signals": [
+    {
+     "signal": "spine:return",
+     "reason": "reciprocalRank returns the value the goal is built from"
+    },
+    {
+     "signal": "spine:why",
+     "reason": "on the way to the goal"
+    }
+   ],
+   "statement": "return 1 / (k + rank);",
+   "score": 3,
+   "values": [
+    {
+     "id": "s178-e8e880.v1",
+     "role": "returned",
+     "name": "reciprocalRank returned",
+     "length": 19,
+     "text": "0.01639344262295082"
+    }
+   ]
+  },
+  {
+   "id": "s179-2d474d",
+   "key": "2d474d",
+   "step": 179,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 135,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "chapter:result",
+     "reason": "what reciprocalRank x8 produced lands"
+    }
+   ],
+   "statement": "total += contribution;",
+   "score": 3,
+   "values": [
+    {
+     "id": "s179-2d474d.v1",
+     "role": "set",
+     "name": "total",
+     "length": 19,
+     "text": "0.01639344262295082"
+    },
+    {
+     "id": "s179-2d474d.v2",
+     "role": "set",
+     "name": "contribution",
+     "length": 19,
+     "text": "0.01639344262295082"
+    },
+    {
+     "id": "s179-2d474d.v3",
+     "role": "call",
+     "name": "reciprocalRank()",
+     "length": 19,
+     "text": "0.01639344262295082"
+    }
+   ]
+  },
+  {
+   "id": "s180-b12fc6",
+   "key": "b12fc6",
+   "step": 180,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 137,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "on the way to the goal"
+    }
+   ],
+   "statement": "console.log(`  ${rankingName.padEnd(10)}: rank ${rank} -> 1/(60+${rank}) = ${contribution.toFixed(6)}`);",
+   "score": 3,
+   "values": [
+    {
+     "id": "s180-b12fc6.v1",
+     "role": "printed",
+     "name": "output",
+     "length": 43,
+     "text": "  BM25      : rank 1 -> 1/(60+1) = 0.016393"
+    }
+   ]
+  },
+  {
+   "id": "s245-ba6d95",
+   "key": "ba6d95",
+   "step": 245,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 127,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "exception:rare-arm",
+     "reason": "took true in 2 of 10 passes"
+    }
+   ],
+   "statement": "if (!ranking.includes(documentId)) {",
+   "score": 2,
+   "values": [
+    {
+     "id": "s245-ba6d95.v1",
+     "role": "took",
+     "name": "branch",
+     "length": 44,
+     "text": "if (!ranking.includes(documentId)) took true"
+    }
+   ],
+   "prose": {
+    "title": "A document missing from a list",
+    "text": "This arm runs only when a document is absent from a ranking, so it adds nothing.",
+    "order": 6
+   }
+  },
+  {
+   "id": "s246-f4140b",
+   "key": "f4140b",
+   "step": 246,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 128,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "on the way to the goal"
+    }
+   ],
+   "statement": "console.log(`  ${rankingName.padEnd(10)}: not retrieved -> +0`);",
+   "score": 3,
+   "values": [
+    {
+     "id": "s246-f4140b.v1",
+     "role": "printed",
+     "name": "output",
+     "length": 33,
+     "text": "  Vector    : not retrieved -> +0"
+    }
+   ]
+  },
+  {
+   "id": "s251-f2a40d",
+   "key": "f2a40d",
+   "step": 251,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 124,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "total = 0"
+    }
+   ],
+   "statement": "let total = 0;",
+   "score": 3,
+   "values": [
+    {
+     "id": "s251-f2a40d.v1",
+     "role": "set",
+     "name": "total",
+     "length": 1,
+     "text": "0"
+    }
+   ],
+   "prose": {
+    "title": "A running total starts",
+    "text": "The breakdown for the last document starts `total` again from 0.",
+    "order": 7
+   }
+  },
+  {
+   "id": "s260-42475a",
+   "key": "42475a",
+   "step": 260,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 133,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:why",
+     "reason": "contribution = 0.016129032258064516"
+    }
+   ],
+   "statement": "const contribution = reciprocalRank(rank, 60);",
+   "score": 2.75,
+   "repeat": true,
+   "values": [
+    {
+     "id": "s260-42475a.v1",
+     "role": "set",
+     "name": "contribution",
+     "length": 20,
+     "text": "0.016129032258064516"
+    },
+    {
+     "id": "s260-42475a.v2",
+     "role": "call",
+     "name": "reciprocalRank()",
+     "length": 20,
+     "text": "0.016129032258064516"
+    }
+   ]
+  },
+  {
+   "id": "s262-e8e880",
+   "key": "e8e880",
+   "step": 262,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 49,
+   "function": "reciprocalRank",
+   "scopeId": 27,
+   "signals": [
+    {
+     "signal": "spine:return",
+     "reason": "reciprocalRank returns the value the goal is built from"
+    },
+    {
+     "signal": "spine:why",
+     "reason": "on the way to the goal"
+    }
+   ],
+   "statement": "return 1 / (k + rank);",
+   "score": 2.75,
+   "repeat": true,
+   "values": [
+    {
+     "id": "s262-e8e880.v1",
+     "role": "returned",
+     "name": "reciprocalRank returned",
+     "length": 20,
+     "text": "0.016129032258064516"
+    }
+   ]
+  },
+  {
+   "id": "s265-9d21bf",
+   "key": "9d21bf",
+   "step": 265,
+   "chapter": "c6",
+   "file": "demo.ts",
+   "line": 140,
+   "function": "main",
+   "scopeId": 1,
+   "signals": [
+    {
+     "signal": "spine:goal",
+     "reason": "the goal: the program's output"
+    },
+    {
+     "signal": "spine:why",
+     "reason": "on the way to the goal"
+    }
+   ],
+   "statement": "console.log(`  ${'TOTAL'.padEnd(10)}: ${total.toFixed(6)}`);",
+   "score": 5,
+   "values": [
+    {
+     "id": "s265-9d21bf.v1",
+     "role": "printed",
+     "name": "output",
+     "length": 22,
+     "text": "  TOTAL     : 0.016129"
+    }
+   ],
+   "prose": {
+    "title": "The total",
+    "text": "The last line prints the summed contribution, 0.016129.",
+    "order": 8
+   }
+  }
+ ],
+ "timing": {
+  "ms": 83,
+  "whyCalls": 9
+ },
+ "intro": "The script fuses two rankings of the same documents with reciprocal rank fusion, then prints how each document's score was built. A document's score is the sum of one small fraction per list it appears in.",
+ "pick": [
+  "s1-ea11b9",
+  "s42-110aab",
+  "s51-cd1dc2",
+  "s109-dd7111",
+  "s124-81727e",
+  "s245-ba6d95",
+  "s251-f2a40d",
+  "s265-9d21bf"
+ ],
+ "prose": {
+  "stops": 8,
+  "chapters": 4,
+  "warnings": [
+   "c3 holds a picked stop but has no title; the page uses the function that opens it"
+  ]
+ }
+}

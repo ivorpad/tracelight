@@ -1,0 +1,17 @@
+{
+  "Tracelight Snap": {
+    "prefix": ["snap"],
+    "body": ["/*{{", "$TM_SELECTED_TEXT$0", "}}*/"],
+    "description": "Tracelight snap: runs the fenced code in module scope"
+  },
+  "Tracelight Snap With Output": {
+    "prefix": ["snapo"],
+    "body": ["/*{{", "$TM_SELECTED_TEXT$0", "}}*/", "//» "],
+    "description": "Tracelight snap whose output is written back into the file"
+  },
+  "Tracelight Live Comment": {
+    "prefix": ["?"],
+    "body": ["// ?$0"],
+    "description": "Log the value of this statement / expression"
+  }
+}
