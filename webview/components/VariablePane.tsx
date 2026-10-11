@@ -85,7 +85,7 @@ export function VariablePane(props: VariablePaneProps) {
 
 function VariableBody(props: VariablePaneProps) {
   const view = props.view;
-  if (!view || !view.name) return <p class="pk-caption pk-caption-sub pk-variable-hint">Type a name above, or put the cursor on one and run "Pyokka: Show Variable History".</p>;
+  if (!view || !view.name) return <p class="pk-caption pk-caption-sub pk-variable-hint">Type a name above, or put the cursor on one and run "Tracelight: Show Variable History".</p>;
   if (view.error) {
     return (
       <div class="pk-notice" role="status">
@@ -111,7 +111,7 @@ function VariableBody(props: VariablePaneProps) {
       ))}
       {history.truncated && (
         <p class="pk-caption pk-caption-sub pk-variable-hint">
-          {history.total - history.changes.length} more changes; the CLI narrows them: <code>pyokka var --live {view.name} --file F</code>.
+          {history.total - history.changes.length} more changes; the CLI narrows them: <code>tracelight var --live {view.name} --file F</code>.
         </p>
       )}
     </div>

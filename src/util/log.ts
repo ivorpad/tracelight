@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 let channel: vscode.OutputChannel | undefined;
 
 export function outputChannel(): vscode.OutputChannel {
-  if (!channel) channel = vscode.window.createOutputChannel('Pyokka');
+  if (!channel) channel = vscode.window.createOutputChannel('Tracelight');
   return channel;
 }
 

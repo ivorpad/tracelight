@@ -1,7 +1,7 @@
 /**
  * The names scanner behind the execution graph's statement nodes (`src/session/names.ts`): the
  * targets and reads of a statement's source, string literals and comments handled as the
- * contract's scanner says. `python/pyokka_runtime/agent/names.py` follows the same steps.
+ * contract's scanner says. `node/src/agent/names.ts` follows the same steps.
  */
 import { describe, expect, it } from 'vitest';
 import { namesOf, stripCode, stripComments } from '../../src/session/names';

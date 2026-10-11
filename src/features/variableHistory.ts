@@ -1,5 +1,5 @@
 /**
- * "Pyokka: Show Variable History" and "Pyokka: Why This Value": which name, and which value, to
+ * "Tracelight: Show Variable History" and "Tracelight: Why This Value": which name, and which value, to
  * explain. An argument wins (the panel, a menu, a hover link), then the member chain under the
  * cursor of the session's document, then an input box for the history.
  */
@@ -42,7 +42,7 @@ export async function pickWhyTarget(session: Session, arg: unknown): Promise<Why
   if (typeof a.logId === 'string') {
     const entry = session.state.entriesById.get(a.logId);
     if (!entry) {
-      void vscode.window.showInformationMessage('Pyokka: that value is not part of the last run any more; hover it again.');
+      void vscode.window.showInformationMessage('Tracelight: that value is not part of the last run any more; hover it again.');
       return undefined;
     }
     return { step: session.trace ? stepOfEntry(session.trace, entry) : entry.step, name: entry.context && NAME_RE.test(entry.context) ? entry.context : '' };
@@ -51,14 +51,14 @@ export async function pickWhyTarget(session: Session, arg: unknown): Promise<Why
   const found = editor && editor.document === session.document ? expressionAtCursor(editor, false) : undefined;
   const name = found?.text.trim();
   if (!name) {
-    void vscode.window.showInformationMessage('Pyokka: put the cursor on a name in the session file, or use Why on a value in the panel or a hover.');
+    void vscode.window.showInformationMessage('Tracelight: put the cursor on a name in the session file, or use Why on a value in the panel or a hover.');
     return undefined;
   }
   if (session.nav.active) return { step: session.nav.currentStep, name };
   const history = await sessionVariableHistory(session, name);
   const last = history?.changes[history.changes.length - 1];
   if (!last) {
-    void vscode.window.showInformationMessage(history ? `Pyokka: the last run recorded no change of ${name}.` : 'Pyokka: no run yet; run the file first (save, or Re-execute).');
+    void vscode.window.showInformationMessage(history ? `Tracelight: the last run recorded no change of ${name}.` : 'Tracelight: no run yet; run the file first (save, or Re-execute).');
     return undefined;
   }
   return { step: last.step, name };

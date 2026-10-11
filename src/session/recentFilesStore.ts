@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { pyokkaHome, readJsonFile, writeJsonFile } from '../util/paths';
+import { tracelightHome, readJsonFile, writeJsonFile } from '../util/paths';
 
 export interface RecentFile {
   id: string;
@@ -18,7 +18,7 @@ export class RecentFilesStore {
   private entries: RecentFile[] | undefined;
   private readonly listeners = new Set<() => void>();
 
-  constructor(file = path.join(pyokkaHome(), 'recentFiles.json')) {
+  constructor(file = path.join(tracelightHome(), 'recentFiles.json')) {
     this.file = file;
   }
 

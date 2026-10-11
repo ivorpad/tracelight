@@ -149,7 +149,7 @@ export function NodeCard({ n, graph, hits, currentStep, onGoto, onExpand, onOpen
         </div>
       ) : src.kind === 'package' && src.more !== undefined ? (
         <div class="pk-dim">
-          {src.more} function{src.more === 1 ? '' : 's'} of {src.file} dropped under the cap; `pyokka graph` lists them all
+          {src.more} function{src.more === 1 ? '' : 's'} of {src.file} dropped under the cap; `tracelight graph` lists them all
         </div>
       ) : isStatement(src) ? (
         <StatementBody n={n} src={src} onGoto={onGoto} hits={hits} currentStep={currentStep} />

@@ -49,8 +49,8 @@ function fakeSession(runId = 'r-1', locals: { recordLocals: boolean; changes: nu
 function setup(answer = '{"pick": ["s53-189112"], "stops": {}}', hasNodeTour = (_exe: string, _entry: string) => true) {
   const store = new Map<string, unknown>();
   const ext = fs.mkdtempSync(path.join(os.tmpdir(), 'pk-tour-ext-'));
-  fs.mkdirSync(path.join(ext, 'skills', 'pyokka', 'references'), { recursive: true });
-  fs.writeFileSync(path.join(ext, 'skills', 'pyokka', 'references', 'tour-prompt.md'), '# Tour prompt\n');
+  fs.mkdirSync(path.join(ext, 'skills', 'tracelight', 'references'), { recursive: true });
+  fs.writeFileSync(path.join(ext, 'skills', 'tracelight', 'references', 'tour-prompt.md'), '# Tour prompt\n');
   const context = { extensionPath: ext, workspaceState: { get: (k: string, d: unknown) => store.get(k) ?? d, update: async (k: string, v: unknown) => void store.set(k, v) } };
   const askModel = vi.fn(async (_prompt: string) => answer);
   const narrator = { canNarrate: () => true, askModel };
@@ -79,7 +79,7 @@ describe('TourHost', () => {
     await t.host.ensure(s as never);
     expect(t.calls).toHaveLength(1);
     expect(t.calls[0]![0]).toBe('tour');
-    expect(t.calls[0]![1]).toMatch(/pyokka-tour-.*run\.json$/);
+    expect(t.calls[0]![1]).toMatch(/tracelight-tour-.*run\.json$/);
     expect(t.calls[0]!.at(-1)).toBe('--json');
     expect(t.posted[0]?.status).toBe('computing');
     expect(t.posted.at(-1)).toMatchObject({ status: 'ready', runId: 'r-1' });

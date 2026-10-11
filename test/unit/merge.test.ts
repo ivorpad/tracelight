@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeConfigSources, readPyokkaKeyFromPackageJson, toRunConfig, parseEnvParams, splitArgs, DEFAULT_RUN_CONFIG } from '../../src/config/merge';
+import { mergeConfigSources, readTracelightKeyFromPackageJson, toRunConfig, parseEnvParams, splitArgs, DEFAULT_RUN_CONFIG } from '../../src/config/merge';
 
 describe('config merge order', () => {
   it('later sources win, nested objects merge', () => {
@@ -55,10 +55,10 @@ describe('env / args parsing', () => {
   });
 });
 
-describe('package.json "pyokka"', () => {
+describe('package.json "tracelight"', () => {
   it('reads the key as a config object, and nothing when absent or not an object', () => {
-    expect(readPyokkaKeyFromPackageJson('{"name":"x","pyokka":{"runMode":"onDemand","timeMachine":{"libraryCode":true}}}')).toEqual({ runMode: 'onDemand', timeMachine: { libraryCode: true } });
-    expect(readPyokkaKeyFromPackageJson('{"name":"x"}')).toBeUndefined();
-    expect(readPyokkaKeyFromPackageJson('{"pyokka":["x"]}')).toBeUndefined();
+    expect(readTracelightKeyFromPackageJson('{"name":"x","tracelight":{"runMode":"onDemand","timeMachine":{"libraryCode":true}}}')).toEqual({ runMode: 'onDemand', timeMachine: { libraryCode: true } });
+    expect(readTracelightKeyFromPackageJson('{"name":"x"}')).toBeUndefined();
+    expect(readTracelightKeyFromPackageJson('{"tracelight":["x"]}')).toBeUndefined();
   });
 });

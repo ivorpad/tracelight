@@ -52,7 +52,7 @@ export function tourArgv(runFile: string, a: TourArgs = {}): string[] {
 
 /** A fresh directory for one session's run file and prose files. */
 export function tourTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'pyokka-tour-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'tracelight-tour-'));
 }
 
 /** Whether Tracelight at `entry` has the `tour` verb: its usage line lists the verbs. */
@@ -64,22 +64,22 @@ export function nodeHasTour(exe: string, entry: string): boolean {
 /** Read the command's answer: the tour on stdout, `{ok: false, error, hint, violations?}` on a refusal. */
 export function parseTourOutput(code: number | null, stdout: string, stderr: string): TourDoc {
   if (/unrecognized arguments: --prose/.test(stderr)) {
-    throw new TourError('this runtime cannot merge a narration yet', '`pyokka tour --prose` validates and merges the answer; update the extension');
+    throw new TourError('this runtime cannot merge a narration yet', '`tracelight tour --prose` validates and merges the answer; update the extension');
   }
   let doc: unknown;
   try {
     doc = JSON.parse(stdout);
   } catch {
     const tail = redact((stderr || stdout).trim().split('\n').slice(-3).join(' ')).slice(0, 400);
-    throw new TourError(`pyokka tour exited with ${code ?? 'a signal'}${tail ? `: ${tail}` : ''}`, 'see the Pyokka output channel');
+    throw new TourError(`tracelight tour exited with ${code ?? 'a signal'}${tail ? `: ${tail}` : ''}`, 'see the Tracelight output channel');
   }
   if (doc && typeof doc === 'object' && (doc as { ok?: unknown }).ok === false) {
     const d = doc as { error?: unknown; hint?: unknown; violations?: unknown };
     const violations = Array.isArray(d.violations) ? d.violations.map(String) : [];
-    throw new TourError(String(d.error ?? 'pyokka tour failed'), String(d.hint ?? ''), violations);
+    throw new TourError(String(d.error ?? 'tracelight tour failed'), String(d.hint ?? ''), violations);
   }
   if (!doc || typeof doc !== 'object' || !Array.isArray((doc as TourDoc).chapters) || !Array.isArray((doc as TourDoc).candidates)) {
-    throw new TourError('pyokka tour printed something that is not a tour', 'see the Pyokka output channel');
+    throw new TourError('tracelight tour printed something that is not a tour', 'see the Tracelight output channel');
   }
   return doc as TourDoc;
 }
@@ -99,7 +99,7 @@ export function runTourCli(o: TourCliOptions, argv: string[]): Promise<TourDoc> 
     let done = false;
     const timer = setTimeout(() => {
       child.kill();
-      finish(() => reject(new TourError(`pyokka tour took longer than ${Math.round((o.timeoutMs ?? TOUR_TIMEOUT_MS) / 1000)} s`, 'a run of this size may need `pyokka tour run.json` from a terminal')));
+      finish(() => reject(new TourError(`tracelight tour took longer than ${Math.round((o.timeoutMs ?? TOUR_TIMEOUT_MS) / 1000)} s`, 'a run of this size may need `tracelight tour run.json` from a terminal')));
     }, o.timeoutMs ?? TOUR_TIMEOUT_MS);
     const finish = (fn: () => void): void => {
       if (done) return;
@@ -111,7 +111,7 @@ export function runTourCli(o: TourCliOptions, argv: string[]): Promise<TourDoc> 
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (c: string) => (stdout += c));
     child.stderr.on('data', (c: string) => (stderr += c));
-    child.on('error', (err) => finish(() => reject(new TourError(`${exe} could not start: ${err.message}`, 'check Node.js (Pyokka: Select Node.js)'))));
+    child.on('error', (err) => finish(() => reject(new TourError(`${exe} could not start: ${err.message}`, 'check Node.js (Tracelight: Select Node.js)'))));
     child.on('close', (code) => {
       finish(() => {
         try {

@@ -25,7 +25,7 @@ fi
 
 VERSION=$(python3 scripts/version.py "$@" --next)
 TAG="v$VERSION"
-VSIX="pyokka-$VERSION.vsix"
+VSIX="tracelight-$VERSION.vsix"
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   echo "release: $TAG already exists. Force a level or a number to go past it." >&2
   exit 1
@@ -39,7 +39,7 @@ echo "==> version"
 python3 scripts/version.py "$@" --auto
 
 echo "==> changelog"
-NOTES=$(mktemp -t pyokka-notes)
+NOTES=$(mktemp -t tracelight-notes)
 trap 'rm -f "$NOTES" "$NOTES.cut"' EXIT
 if python3 scripts/changelog.py --cut "$VERSION" > "$NOTES"; then
   # GitHub caps release notes at 125000 characters; CHANGELOG.md keeps the whole entry
@@ -62,7 +62,7 @@ code --install-extension "$PWD/$VSIX" --force
 echo "==> tag"
 git add -A
 git commit -m "Release $TAG"
-git tag -a "$TAG" -m "Pyokka $VERSION"
+git tag -a "$TAG" -m "Tracelight $VERSION"
 
 echo "==> publish"
 git push -u origin HEAD

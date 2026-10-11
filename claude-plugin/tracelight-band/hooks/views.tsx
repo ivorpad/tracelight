@@ -37,7 +37,7 @@ export function errorView(ui: Ui, width: number, message: string) {
   const { Box, Text } = ui
   return (
     <Box>
-      <Text dimColor>{cut(`pyokka  ${message}`, width)}</Text>
+      <Text dimColor>{cut(`tracelight  ${message}`, width)}</Text>
     </Box>
   )
 }
@@ -51,7 +51,7 @@ export function bugsView(ui: Ui, act: Act, width: number, l: Look, spot: Spot) {
     <Box flexDirection="column" borderStyle="round" borderColor="red" paddingX={1}>
       <Box justifyContent="space-between">
         <Box>
-          <Text color="red" bold>pyokka bugs </Text>
+          <Text color="red" bold>tracelight bugs </Text>
           <Text dimColor>{found === null ? 'scanning…' : `${list.length} suspicious step${list.length === 1 ? '' : 's'} · from ${found.source}`}</Text>
         </Box>
         <Text dimColor>{`${spot.file} · #${spot.step}/${spot.count}`}</Text>
@@ -98,7 +98,7 @@ function fixBox(ui: Ui, act: Act, l: Look, inner: number) {
     <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={proposed.status === 'applied' ? 'green' : 'yellow'} paddingX={1}>
       <Text bold color={proposed.status === 'failed' ? 'red' : 'yellow'}>{title}</Text>
       {proposed.explanation ? <Text wrap="wrap">{proposed.explanation}</Text> : null}
-      {proposed.plan ? <Text color="cyan">{cut(`plan: .pyokka/findings/${baseName(proposed.plan)}`, inner - 4)}</Text> : null}
+      {proposed.plan ? <Text color="cyan">{cut(`plan: .tracelight/findings/${baseName(proposed.plan)}`, inner - 4)}</Text> : null}
       {proposed.diff.map((d, i) => (
         <Text key={`d${i}`} color={d.sign === '-' ? 'red' : 'green'}>{cut(`${d.sign} ${String(d.line).padStart(3)}  ${d.text}`, inner - 4)}</Text>
       ))}
@@ -124,7 +124,7 @@ const linkLabel = (x: OriginLink, room: number) => {
 }
 
 /**
- * Where the finding's bad value came from (`pyokka origin`): newest step first, the root marked
+ * Where the finding's bad value came from (`tracelight origin`): newest step first, the root marked
  * `▶`, links picked by value (inferred, text match) dimmed. Each link moves the Time Machine there.
  */
 function originBox(ui: Ui, act: Act, l: Look, inner: number) {
@@ -211,7 +211,7 @@ export function explainView(ui: Ui, act: Act, width: number, l: Look, spot: Spot
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
       <Box justifyContent="space-between">
         <Box>
-          <Text color="cyan" bold>pyokka </Text>
+          <Text color="cyan" bold>tracelight </Text>
           <Text bold>{cut(`${spot.file}:${spot.line}`, 40)}</Text>
           <Text dimColor>{` · ${cut(spot.function, 30)}`}</Text>
           {reached && !spot.stale ? <Text color="red" bold>{`  ⚠ ${reached}`}</Text> : null}

@@ -56,7 +56,7 @@ function HttpBody({ panel, mode, onGoto, onOpen, onMode }: Pick<HttpPaneProps, '
     <div class="pk-http-body">
       {panel.running && <div class="pk-empty small">Running…</div>}
       {untouched ? (
-        <div class="pk-empty small">HTTP clients untouched (pyokka.httpObserve is off)</div>
+        <div class="pk-empty small">HTTP clients untouched (tracelight.httpObserve is off)</div>
       ) : !panel.running && rows.length === 0 ? (
         <div class="pk-empty small">No HTTP requests in this run</div>
       ) : rows.length > 0 ? (
@@ -74,7 +74,7 @@ function HttpBody({ panel, mode, onGoto, onOpen, onMode }: Pick<HttpPaneProps, '
           {rows.map((r) => (
             <HttpRow key={`${r.n}:${r.source}:${r.ms}`} row={r} running={panel.running} onGoto={onGoto} onOpen={onOpen} />
           ))}
-          {panel.truncated && <p class="pk-caption pk-caption-sub pk-http-hint">… {panel.count - rows.length} more requests; `pyokka http --live` lists them all.</p>}
+          {panel.truncated && <p class="pk-caption pk-caption-sub pk-http-hint">… {panel.count - rows.length} more requests; `tracelight http --live` lists them all.</p>}
         </div>
       ) : null}
       {(fin || rows.length > 0) && (

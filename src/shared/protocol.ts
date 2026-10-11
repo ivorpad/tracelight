@@ -190,7 +190,7 @@ export type HostRequest =
   | { type: 'stop'; id: number; runId: string }
   | { type: 'shutdown'; id: number };
 
-/* ---------- variable history (bridge `var` reply, `pyokka var --json`, the panel's Variable pane) ---------- */
+/* ---------- variable history (bridge `var` reply, `tracelight var --json`, the panel's Variable pane) ---------- */
 
 export type VariableChangeSource = 'locals' | 'value' | 'assign';
 
@@ -247,7 +247,7 @@ export interface StatementBinding {
   calls?: string[];
 }
 
-/* ---------- provenance (bridge `why` reply, `pyokka why --json`, the Details pane's "why" tree) ---------- */
+/* ---------- provenance (bridge `why` reply, `tracelight why --json`, the Details pane's "why" tree) ---------- */
 
 /** levels below the root expanded by default, and the most a query may ask for */
 export const PROVENANCE_DEPTH = 5;
@@ -328,7 +328,7 @@ export interface Provenance {
   conclusion?: string;
 }
 
-/* ---------- HTTP table (bridge `http` reply, `pyokka http`, the panel's HTTP view) ---------- */
+/* ---------- HTTP table (bridge `http` reply, `tracelight http`, the panel's HTTP view) ---------- */
 
 /** where a row's response came from: the network (`live` while observing, `recorded` in record mode), the recording, or nowhere */
 export type HttpSource = 'live' | 'recorded' | 'replayed' | 'miss';

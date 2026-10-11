@@ -1,6 +1,6 @@
 /**
  * The TOUR section's model from a `tour.json` (docs/TOUR.md), with or without merged prose. No
- * tour rules here: chapters, candidates and values are what `pyokka tour` printed; this only picks
+ * tour rules here: chapters, candidates and values are what `tracelight tour` printed; this only picks
  * what a row shows (a title, one short value) and resolves display paths to the run's file ids.
  */
 import type { PanelTourChapter, PanelTourStop, TourPanel } from '../shared/webviewProtocol';

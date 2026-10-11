@@ -8,17 +8,17 @@ import { CONTEXT_64, EXCEPTIONS_CAUGHT, INVOICES_SOURCE, ORIGIN_64 } from './fix
 // the files live in a map; the model replies with what the test sets.
 
 export type World = {
-  /** What `pyokka context --live --json` prints; a string: the error it fails with. */
+  /** What `tracelight context --live --json` prints; a string: the error it fails with. */
   context: object | string
-  /** What `pyokka step --live` prints; a string: the error it fails with. */
+  /** What `tracelight step --live` prints; a string: the error it fails with. */
   step: object | string
   /** What `context` prints after the next `step`, when set: the stop the step reached. */
   afterStep?: object | string
-  /** What `pyokka exceptions --live --json` prints; a string: the error it fails with. */
+  /** What `tracelight exceptions --live --json` prints; a string: the error it fails with. */
   exceptions: object | string
-  /** What `pyokka suspects --live --json` prints; null: this pyokka has no `suspects`. */
+  /** What `tracelight suspects --live --json` prints; null: this tracelight has no `suspects`. */
   suspects: object | null
-  /** What `pyokka origin --live --json STEP` prints; a string: the error it fails with. */
+  /** What `tracelight origin --live --json STEP` prints; a string: the error it fails with. */
   origin: object | string
   /** Swallowed exceptions in a re-run of a saved file, in the order the band asks. */
   totals: number[]
@@ -62,7 +62,7 @@ const done = (stdout: string, exitCode = 0, stderr = '') => ({
 
 /** The CLI's answer to one argv. */
 const answer = (w: World, argv: readonly string[]) => {
-  const verb = argv[0] === 'pyokka' || argv[0] === 'tracelight' ? argv[1] : argv[0]
+  const verb = argv[0] === 'tracelight' || argv[0] === 'tracelight' ? argv[1] : argv[0]
   const isLive = argv.includes('--live')
   if (verb === 'context') return typeof w.context === 'string' ? done('', 1, w.context) : done(JSON.stringify(w.context))
   if (verb === 'step') {
@@ -71,11 +71,11 @@ const answer = (w: World, argv: readonly string[]) => {
   }
   if (verb === 'origin') return typeof w.origin === 'string' ? done('', 2, w.origin) : done(JSON.stringify(w.origin))
   if (verb === 'suspects') {
-    return w.suspects ? done(JSON.stringify(w.suspects)) : done('', 2, "pyokka: error: argument command: invalid choice: 'suspects'")
+    return w.suspects ? done(JSON.stringify(w.suspects)) : done('', 2, "tracelight: error: argument command: invalid choice: 'suspects'")
   }
   if (verb === 'exceptions' && isLive) return typeof w.exceptions === 'string' ? done(w.exceptions, 2) : done(JSON.stringify(w.exceptions))
   if (verb === 'exceptions') return done(JSON.stringify({ total: w.totals.shift() ?? 0 }))
-  if (verb === 'python3' || verb === 'node') return done(argv[1]?.includes('/.pyokka/band-tmp/') ? w.printed.patched : w.printed.original)
+  if (verb === 'python3' || verb === 'node') return done(argv[1]?.includes('/.tracelight/band-tmp/') ? w.printed.patched : w.printed.original)
   return done('')
 }
 
@@ -116,7 +116,7 @@ export function engine(on: On, w: World) {
 
 export const BAND = { hasSurvey: false, isWorking: false, maxRows: 30, bodyColumns: 120, scroll: { offset: 0, bodyRows: 30 }, view: {} }
 
-/** The argvs of the band's `pyokka step` calls. */
+/** The argvs of the band's `tracelight step` calls. */
 export const steps = (w: World) => w.runs.filter(r => r[1] === 'step').map(r => r.slice(2).join(' '))
 
 /** `/pk <key>` as the person types it. */

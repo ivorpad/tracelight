@@ -1,4 +1,4 @@
-// Written by scripts/band-fixtures.py from what the pyokka CLI printed. Do not edit by hand:
+// Written by scripts/band-fixtures.py from what the tracelight CLI printed. Do not edit by hand:
 // run the script again when the CLI's JSON changes. Paths read /work/<file>.
 
 // `context --json` at step 64 of invoices.py: the TypeError that subtotal swallows

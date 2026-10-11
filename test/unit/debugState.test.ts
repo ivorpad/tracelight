@@ -87,7 +87,7 @@ describe('breakpoints', () => {
     ]);
   });
   it('says a file can pause on a plain breakpoint, and not on a logpoint, a disabled one or one in another file', () => {
-    // the key behind F5: a logpoint is a marker in Pyokka and never pauses, so it must not take F5
+    // the key behind F5: a logpoint is a marker in Tracelight and never pauses, so it must not take F5
     expect(fileHasBreakpoints([bp(6)], '/w/a.py')).toBe(true);
     expect(fileHasBreakpoints([bp(6, { condition: 'i > 2' })], '/w/a.py')).toBe(true);
     expect(fileHasBreakpoints([bp(6, { logMessage: 'x = {x}' })], '/w/a.py')).toBe(false);

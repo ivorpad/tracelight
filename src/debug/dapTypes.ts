@@ -1,5 +1,5 @@
 /**
- * The slice of the Debug Adapter Protocol the Pyokka adapter speaks, hand-written so no
+ * The slice of the Debug Adapter Protocol the Tracelight adapter speaks, hand-written so no
  * dependency is needed. Field names follow the specification (microsoft.github.io/debug-adapter-protocol).
  */
 

@@ -89,7 +89,7 @@ describe('colours and blocks', () => {
     expect(blocks[3]?.echo).toBe(true);
     expect(blocks[0]?.label).toBe('9:2');
   });
-  it('names every block after its step number, location and function, as the pyokka CLI prints them', () => {
+  it('names every block after its step number, location and function, as the tracelight CLI prints them', () => {
     const blocks = stepBlocks(model(), { start: 8, end: 12 }, 10, new Set());
     expect(blocks.map((b) => b.scopeName)).toEqual(['<module>', '<module>', 'f', 'f']);
     expect(blocks[0]?.title).toBe('#8  9:2  <module>');

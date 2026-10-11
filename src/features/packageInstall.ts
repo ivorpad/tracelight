@@ -60,7 +60,7 @@ export class PackageInstall implements vscode.HoverProvider, vscode.CodeActionPr
     if (!hit) return undefined;
     const pkg = hit.module;
     const args = encodeURIComponent(JSON.stringify({ package: pkg }));
-    const md = new vscode.MarkdownString(`**Pyokka:** module \`${hit.module}\` is not installed.\n\n[$(package) Install ${pkg} into project](command:pyokka.installMissingPackageToProject?${args}) &nbsp;|&nbsp; [$(file) Install only for this Pyokka file](command:pyokka.installMissingPackageForFile?${args})`, true);
+    const md = new vscode.MarkdownString(`**Tracelight:** module \`${hit.module}\` is not installed.\n\n[$(package) Install ${pkg} into project](command:tracelight.installMissingPackageToProject?${args}) &nbsp;|&nbsp; [$(file) Install only for this Tracelight file](command:tracelight.installMissingPackageForFile?${args})`, true);
     md.isTrusted = true;
     return new vscode.Hover(md);
   }
@@ -72,10 +72,10 @@ export class PackageInstall implements vscode.HoverProvider, vscode.CodeActionPr
     const mk = (title: string, command: string): vscode.CodeAction => {
       const a = new vscode.CodeAction(title, vscode.CodeActionKind.QuickFix);
       a.command = { title, command, arguments: [{ package: pkg }] };
-      a.isPreferred = command === 'pyokka.installMissingPackageToProject';
+      a.isPreferred = command === 'tracelight.installMissingPackageToProject';
       return a;
     };
-    return [mk(`Pyokka: install ${pkg} into project`, 'pyokka.installMissingPackageToProject'), mk(`Pyokka: install ${pkg} only for this Pyokka file`, 'pyokka.installMissingPackageForFile')];
+    return [mk(`Tracelight: install ${pkg} into project`, 'tracelight.installMissingPackageToProject'), mk(`Tracelight: install ${pkg} only for this Tracelight file`, 'tracelight.installMissingPackageForFile')];
   }
 
   private async pickPackage(session: Session, arg: unknown): Promise<string | undefined> {
@@ -84,7 +84,7 @@ export class PackageInstall implements vscode.HoverProvider, vscode.CodeActionPr
     const missing = [...session.missingModules];
     if (missing.length === 1) return missing[0];
     if (missing.length > 1) {
-      const pick = await vscode.window.showQuickPick(missing, { title: 'Pyokka: which package?' });
+      const pick = await vscode.window.showQuickPick(missing, { title: 'Tracelight: which package?' });
       return pick;
     }
     return vscode.window.showInputBox({ prompt: 'Package to install (npm name)', ignoreFocusOut: true });
@@ -113,7 +113,7 @@ export class PackageInstall implements vscode.HoverProvider, vscode.CodeActionPr
   private async runInTerminal(session: Session, command: string, onDone: () => void): Promise<void> {
     log.info(`install: ${command}`);
     // an install runs where the file's package.json is, so the package lands in that project
-    const terminal = vscode.window.createTerminal({ name: 'Pyokka install', cwd: projectDir(session) });
+    const terminal = vscode.window.createTerminal({ name: 'Tracelight install', cwd: projectDir(session) });
     terminal.show(true);
     // shell integration arrives shortly after creation; wait for it briefly
     const integration = await new Promise<vscode.TerminalShellIntegration | undefined>((resolve) => {
@@ -138,11 +138,11 @@ export class PackageInstall implements vscode.HoverProvider, vscode.CodeActionPr
         if (e.exitCode === 0) {
           session.missingModules.clear();
           onDone();
-        } else void vscode.window.showWarningMessage(`Pyokka: install command exited with code ${e.exitCode ?? '?'}.`);
+        } else void vscode.window.showWarningMessage(`Tracelight: install command exited with code ${e.exitCode ?? '?'}.`);
       });
     } else {
       terminal.sendText(command, true);
-      const pick = await vscode.window.showInformationMessage('Pyokka: installing in the terminal. Re-execute the file when it finishes.', 'Re-execute now');
+      const pick = await vscode.window.showInformationMessage('Tracelight: installing in the terminal. Re-execute the file when it finishes.', 'Re-execute now');
       if (pick) {
         session.missingModules.clear();
         onDone();

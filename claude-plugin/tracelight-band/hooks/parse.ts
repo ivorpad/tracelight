@@ -5,7 +5,7 @@ import type { Finding, Frame, LivePause, ValueOrigin, Spot } from '../types'
 type Place = { file?: string; line?: number; function?: string }
 
 /**
- * `pyokka context --json`. At a debug pause with nothing recorded (`recording: false`, see
+ * `tracelight context --json`. At a debug pause with nothing recorded (`recording: false`, see
  * docs/design/live-pause-context.md) there is no `count`, `values` is empty, and `paused` and
  * `locals` carry the reason, the exception and the frame's variables.
  */
@@ -38,7 +38,7 @@ const pauseOf = (raw: RawContext): LivePause => {
   }
 }
 
-/** A row of `pyokka exceptions --json` or a finding of `pyokka suspects --json`. */
+/** A row of `tracelight exceptions --json` or a finding of `tracelight suspects --json`. */
 export type RawFinding = {
   id?: string
   kind?: string
@@ -99,14 +99,14 @@ export const errorMessage = (text: string, afterPause = false): string => {
   }
   if (/Time Machine is not active|Time Machine inactive/i.test(said)) {
     return afterPause
-      ? 'The debug pause is over: the program ran on or finished. Press r to record the file, or pause it again with pyokka debug FILE --at NAME.'
+      ? 'The debug pause is over: the program ran on or finished. Press r to record the file, or pause it again with tracelight debug FILE --at NAME.'
       : 'The Time Machine is off for this session. Press r to record again, or i to start at step 1.'
   }
   return said
 }
 
 /**
- * What a `pyokka step` at a pause without a recording answered, as a line for the band, or
+ * What a `tracelight step` at a pause without a recording answered, as a line for the band, or
  * undefined when it moved to another pause (the band then reads that pause).
  */
 export const stepOutcome = (ran: { exitCode: number; stdout: string; stderr: string }): string | undefined => {
@@ -189,7 +189,7 @@ export const statementLines = (source: string[], line: number): number[] => {
   return lines
 }
 
-/** `pyokka origin --json` (docs/design/origin.md): the chain, newest first, and its root. */
+/** `tracelight origin --json` (docs/design/origin.md): the chain, newest first, and its root. */
 export type RawOrigin = {
   step?: number
   links?: {
@@ -234,7 +234,7 @@ export const toFindings =(rows: RawFinding[]): Finding[] =>
   rows
     .filter(r => r.step !== undefined)
     .map((r, i) => {
-      // `pyokka exceptions` rows: where it was raised and where it was swallowed
+      // `tracelight exceptions` rows: where it was raised and where it was swallowed
       const at = r.raisedAt ?? undefined
       const caughtAt = r.handledAt ?? undefined
       const swallowed = r.kind === 'caught' && caughtAt !== undefined

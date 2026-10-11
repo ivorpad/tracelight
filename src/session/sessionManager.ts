@@ -13,7 +13,7 @@ import { RecentFilesStore } from './recentFilesStore';
 import { setting } from '../config/settings';
 import { setContext } from '../util/context';
 import { log } from '../util/log';
-import { existsSync, pyokkaHome, shortHash } from '../util/paths';
+import { existsSync, tracelightHome, shortHash } from '../util/paths';
 
 export interface StartOptions {
   runMode?: RunMode;
@@ -38,7 +38,7 @@ export interface StartOptions {
 
 /** What a recording debug start says when the document's session runs in another interpreter. */
 export function interpreterRefusal(displayName: string): string {
-  return `stop the Pyokka session on ${displayName} first: a recording debug session runs in its interpreter`;
+  return `stop the Tracelight session on ${displayName} first: a recording debug session runs in its interpreter`;
 }
 
 export interface SessionManagerEvents {
@@ -48,7 +48,7 @@ export interface SessionManagerEvents {
   activeChanged: [Session | undefined];
 }
 
-const WAS_RUNNING_KEY = 'pyokka.wasRunning';
+const WAS_RUNNING_KEY = 'tracelight.wasRunning';
 
 export class SessionManager extends EventEmitter<SessionManagerEvents> {
   readonly sessions = new Map<string, Session>();
@@ -67,7 +67,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     super();
     // every feature (panel, decorator, bridge, narrator, graph provider, ...) listens to sessionStarted; Node warns past 10
     this.setMaxListeners(32);
-    this.preferredFolder = context.workspaceState.get<string>('pyokka.preferredFolder');
+    this.preferredFolder = context.workspaceState.get<string>('tracelight.preferredFolder');
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument((e) => this.onDocumentChanged(e)),
       vscode.workspace.onDidSaveTextDocument((doc) => this.onDocumentSaved(doc)),
@@ -130,7 +130,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     const s = this.active();
     if (s) this.lastActive = s;
     const editor = vscode.window.activeTextEditor;
-    setContext('isActiveEditorRunningPyokka', !!editor && !!this.sessionForDocument(editor.document));
+    setContext('isActiveEditorRunningTracelight', !!editor && !!this.sessionForDocument(editor.document));
     this.emit('activeChanged', s);
   }
 
@@ -150,16 +150,16 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   async selectWorkspaceFolder(): Promise<string | undefined> {
     const folders = vscode.workspace.workspaceFolders ?? [];
     if (folders.length === 0) {
-      void vscode.window.showInformationMessage('Pyokka: no workspace folder is open.');
+      void vscode.window.showInformationMessage('Tracelight: no workspace folder is open.');
       return undefined;
     }
     const pick = await vscode.window.showQuickPick(
       folders.map((f) => ({ label: f.name, description: f.uri.fsPath, picked: f.uri.fsPath === this.preferredFolder })),
-      { title: 'Pyokka: workspace folder for new sessions' },
+      { title: 'Tracelight: workspace folder for new sessions' },
     );
     if (!pick) return undefined;
     this.preferredFolder = pick.description;
-    await this.context.workspaceState.update('pyokka.preferredFolder', this.preferredFolder);
+    await this.context.workspaceState.update('tracelight.preferredFolder', this.preferredFolder);
     return this.preferredFolder;
   }
 
@@ -169,13 +169,13 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     log.info(`workspace is not trusted; untrustedWorkspaceBehavior = ${behavior}`);
     if (behavior === 'Always allow') return true;
     if (behavior === 'Never allow') {
-      void vscode.window.showWarningMessage('Pyokka is disabled in untrusted workspaces (pyokka.untrustedWorkspaceBehavior).');
+      void vscode.window.showWarningMessage('Tracelight is disabled in untrusted workspaces (tracelight.untrustedWorkspaceBehavior).');
       return false;
     }
     if (this.trustPromptAnswer !== undefined) return this.trustPromptAnswer;
-    const pick = await vscode.window.showWarningMessage('This workspace is not trusted. Pyokka executes the file with your Python interpreter. Run anyway?', { modal: true }, 'Run', 'Always run in untrusted workspaces');
+    const pick = await vscode.window.showWarningMessage('This workspace is not trusted. Tracelight executes the file with Node.js. Run anyway?', { modal: true }, 'Run', 'Always run in untrusted workspaces');
     if (pick === 'Always run in untrusted workspaces') {
-      await vscode.workspace.getConfiguration('pyokka').update('untrustedWorkspaceBehavior', 'Always allow', vscode.ConfigurationTarget.Global);
+      await vscode.workspace.getConfiguration('tracelight').update('untrustedWorkspaceBehavior', 'Always allow', vscode.ConfigurationTarget.Global);
       return true;
     }
     this.trustPromptAnswer = pick === 'Run';
@@ -232,12 +232,12 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       session.status = 'failed';
       session.lastError = err instanceof Error ? err.message : String(err);
       session.emit('statusChanged');
-      void vscode.window.showErrorMessage(`Pyokka could not start: ${session.lastError}`, 'Show Logs').then((p) => p && log.show());
+      void vscode.window.showErrorMessage(`Tracelight could not start: ${session.lastError}`, 'Show Logs').then((p) => p && log.show());
     });
     return session;
   }
 
-  /** `~/.pyokka/data/<id>/npm` for "install only for this Pyokka file". */
+  /** `~/.tracelight/data/<id>/npm` for "install only for this Tracelight file". */
   forFileModulePaths(doc: vscode.TextDocument): string[] {
     const dir = this.forFileDataDir(doc);
     return existsSync(dir) ? [dir] : [];
@@ -246,7 +246,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   forFileDataDir(doc: vscode.TextDocument): string {
     const id = shortHash(doc.uri.scheme === 'file' ? doc.uri.fsPath : doc.uri.toString());
     // packages go to a folder of their own (`npm install --prefix`), found through NODE_PATH
-    return path.join(pyokkaHome(), 'data', id, 'npm');
+    return path.join(tracelightHome(), 'data', id, 'npm');
   }
 
   async toggle(doc: vscode.TextDocument): Promise<void> {
@@ -347,7 +347,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       try {
         if (new RegExp(regex).test(doc.uri.fsPath)) return 'open';
       } catch {
-        log.warn(`invalid pyokka.automaticStartRegex: ${regex}`);
+        log.warn(`invalid tracelight.automaticStartRegex: ${regex}`);
       }
     }
     if (setting<boolean>('automaticRestart', false, doc.uri) && this.context.workspaceState.get<string[]>(WAS_RUNNING_KEY, []).includes(doc.uri.fsPath)) return 'open';

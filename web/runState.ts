@@ -24,7 +24,7 @@ export interface RunData {
   errors: ErrorEvent[];
   coverage: Map<number, CoverageEvent>;
   trace: TraceModel | null;
-  /** the raw trace event, kept for the saved-run document (`pyokka tour`) */
+  /** the raw trace event, kept for the saved-run document (`tracelight tour`) */
   traceEvent: Extract<RunEvent, { type: 'trace' }> | null;
   locals: LocalsEvent['entries'];
   http: HttpExchangeEvent[];

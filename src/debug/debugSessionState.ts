@@ -1,6 +1,6 @@
 /**
  * The Debugger's pure decisions (docs/design/debugger-product.md, 3.2, 3.9, 4.1, 4.3): the launch
- * configuration and its defaults, the registry key, the `vscode://ivor.pyokka/debug` codec, the
+ * configuration and its defaults, the registry key, the `vscode://ivor.tracelight/debug` codec, the
  * bridge descriptor, and the stop slice a `record: false` pause answers with. No vscode import, so
  * vitest covers it (test/unit/debugLaunch.test.ts, debugUri.test.ts, stopSlice.test.ts).
  *
@@ -14,7 +14,7 @@ import type { BlockLine, SliceBlock, SliceError, SliceLocation, SliceOptions, Sl
 import type { BreakpointSpec, ExceptionMode, PausedInfo, PausedThread } from '../session/debugState';
 
 /** The extension's id, as the URI handler is registered under. */
-export const URI_AUTHORITY = 'ivor.pyokka';
+export const URI_AUTHORITY = 'ivor.tracelight';
 
 /** Lines of the enclosing function a stop slice spends before it cuts on the code's own structure. */
 export const BLOCK_LINES = 60;
@@ -38,7 +38,7 @@ export interface LaunchConfig {
   env: Record<string, string>;
   /** interpreter path; undefined means resolve it as a run-all session does */
   python?: string;
-  /** JS/TS programs: the node to run with; undefined means `pyokka.nodePath`, then `node` on PATH */
+  /** JS/TS programs: the node to run with; undefined means `tracelight.nodePath`, then `node` on PATH */
   node?: string;
   stopOnEntry: boolean;
   breakOnException: ExceptionMode;
@@ -102,9 +102,9 @@ export function parseLaunch(raw: Record<string, unknown>, ctx: LaunchContext = {
   if (recordFrom && !parseAt(recordFrom)) throw new Error(`"recordFrom" is FILE:LINE or a function name, the \`--at\` grammar: got ${JSON.stringify(recordFrom)}`);
   // recording from a pause is a recording session: the run-all session holds the trace once it starts
   const record = raw['record'] === true || !!recordFrom;
-  if (!program && !module) throw new Error('a Pyokka launch needs "program", the JavaScript or TypeScript file to run');
+  if (!program && !module) throw new Error('a Tracelight launch needs "program", the JavaScript or TypeScript file to run');
   if (module && !MODULE_RE.test(module)) throw new Error(`"module" is a dotted module name, not a path: got ${JSON.stringify(module)}`);
-  if (module && record) throw new Error('"record": true runs the file as a Pyokka run-all session, which has no module launch; use "record": false, or a "program" launch');
+  if (module && record) throw new Error('"record": true runs the file as a Tracelight run-all session, which has no module launch; use "record": false, or a "program" launch');
   const rawCwd = str(raw['cwd']);
   const cwd = rawCwd ? path.resolve(substitute(rawCwd, ctx)) : ctx.workspaceRoot || (program ? path.dirname(program) : process.cwd());
   const launch: LaunchConfig = {
@@ -167,7 +167,7 @@ export interface DebugUri {
   also?: string[];
 }
 
-/** `vscode://ivor.pyokka/debug?…` for a launch; every value `encodeURIComponent`-ed. */
+/** `vscode://ivor.tracelight/debug?…` for a launch; every value `encodeURIComponent`-ed. */
 export function debugUri(launch: LaunchConfig, at?: string): string {
   const q = new URLSearchParams();
   if (launch.program) q.set('program', launch.program);

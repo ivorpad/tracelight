@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Pyokka panel dev harness. Serve the repo root over http (module workers need a real origin), e.g.
+  Tracelight panel dev harness. Serve the repo root over http (module workers need a real origin), e.g.
     npx --yes http-server -p 8765
   then open http://localhost:8765/webview/dev.html[#debugger|#debugger,paused|#light|#diagram|#settings|#variable|#http|#tree|#hc]
   Build first: node esbuild.mjs (the webview part is enough).
@@ -8,7 +8,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Pyokka panel (dev)</title>
+<title>Tracelight panel (dev)</title>
 <style>
   /* Dark Modern approximation of the variables VS Code injects into webviews */
   :root {
@@ -105,7 +105,7 @@
   // ---- fake VS Code API -------------------------------------------------
   const hash = new Set(location.hash.replace('#', '').split(',').filter(Boolean));
   if (hash.has('light')) document.body.classList.add('light');
-  window.__pyokka = {
+  window.__tracelight = {
     workerUri: new URL('../dist/webview/editor.worker.js', location.href).href,
     codiconsUri: new URL('../node_modules/@vscode/codicons/dist/codicon.css', location.href).href,
   };
@@ -143,8 +143,8 @@
   const memory = dict([['rss', num(77955072)], ['heapTotal', num(27983872)], ['heapUsed', num(21560616)], ['external', num(6562737)], ['arrayBuffers', num(156494)]]);
 
   const entries = [
-    { logId: 'l1', kind: 'log', fileId: 1, file: FILE, line: 10, col: 1, rid: 3, hit: 1, step: 4, context: 'pyokka', text: "{'is_awesome': True, 'python_version': '3.12.4'}", runtimeKey: 'k10', valueBag: { runtimeKey: 'k10', data: dict([['is_awesome', bool(true)], ['python_version', str('3.12.4')]]) } },
-    { logId: 'l2', kind: 'value', fileId: 1, file: FILE, line: 13, col: 1, rid: 5, hit: 1, step: 6, context: 'pyokka', text: "{'is_awesome': True, 'python_version': '3.12.4'}", runtimeKey: 'k13', valueBag: { runtimeKey: 'k13', data: dict([['is_awesome', bool(true)], ['python_version', str('3.12.4')]]) } },
+    { logId: 'l1', kind: 'log', fileId: 1, file: FILE, line: 10, col: 1, rid: 3, hit: 1, step: 4, context: 'tracelight', text: "{'is_awesome': True, 'python_version': '3.12.4'}", runtimeKey: 'k10', valueBag: { runtimeKey: 'k10', data: dict([['is_awesome', bool(true)], ['python_version', str('3.12.4')]]) } },
+    { logId: 'l2', kind: 'value', fileId: 1, file: FILE, line: 13, col: 1, rid: 5, hit: 1, step: 6, context: 'tracelight', text: "{'is_awesome': True, 'python_version': '3.12.4'}", runtimeKey: 'k13', valueBag: { runtimeKey: 'k13', data: dict([['is_awesome', bool(true)], ['python_version', str('3.12.4')]]) } },
     { logId: 'l3', kind: 'value', fileId: 1, file: FILE, line: 17, col: 1, rid: 7, hit: 1, step: 8, context: 'working_dir', text: "'/path/to/project'", runtimeKey: 'k17', valueBag: { runtimeKey: 'k17', data: str('/path/to/project') } },
     { logId: 'l4', kind: 'value', fileId: 1, file: FILE, line: 19, col: 1, rid: 9, hit: 1, step: 10, context: 'memory_usage()', text: "{'rss': 77955072, 'heapTotal': 27983872, 'heapUsed': 21560616, 'external': 6562737, ...}", runtimeKey: 'k19', valueBag: { runtimeKey: 'k19', data: memory } },
     { logId: 'l5', kind: 'log', fileId: 1, file: FILE, line: 27, col: 1, rid: 12, hit: 1, step: 14, text: "['partial_coverage', False]", runtimeKey: 'k27', valueBag: { runtimeKey: 'k27', data: list([str('partial_coverage'), bool(false)]) } },
@@ -266,7 +266,7 @@
   const httpPanel = {
     runId: rt, running: false, count: 3, truncated: false,
     totals: { requests: 3, bytes: 68123, ms: 2264, misses: 0, missAttempts: 0 },
-    finished: { mode: 'record', requests: 3, recorded: 3, served: 0, misses: 0, file: '/w/.pyokka/replay/3f2a9c1e5b7d0f42.jsonl', exists: true, recordedAt: '2026-09-11T10:12:03Z', entries: 3 },
+    finished: { mode: 'record', requests: 3, recorded: 3, served: 0, misses: 0, file: '/w/.tracelight/replay/3f2a9c1e5b7d0f42.jsonl', exists: true, recordedAt: '2026-09-11T10:12:03Z', entries: 3 },
     requests: [httpRow(1, {}), httpRow(2, { method: 'GET', url: 'https://api.openai.com/v1/models', name: 'models', bytes: 61311, ms: 400, step: 22, location: { file: FILE, line: 48, col: 8, fileId: 1 } }), httpRow(3, { client: 'requests', url: 'https://example.com/missing', name: 'missing', status: 404, reason: 'Not Found', bytes: 0, ms: 30, step: 31, location: { file: FILE, line: 110, col: 0, fileId: 1 } })],
   };
   // #timeout: the last run was killed by the run timeout
@@ -348,8 +348,8 @@
         else { sessionSettings = { ...sessionSettings, ...m.patch }; send({ type: 'session', name: 'demo.py', running: false, durationMs: timedOutMs ?? 123, runMode: sessionSettings.runMode, settings: sessionSettings, timedOutMs }); }
         break;
       case 'command':
-        if (m.command === 'pyokka.debug') send({ type: 'debugger', state: dbgState() });
-        if (m.command === 'pyokka.stopTraceNavigation') send({ type: 'debugger', state: { ...dbgState(), active: false } });
+        if (m.command === 'tracelight.debug') send({ type: 'debugger', state: dbgState() });
+        if (m.command === 'tracelight.stopTraceNavigation') send({ type: 'debugger', state: { ...dbgState(), active: false } });
         break;
     }
   }

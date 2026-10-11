@@ -28,7 +28,7 @@ export function currentTheme(): 'dark' | 'light' | 'hc' {
   return k === vscode.ColorThemeKind.Light ? 'light' : 'dark';
 }
 
-/** The Execution Diagram's settings the panel draws by (`pyokka.diagram.detail`, `pyokka.diagram.dataEdges`); user settings, no session value. */
+/** The Execution Diagram's settings the panel draws by (`tracelight.diagram.detail`, `tracelight.diagram.dataEdges`); user settings, no session value. */
 export function diagramSettings(): Pick<PanelSettings, 'diagramDetail' | 'diagramDataEdges'> {
   return { diagramDetail: setting<string>('diagram.detail', 'scopes') === 'statements' ? 'statements' : 'scopes', diagramDataEdges: setting<boolean>('diagram.dataEdges', false) };
 }
@@ -77,11 +77,11 @@ export function panelHtml(context: vscode.ExtensionContext, webview: vscode.Webv
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${panelCss}">
 <link rel="stylesheet" href="${codicons}">
-<title>Pyokka</title>
+<title>Tracelight</title>
 </head>
 <body>
 <div id="root"></div>
-<script nonce="${nonce}">window.__pyokka = ${boot};</script>
+<script nonce="${nonce}">window.__tracelight = ${boot};</script>
 <script type="module" nonce="${nonce}" src="${panelJs}"></script>
 </body>
 </html>`;
@@ -160,7 +160,7 @@ export async function openLocation(s: Session | undefined, msg: Extract<WebviewT
 export async function applySettingsPatch(s: Session | undefined, msg: Extract<WebviewToHost, { type: 'settings.update' }>): Promise<void> {
   const p = msg.patch;
   if (msg.scope === 'global') {
-    const cfg = vscode.workspace.getConfiguration('pyokka');
+    const cfg = vscode.workspace.getConfiguration('tracelight');
     const settingKey: Record<string, string> = { libraryCode: 'timeMachine.libraryCode', maskSecrets: 'secrets.mask', runTimeoutMs: 'runTimeout', recordLocals: 'timeMachine.recordLocals', http: 'http' };
     for (const [k, v] of Object.entries(p)) {
       // never write the run mode globally from the panel: a global "auto" makes every project

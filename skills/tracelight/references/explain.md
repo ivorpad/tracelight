@@ -16,7 +16,7 @@ Three rules:
 ## Running the CLI
 
 Find `tracelight` as SKILL.md says. `--live` addresses the open VS Code session
-(`pyokka.agentAccess` on, and the file has run); `tracelight state --live` prints the file, the
+(`tracelight.agentAccess` on, and the file has run); `tracelight state --live` prints the file, the
 step count and where the Time Machine is.
 
 No session: `tracelight run FILE --save run.json`, then `run.json` replaces `--live` in every

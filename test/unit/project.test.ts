@@ -6,7 +6,7 @@ import { looksLikeProject } from '../../src/config/project';
 
 describe('looksLikeProject', () => {
   it('detects marker files and ignores scratch folders', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pyokka-proj-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tracelight-proj-'));
     const scratch = path.join(root, 'scratch');
     const proj = path.join(root, 'proj');
     fs.mkdirSync(scratch);
@@ -19,7 +19,7 @@ describe('looksLikeProject', () => {
   });
 
   it('reads a tsconfig or a lockfile as a project, a pyproject.toml not', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pyokka-proj-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tracelight-proj-'));
     fs.writeFileSync(path.join(root, 'pyproject.toml'), '[project]\nname = "x"\n');
     expect(looksLikeProject([root])).toBe(false);
     fs.writeFileSync(path.join(root, 'tsconfig.json'), '{}');

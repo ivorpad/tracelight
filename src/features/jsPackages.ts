@@ -65,7 +65,7 @@ export function packageManagerFor(dir: string, stopAt?: string, exists: (p: stri
 const ADD: Record<PackageManager, string> = { npm: 'npm install', pnpm: 'pnpm add', yarn: 'yarn add', bun: 'bun add' };
 
 /**
- * The command that installs `packageName`. `pyokka.installPackageCommand` wins when set (with
+ * The command that installs `packageName`. `tracelight.installPackageCommand` wins when set (with
  * `{packageName}`, `{target}` and `{packageManager}` filled in); a per-file install (`target`) goes
  * into a private folder with npm, whatever the project uses, and is found through `NODE_PATH`.
  */

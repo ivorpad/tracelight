@@ -29,9 +29,9 @@ const SOURCE = [
   "console.log('total', total);",
   '',
 ].join('\n');
-process.env.PYOKKA_HOME = HOME;
-process.env.PYOKKA_SESSIONS_DIR = '';
-// the unbundled extension source keeps Pyokka's names (the Tracelight build renames them), so the
+process.env.TRACELIGHT_HOME = HOME;
+process.env.TRACELIGHT_SESSIONS_DIR = '';
+// the unbundled extension source keeps Tracelight's names (the Tracelight build renames them), so the
 // CLI is pointed at the directory it writes: what `TRACELIGHT_HOME` is to the Tracelight build
 process.env.TRACELIGHT_SESSIONS_DIR = path.join(HOME, 'sessions');
 
@@ -73,7 +73,7 @@ type Msg = Record<string, any>;
 /** the agent's side: `tracelight VERB ... --live --session app.mjs` */
 function cli(args: string[], timeoutMs = 60_000): Promise<{ status: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [ENTRY, ...args], { cwd: DIR, env: { ...process.env, PYOKKA_HOME: HOME } });
+    const child = spawn(process.execPath, [ENTRY, ...args], { cwd: DIR, env: { ...process.env, TRACELIGHT_HOME: HOME } });
     let stdout = '';
     let stderr = '';
     child.stdout.setEncoding('utf8').on('data', (c) => (stdout += c));

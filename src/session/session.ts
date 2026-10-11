@@ -1,5 +1,5 @@
 /**
- * One Pyokka session per document: owns a runner process, the run loop (modes + debounce),
+ * One Tracelight session per document: owns a runner process, the run loop (modes + debounce),
  * markers, watches and the state produced by the latest run.
  */
 import * as vscode from 'vscode';
@@ -204,7 +204,7 @@ export class Session extends EventEmitter<SessionEvents> {
       log.error(`runner error (${this.displayName}): ${message}${detail ? `\n${detail}` : ''}`);
       if (!this.runnerErrorNotified) {
         this.runnerErrorNotified = true;
-        void vscode.window.showErrorMessage(`Pyokka runtime error: ${message}`, 'Show Logs').then((pick) => {
+        void vscode.window.showErrorMessage(`Tracelight runtime error: ${message}`, 'Show Logs').then((pick) => {
           if (pick) log.show();
         });
       }

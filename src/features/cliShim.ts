@@ -1,11 +1,11 @@
 /**
- * The extension's command on PATH: a shell script at `~/.local/bin/pyokka` that runs this
+ * The extension's command on PATH: a shell script at `~/.local/bin/tracelight` that runs this
  * extension's own `dist/node` runtime. An agent then finds the CLI without knowing where the
  * extension lives, and a path it saved from an older version cannot go stale, because every
  * activation rewrites the script with the current one.
  *
- * Written only while `pyokka.agentAccess` is on, since that is the user saying agents may use
- * Pyokka. A script that is already ours is refreshed whatever the setting. Anything else at that
+ * Written only while `tracelight.agentAccess` is on, since that is the user saying agents may use
+ * Tracelight. A script that is already ours is refreshed whatever the setting. Anything else at that
  * path (a `uv tool install` symlink, the user's own script) is never touched.
  */
 import * as vscode from 'vscode';
@@ -19,13 +19,13 @@ import { jsRuntimeEntry } from '../runtime/language';
 import { log } from '../util/log';
 
 /** the line that marks a script as one this extension wrote and may rewrite */
-export const SHIM_MARKER = '# pyokka-shim: written by the Pyokka extension';
+export const SHIM_MARKER = '# tracelight-shim: written by the Tracelight extension';
 export interface ShimInputs {
   /** `bin/tracelight.mjs` of the runtime inside the extension */
   entry: string;
-  /** the Node the window resolved (`pyokka.nodePath`, else `node` on PATH), used unless $TRACELIGHT_CLI_NODE is set */
+  /** the Node the window resolved (`tracelight.nodePath`, else `node` on PATH), used unless $TRACELIGHT_CLI_NODE is set */
   node: string;
-  /** the editor's own launcher, exported as $PYOKKA_CODE unless the caller set one */
+  /** the editor's own launcher, exported as $TRACELIGHT_CODE unless the caller set one */
   launcher?: string;
   version: string;
 }
@@ -40,7 +40,7 @@ function shQuote(s: string): string {
  */
 export function shimScript(i: ShimInputs): string {
   const lines = ['#!/bin/sh', `${SHIM_MARKER} ${i.version}. It is rewritten on every activation; edit nothing here.`, `node=\${TRACELIGHT_CLI_NODE:-${shQuote(i.node)}}`];
-  if (i.launcher) lines.push(`if [ -z "\${PYOKKA_CODE:-}" ]; then PYOKKA_CODE=${shQuote(i.launcher)}; export PYOKKA_CODE; fi`);
+  if (i.launcher) lines.push(`if [ -z "\${TRACELIGHT_CODE:-}" ]; then TRACELIGHT_CODE=${shQuote(i.launcher)}; export TRACELIGHT_CODE; fi`);
   lines.push(`exec "$node" ${shQuote(i.entry)} "$@"`, '');
   return lines.join('\n');
 }
@@ -59,7 +59,7 @@ export function shimState(file: string): ShimState {
   if (!st.isFile()) return { kind: 'foreign', why: 'not a file' };
   const text = fs.readFileSync(file, 'utf8');
   const ours = text.includes(SHIM_MARKER);
-  return ours ? { kind: 'ours', text } : { kind: 'foreign', why: 'a script Pyokka did not write' };
+  return ours ? { kind: 'ours', text } : { kind: 'foreign', why: 'a script Tracelight did not write' };
 }
 
 /** Write `text` to `file` when it should: absent and allowed, or ours and different. Returns what it did; `foreign` is someone else's file, left alone. */
@@ -89,7 +89,7 @@ export function findLauncher(appRoot: string): string | undefined {
 
 /** The line a shell profile needs; it names $HOME rather than the account's path. */
 export const PATH_LINE = 'export PATH="$HOME/.local/bin:$PATH"';
-const PATH_ASKED_KEY = 'pyokka.cliPathAsked';
+const PATH_ASKED_KEY = 'tracelight.cliPathAsked';
 
 /** Is `dir` on this PATH, ignoring a trailing slash? */
 export function onPath(dir: string, pathVar: string): boolean {
@@ -112,7 +112,7 @@ async function offerPath(context: vscode.ExtensionContext): Promise<void> {
   const profile = profileFor(process.env['SHELL'] ?? '', os.homedir(), process.platform);
   const add = profile ? `Add to ${path.basename(profile)}` : undefined;
   const pick = await vscode.window.showInformationMessage(
-    `Pyokka installed the pyokka command in ~/.local/bin, which is not on your PATH. Agents can call it by its full path; for the bare name, add ${PATH_LINE} to your shell profile.`,
+    `Tracelight installed the tracelight command in ~/.local/bin, which is not on your PATH. Agents can call it by its full path; for the bare name, add ${PATH_LINE} to your shell profile.`,
     ...(add ? [add] : []),
     'Copy Line',
   );
@@ -121,26 +121,26 @@ async function offerPath(context: vscode.ExtensionContext): Promise<void> {
     try {
       const text = fs.existsSync(profile) ? fs.readFileSync(profile, 'utf8') : '';
       if (!text.includes(PATH_LINE)) fs.writeFileSync(profile, `${text.replace(/\n*$/, text ? '\n' : '')}${PATH_LINE}\n`);
-      void vscode.window.showInformationMessage(`Added to ${profile}. New terminals will find pyokka; running ones keep their PATH.`);
+      void vscode.window.showInformationMessage(`Added to ${profile}. New terminals will find tracelight; running ones keep their PATH.`);
     } catch (err) {
       // a managed machine may lock the profile: say so and hand over the line instead
-      log.error(`pyokka CLI: could not write ${profile}`, err);
+      log.error(`tracelight CLI: could not write ${profile}`, err);
       await vscode.env.clipboard.writeText(PATH_LINE);
-      void vscode.window.showWarningMessage(`Pyokka could not write ${profile}. The PATH line is on the clipboard.`);
+      void vscode.window.showWarningMessage(`Tracelight could not write ${profile}. The PATH line is on the clipboard.`);
     }
   }
 }
 
 /** Keep the shim current now and whenever agent access is turned on. POSIX only: a Windows user profile has no bin directory on PATH to put it in. */
 export function installCliShim(context: vscode.ExtensionContext, runtimeDir: string): vscode.Disposable {
-  if (process.platform === 'win32' || process.env['PYOKKA_E2E'] || context.extensionMode === vscode.ExtensionMode.Test) return new vscode.Disposable(() => {});
+  if (process.platform === 'win32' || process.env['TRACELIGHT_E2E'] || context.extensionMode === vscode.ExtensionMode.Test) return new vscode.Disposable(() => {});
   const bin = path.join(os.homedir(), '.local', 'bin');
   const version = String(context.extension.packageJSON.version);
   const launcher = findLauncher(vscode.env.appRoot);
   const entry = jsRuntimeEntry(runtimeDir, path.join, path.dirname);
   // target is what the shim runs, for the log line
   const scripts: { file: string; target: string; text: () => Promise<string> }[] = [
-    { file: path.join(bin, 'pyokka'), target: entry, text: async () => shimScript({ entry, node: await resolveNode().then((i) => i.path, () => 'node'), launcher, version }) },
+    { file: path.join(bin, 'tracelight'), target: entry, text: async () => shimScript({ entry, node: await resolveNode().then((i) => i.path, () => 'node'), launcher, version }) },
   ];
   const syncOne = async (file: string, target: string, script: () => Promise<string>): Promise<void> => {
     const allowCreate = setting<boolean>(AGENT_ACCESS_SETTING, false);
@@ -149,20 +149,20 @@ export function installCliShim(context: vscode.ExtensionContext, runtimeDir: str
     const did = syncShim(file, text, allowCreate);
     if (did === 'foreign') {
       const state = shimState(file);
-      log.info(`pyokka CLI: left ${file} alone (${state.kind === 'foreign' ? state.why : 'changed meanwhile'})`);
+      log.info(`tracelight CLI: left ${file} alone (${state.kind === 'foreign' ? state.why : 'changed meanwhile'})`);
     }
-    if (did === 'created' || did === 'updated') log.info(`pyokka CLI: ${did} ${file} -> ${target}`);
+    if (did === 'created' || did === 'updated') log.info(`tracelight CLI: ${did} ${file} -> ${target}`);
     if (did === 'created' && !onPath(path.dirname(file), process.env['PATH'] ?? '')) {
-      log.warn(`pyokka CLI: ${path.dirname(file)} is not on PATH, so agents will not find ${file} by name`);
+      log.warn(`tracelight CLI: ${path.dirname(file)} is not on PATH, so agents will not find ${file} by name`);
       void offerPath(context);
     }
   };
   const sync = async (): Promise<void> => {
     for (const s of scripts) await syncOne(s.file, s.target, s.text);
   };
-  const run = (): void => void sync().catch((err) => log.error('pyokka CLI shim failed', err));
+  const run = (): void => void sync().catch((err) => log.error('tracelight CLI shim failed', err));
   run();
   return vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration(`pyokka.${AGENT_ACCESS_SETTING}`)) run();
+    if (e.affectsConfiguration(`tracelight.${AGENT_ACCESS_SETTING}`)) run();
   });
 }

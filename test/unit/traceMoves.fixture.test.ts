@@ -1,7 +1,7 @@
 /**
- * Shared fixture for the Time Machine moves: the TypeScript model is the reference, the Python
- * port (`pyokka_runtime/trace.py`) is checked against `fixtures/trace-moves.json`.
- * Regenerate with PYOKKA_WRITE_FIXTURES=1 after changing the model.
+ * Shared fixture for the Time Machine moves: the extension's TypeScript model is the reference, the
+ * runtime's port (`node/src/agent/trace.ts`) is checked against `fixtures/trace-moves.json`.
+ * Regenerate with TRACELIGHT_WRITE_FIXTURES=1 after changing the model.
  */
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
@@ -46,7 +46,7 @@ function build() {
 describe('trace moves fixture', () => {
   it('matches fixtures/trace-moves.json (the Python port is tested against the same file)', () => {
     const built = build();
-    if (process.env.PYOKKA_WRITE_FIXTURES) fs.writeFileSync(FIXTURE, JSON.stringify(built, null, 1) + '\n');
+    if (process.env.TRACELIGHT_WRITE_FIXTURES) fs.writeFileSync(FIXTURE, JSON.stringify(built, null, 1) + '\n');
     const stored = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
     expect(built).toEqual(stored);
   });

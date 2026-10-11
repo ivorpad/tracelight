@@ -1,5 +1,5 @@
 /**
- * The execution graph's text form (the lines `pyokka graph` prints, for the Code Story and the
+ * The execution graph's text form (the lines `tracelight graph` prints, for the Code Story and the
  * tests) and the call stack as node ids (the panel's active path).
  */
 import { displayPath } from './walkthroughShared';

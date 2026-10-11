@@ -1,6 +1,6 @@
 /**
  * The Details pane's "why" document: the text form of a provenance tree (`provenanceLines`, shared
- * with `pyokka why`) plus what a click on each line needs. Pure, so the pane and its tests share
+ * with `tracelight why`) plus what a click on each line needs. Pure, so the pane and its tests share
  * it; Details.tsx owns the Monaco side.
  */
 import { provenanceLines } from '../src/shared/provenanceText';

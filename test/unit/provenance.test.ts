@@ -2,7 +2,7 @@
  * The provenance builder (docs/PROTOCOL.md, "Provenance") over a hand-built trace, then over the
  * shared fixture run `fixtures/provenance-run.json` with the cases `fixtures/provenance.json`
  * (both written by python/tests/test_provenance.py): every case must produce exactly the tree the
- * Python builder wrote. Regenerate them from the Python side with PYOKKA_WRITE_FIXTURES=1.
+ * Python builder wrote. Regenerate them from the Python side with TRACELIGHT_WRITE_FIXTURES=1.
  */
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';

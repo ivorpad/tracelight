@@ -1,10 +1,10 @@
 /**
- * `vscode://ivor.pyokka/debug?…` (docs/design/debugger-product.md, 3.9): how `pyokka debug FILE`
+ * `vscode://ivor.tracelight/debug?…` (docs/design/debugger-product.md, 3.9): how `tracelight debug FILE`
  * reaches a window that has no socket for the file yet. The CLI builds the URI, `code --open-url`
  * hands it to the focused window, and this handler starts the debug session the CLI then connects
  * to over the descriptor.
  *
- * The handler obeys `pyokka.agentAccess`. The setting is what makes the window answer an agent at
+ * The handler obeys `tracelight.agentAccess`. The setting is what makes the window answer an agent at
  * all, and a debug session serves code execution in the user's own process, so a URI that arrives
  * while the setting is off starts nothing: a stopped program nobody can continue is worse than a
  * refusal.
@@ -19,14 +19,14 @@ import { startDebugSession } from './dapAdapter';
 import { AGENT_ACCESS_SETTING } from '../agent/bridge';
 import { log } from '../util/log';
 
-/** The path of the one URI Pyokka answers. */
+/** The path of the one URI Tracelight answers. */
 export const DEBUG_URI_PATH = '/debug';
 
-/** Handle one `vscode://ivor.pyokka/debug` URI; resolves once the debug session has been asked for. */
+/** Handle one `vscode://ivor.tracelight/debug` URI; resolves once the debug session has been asked for. */
 export async function handleDebugUri(uri: vscode.Uri): Promise<void> {
   log.info(`URI handler: ${uri.path}${uri.query ? `?${uri.query}` : ''}`);
   if (uri.path !== DEBUG_URI_PATH) {
-    log.warn(`URI handler: ${uri.path} is not a Pyokka URI (only ${DEBUG_URI_PATH})`);
+    log.warn(`URI handler: ${uri.path} is not a Tracelight URI (only ${DEBUG_URI_PATH})`);
     return;
   }
   let launch: LaunchConfig;
@@ -40,28 +40,28 @@ export async function handleDebugUri(uri: vscode.Uri): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log.error(`URI handler: ${message}`);
-    void vscode.window.showErrorMessage(`Pyokka: an agent asked to debug, but the request could not be read: ${message}`);
+    void vscode.window.showErrorMessage(`Tracelight: an agent asked to debug, but the request could not be read: ${message}`);
     return;
   }
   const resource = vscode.Uri.file(launch.program ?? launch.cwd);
   if (!setting<boolean>(AGENT_ACCESS_SETTING, false, resource)) {
     const name = launch.module ? `-m ${launch.module}` : path.basename(launch.program ?? '');
-    log.warn(`URI handler: a debug start of ${name} arrived with pyokka.agentAccess off; asking`);
+    log.warn(`URI handler: a debug start of ${name} arrived with tracelight.agentAccess off; asking`);
     // not awaited: the handler returns at once, and a click (the CLI may still be polling, or a
     // later `state --live` finds it) starts the very launch that was asked for
     void vscode.window
       .showWarningMessage(
-        `Pyokka: an agent asked to debug ${name}. Allow local agents (the pyokka CLI) to start and drive debug sessions and read runs in VS Code? This turns on "pyokka.agentAccess" for every workspace.`,
+        `Tracelight: an agent asked to debug ${name}. Allow local agents (the tracelight CLI) to start and drive debug sessions and read runs in VS Code? This turns on "tracelight.agentAccess" for every workspace.`,
         'Allow',
         'Open Settings',
       )
       .then(async (pick) => {
-        if (pick === 'Open Settings') void vscode.commands.executeCommand('workbench.action.openSettings', 'pyokka.agentAccess');
+        if (pick === 'Open Settings') void vscode.commands.executeCommand('workbench.action.openSettings', 'tracelight.agentAccess');
         if (pick !== 'Allow') {
-          log.warn(`URI handler: refused a debug start of ${name}; pyokka.agentAccess is off`);
+          log.warn(`URI handler: refused a debug start of ${name}; tracelight.agentAccess is off`);
           return;
         }
-        await vscode.workspace.getConfiguration('pyokka').update(AGENT_ACCESS_SETTING, true, vscode.ConfigurationTarget.Global);
+        await vscode.workspace.getConfiguration('tracelight').update(AGENT_ACCESS_SETTING, true, vscode.ConfigurationTarget.Global);
         log.info(`URI handler: agent access allowed from the prompt; starting ${name}`);
         await handleDebugUri(uri);
       });
@@ -72,7 +72,7 @@ export async function handleDebugUri(uri: vscode.Uri): Promise<void> {
     const spec = parseAt(at);
     if (!spec) {
       log.warn(`URI handler: ${AT_UNREADABLE}, got ${JSON.stringify(at)}`);
-      void vscode.window.showErrorMessage(`Pyokka: ${AT_UNREADABLE}, got ${JSON.stringify(at)}`);
+      void vscode.window.showErrorMessage(`Tracelight: ${AT_UNREADABLE}, got ${JSON.stringify(at)}`);
       return;
     }
     // the human sees each `--at` breakpoint in the Breakpoints view, and all are set before the run starts

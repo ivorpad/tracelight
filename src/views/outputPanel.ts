@@ -1,5 +1,5 @@
 /**
- * `pyokka.output` WebviewViewProvider: HTML shell, state forwarding per webviewProtocol.ts,
+ * `tracelight.output` WebviewViewProvider: HTML shell, state forwarding per webviewProtocol.ts,
  * and handling of every WebviewToHost message.
  */
 import * as vscode from 'vscode';
@@ -25,7 +25,7 @@ import { walkthroughInputs } from '../agent/bridgeSupport';
 import { setting } from '../config/settings';
 import { log } from '../util/log';
 
-export const OUTPUT_VIEW_ID = 'pyokka.output';
+export const OUTPUT_VIEW_ID = 'tracelight.output';
 
 export class OutputPanel implements vscode.WebviewViewProvider, TimeMachineSink, vscode.Disposable {
   private view: vscode.WebviewView | undefined;
@@ -35,11 +35,11 @@ export class OutputPanel implements vscode.WebviewViewProvider, TimeMachineSink,
   private boundDisposers: (() => void)[] = [];
   private readonly disposables: vscode.Disposable[] = [];
   private pendingShowOnStart = false;
-  /** the view the webview last reported showing (`pyokka.panelView`); the e2e suite reads it */
+  /** the view the webview last reported showing (`tracelight.panelView`); the e2e suite reads it */
   activeView: ViewId | undefined;
   private entriesTimer: NodeJS.Timeout | undefined;
   private narrator: Narrator | undefined;
-  /** the TOUR section: `pyokka tour` of the bound session's run, computed while the section is open */
+  /** the TOUR section: `tracelight tour` of the bound session's run, computed while the section is open */
   private tour: TourHost | undefined;
   /** the Variable pane's query for the bound session, recomputed after every run */
   private readonly variable = new VariablePaneHost((s, msg) => this.post(s, msg));
@@ -52,7 +52,7 @@ export class OutputPanel implements vscode.WebviewViewProvider, TimeMachineSink,
   private debugView: DebuggerViewHost | undefined;
   /** observers of everything posted, for the e2e suite; empty in a real window */
   private readonly taps = new Set<(msg: HostToWebview) => void>();
-  /** the Execution Diagram view: its graph (built when `pyokka.diagram.build` says), the story phases, the call stack, unrolling, hits */
+  /** the Execution Diagram view: its graph (built when `tracelight.diagram.build` says), the story phases, the call stack, unrolling, hits */
   private readonly graph = new GraphPaneHost((s, msg) => this.post(s, msg));
 
   constructor(
@@ -71,7 +71,7 @@ export class OutputPanel implements vscode.WebviewViewProvider, TimeMachineSink,
     // the diagram settings are user settings with no session value: a change re-sends them and the graph they shape
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (!e.affectsConfiguration('pyokka.diagram')) return;
+        if (!e.affectsConfiguration('tracelight.diagram')) return;
         this.post({ type: 'settings', settings: this.bound ? this.settings(this.bound) : defaultSettings() });
         if (this.bound) this.graph.afterRun(this.bound);
       }),
@@ -411,7 +411,7 @@ export class OutputPanel implements vscode.WebviewViewProvider, TimeMachineSink,
     this.post({ type: 'exceptions', report: panel });
   }
 
-  /** The Execution Diagram view: build the graph of the last run and send it (the Show Execution Diagram command; the view otherwise asks for it, `pyokka.diagram.build`). */
+  /** The Execution Diagram view: build the graph of the last run and send it (the Show Execution Diagram command; the view otherwise asks for it, `tracelight.diagram.build`). */
   pushExecutionGraph(session: Session): void {
     this.graph.push(session);
   }

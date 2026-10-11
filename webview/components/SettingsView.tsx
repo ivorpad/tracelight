@@ -72,7 +72,7 @@ export function SettingsView({ settings, onUpdate, onSaveDefaults, onCommand }: 
         <span class="pk-toolbar">
           <IconButton icon="save" title="Save as defaults for new files" onClick={() => onSaveDefaults(settings)} />
           <IconButton icon="discard" title="Reset to defaults" onClick={() => onUpdate({ ...DEFAULT_SETTINGS, runMode: settings.runMode })} />
-          <IconButton icon="history" title="View Recent Files" onClick={() => onCommand('pyokka.viewRecentFiles')} />
+          <IconButton icon="history" title="View Recent Files" onClick={() => onCommand('tracelight.viewRecentFiles')} />
         </span>
       </header>
       <div class="pk-settings-body">
@@ -102,7 +102,7 @@ export function SettingsView({ settings, onUpdate, onSaveDefaults, onCommand }: 
           {timeoutOpen && <Menu items={timeoutItems} onClose={() => setTimeoutOpen(false)} align="left" />}
         </span>
         <div class="pk-settings-group">HTTP</div>
-        <p class="pk-caption pk-caption-sub">Record writes every HTTP exchange of the next run to .pyokka/replay/ in the workspace (httpx, requests, urllib). Replay answers from that recording without touching the network: a re-run costs nothing and returns the same values. Both apply to the next run.</p>
+        <p class="pk-caption pk-caption-sub">Record writes every HTTP exchange of the next run to .tracelight/replay/ in the workspace (httpx, requests, urllib). Replay answers from that recording without touching the network: a re-run costs nothing and returns the same values. Both apply to the next run.</p>
         <span class="pk-menu-anchor">
           <button type="button" class="pk-dropdown" onClick={() => setHttpOpen((o) => !o)}>
             {HTTP_MODE_LABEL[settings.http]}

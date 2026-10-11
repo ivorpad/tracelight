@@ -9,10 +9,10 @@
 # SPECS is comma-separated absolute or repository paths; EXT_ID is $E2E_EXTENSION for the specs;
 # every VSIX is installed. E2E_GREP filters tests, SETTINGS adds ',"key":value' to settings.json.
 # Needs Chromium (PLAYWRIGHT_BROWSERS_PATH or CHROMIUM) and Xvfb-free headless; libkrb5-dev to
-# build code-server's native modules once. Tools are cached in $CS_CACHE (~/.cache/pyokka-code-server).
+# build code-server's native modules once. Tools are cached in $CS_CACHE (~/.cache/tracelight-code-server).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd); REPO=$(cd "$HERE/../.." && pwd)
-CACHE=${CS_CACHE:-$HOME/.cache/pyokka-code-server}
+CACHE=${CS_CACHE:-$HOME/.cache/tracelight-code-server}
 WS=$1; SPECS=$2; EXTID=$3; shift 3
 mkdir -p "$CACHE"
 if [ ! -x "$CACHE/node_modules/node-linux-x64/bin/node" ]; then (cd "$CACHE" && npm init -y >/dev/null && npm install node-linux-x64@24 >/dev/null) || exit 1; fi
@@ -31,7 +31,7 @@ echo "{\"security.workspace.trust.enabled\":false,\"workbench.startupEditor\":\"
 abs() { case "$1" in /*) echo "$1";; *) echo "$REPO/$1";; esac; }
 SPECS=$(IFS=,; for s in $SPECS; do printf '%s,' "$(abs "$s")"; done); SPECS=${SPECS%,}
 export E2E_RESULT=$RUN/result.json E2E_SPECS=$SPECS E2E_MOCHA=$CACHE/node_modules/mocha E2E_EXTENSION=$EXTID
-export PYOKKA_E2E=1 TRACELIGHT_E2E=1 PYOKKA_HOME=$(mktemp -d /tmp/pk-XXXX) TRACELIGHT_HOME=$(mktemp -d /tmp/tl-XXXX)
+export TRACELIGHT_E2E=1 TRACELIGHT_E2E=1 TRACELIGHT_HOME=$(mktemp -d /tmp/pk-XXXX) TRACELIGHT_HOME=$(mktemp -d /tmp/tl-XXXX)
 PORT=$((20000 + RANDOM % 20000))
 $CS --auth none --bind-addr 127.0.0.1:$PORT --extensions-dir "$RUN/ext" --user-data-dir "$RUN/data" --disable-telemetry --disable-workspace-trust "$WS" > "$RUN/server.log" 2>&1 &
 SP=$!

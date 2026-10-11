@@ -123,7 +123,7 @@ describe('the story document', () => {
   });
 });
 
-describe('story values (pyokka.story.values)', () => {
+describe('story values (tracelight.story.values)', () => {
   const block = { firstStep: 10, lastStep: 20 };
 
   it("'all', the default, paints every entry the block's steps produced, whatever the current step", () => {

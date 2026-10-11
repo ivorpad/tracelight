@@ -1,5 +1,5 @@
 /**
- * Recent Pyokka Files virtual document with per-entry code lenses.
+ * Recent Tracelight Files virtual document with per-entry code lenses.
  */
 import * as vscode from 'vscode';
 import { languageIdFor } from '../runtime/language';
@@ -8,8 +8,8 @@ import * as path from 'node:path';
 import type { SessionManager } from '../session/sessionManager';
 import type { RecentFile } from '../session/recentFilesStore';
 
-export const RECENT_SCHEME = 'pyokka-recent';
-export const RECENT_URI = vscode.Uri.from({ scheme: RECENT_SCHEME, path: 'Recent Pyokka Files' });
+export const RECENT_SCHEME = 'tracelight-recent';
+export const RECENT_URI = vscode.Uri.from({ scheme: RECENT_SCHEME, path: 'Recent Tracelight Files' });
 const WJ = '⁠'; // word joiner fences around names
 const FSP = ' '; // figure space fences around dates
 const ZWSP = '​';
@@ -45,7 +45,7 @@ export class RecentFilesView implements vscode.TextDocumentContentProvider, vsco
 
   async show(): Promise<void> {
     const doc = await vscode.workspace.openTextDocument(RECENT_URI);
-    if (doc.languageId !== 'pyokka-recent') await vscode.languages.setTextDocumentLanguage(doc, 'pyokka-recent');
+    if (doc.languageId !== 'tracelight-recent') await vscode.languages.setTextDocumentLanguage(doc, 'tracelight-recent');
     await vscode.window.showTextDocument(doc, { preview: false });
   }
 
@@ -58,7 +58,7 @@ export class RecentFilesView implements vscode.TextDocumentContentProvider, vsco
     const entries = this.manager.recentFiles.list();
     const out: string[] = [];
     const headers: Rendered['headers'] = [];
-    if (!entries.length) out.push('# No recent Pyokka files yet. Start Pyokka on a file (Cmd/Ctrl+K Q) and it appears here.');
+    if (!entries.length) out.push('# No recent Tracelight files yet. Start Tracelight on a file (Cmd/Ctrl+K Q) and it appears here.');
     for (const e of entries) {
       headers.push({ line: out.length, entry: e });
       out.push(`${WJ}${e.name}${WJ}  ${FSP}${new Date(e.timestamp).toLocaleString()}${FSP}${e.projectRoot ? `  ${e.projectRoot}` : ''}`);
@@ -98,14 +98,14 @@ export class RecentFilesView implements vscode.TextDocumentContentProvider, vsco
       const add = (title: string, command: string, args: unknown): void => {
         lenses.push(new vscode.CodeLens(range, { title, command, arguments: [args] }));
       };
-      add('Run', 'pyokka.runRecentFile', { id: entry.id });
-      add('Clone and Run', 'pyokka.runRecentFile', { id: entry.id, clone: true });
+      add('Run', 'tracelight.runRecentFile', { id: entry.id });
+      add('Clone and Run', 'tracelight.runRecentFile', { id: entry.id, clone: true });
       for (const f of folders) {
         if (f.uri.fsPath === entry.projectRoot) continue;
-        add(`Run in ${f.name}`, 'pyokka.runRecentFile', { id: entry.id, folder: f.uri.fsPath });
-        add(`Clone and Run in ${f.name}`, 'pyokka.runRecentFile', { id: entry.id, clone: true, folder: f.uri.fsPath });
+        add(`Run in ${f.name}`, 'tracelight.runRecentFile', { id: entry.id, folder: f.uri.fsPath });
+        add(`Clone and Run in ${f.name}`, 'tracelight.runRecentFile', { id: entry.id, clone: true, folder: f.uri.fsPath });
       }
-      add('Remove from recent files', 'pyokka.removeRecentFiles', { ids: [entry.id] });
+      add('Remove from recent files', 'tracelight.removeRecentFiles', { ids: [entry.id] });
     }
     return lenses;
   }
@@ -123,7 +123,7 @@ export class RecentFilesView implements vscode.TextDocumentContentProvider, vsco
         try {
           content = fs.readFileSync(entry.path, 'utf8');
         } catch {
-          void vscode.window.showWarningMessage(`Pyokka: ${entry.path} no longer exists.`);
+          void vscode.window.showWarningMessage(`Tracelight: ${entry.path} no longer exists.`);
           return;
         }
       }

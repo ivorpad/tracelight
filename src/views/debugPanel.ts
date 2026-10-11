@@ -76,7 +76,7 @@ export class DebugPanelHost {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log.error(`panel ${msg.type} failed (${session.displayName})`, err);
-      void vscode.window.showErrorMessage(`Pyokka: ${message}`);
+      void vscode.window.showErrorMessage(`Tracelight: ${message}`);
     }
   }
 

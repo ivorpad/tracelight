@@ -1,5 +1,5 @@
 /**
- * TOUR section of the Output view: the run's chapters (`pyokka tour`, docs/TOUR.md) as a map and
+ * TOUR section of the Output view: the run's chapters (`tracelight tour`, docs/TOUR.md) as a map and
  * as folding groups, each chapter's stops as rows. Only the open chapter is expanded; it follows
  * the Time Machine. A stop's values are folded under it. Clicking a stop moves the Time Machine
  * there. Narrate Tour (the sparkle) is one model call that titles and explains the picked stops.
@@ -25,7 +25,7 @@ export interface TourProps {
 function narrateTitle(model: TourPanel | null): string {
   if (!model || model.status !== 'ready') return 'Narrate Tour: wait for the tour';
   if (model.narrating) return 'Narrating the tour… (one model call)';
-  if (!model.canNarrate) return 'Narrate Tour: install claude or codex, set pyokka.explain.command, or sign in to Copilot';
+  if (!model.canNarrate) return 'Narrate Tour: install claude or codex, set tracelight.explain.command, or sign in to Copilot';
   if (model.narrated) return 'Narrated (one model call per run)';
   return 'Narrate Tour: one model call picks the stops that tell the story and explains each';
 }

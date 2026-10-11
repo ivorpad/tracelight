@@ -61,7 +61,7 @@ describe('Rail', () => {
     const views: string[] = [];
     const commands: string[] = [];
     const items = railMenuItems((v) => views.push(v), (c) => commands.push(c));
-    expect(items.map((i) => i.label)).toEqual(['Show Execution Diagram', 'View Recent Files', 'Show Instrumented File', 'Edit Session Settings', 'Show Pyokka Logs']);
+    expect(items.map((i) => i.label)).toEqual(['Show Execution Diagram', 'View Recent Files', 'Show Instrumented File', 'Edit Session Settings', 'Show Tracelight Logs']);
     items[0]!.onSelect!();
     expect(views).toEqual(['run-diagram']);
     expect(commands).toEqual([]);
@@ -244,7 +244,7 @@ describe('Walkthrough', () => {
     expect(tips(busy)).toEqual(['Narrating… (one model call)']);
     const failed = walk(model({ narrationError: 'claude is not on the PATH' }));
     expect(failed).toMatch(/pk-notice pk-walkthrough-error" role="status".*Narration failed: claude is not on the PATH/);
-    expect(tips(walk(model({ canNarrate: false })))).toEqual(['Narrate: install claude or codex, set pyokka.explain.command, or sign in to Copilot']);
+    expect(tips(walk(model({ canNarrate: false })))).toEqual(['Narrate: install claude or codex, set tracelight.explain.command, or sign in to Copilot']);
   });
   it('collapses to its header and shows the cap', () => {
     const closed = walk(model(), null, false);
@@ -317,6 +317,6 @@ describe('NoSession', () => {
       for (const c of [n.props.children ?? []].flat()) if (c && typeof c === 'object') walk(c as Node);
     };
     walk(NoSession({ onCommand: (c) => ran.push(c) }) as Node);
-    expect(ran).toEqual(['pyokka.startOnCurrentFile', 'pyokka.debugCurrentFile']);
+    expect(ran).toEqual(['tracelight.startOnCurrentFile', 'tracelight.debugCurrentFile']);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Recording from a pause over the bridge (`pyokka debug FILE --record-from X`, `pyokka record --live`):
+ * Recording from a pause over the bridge (`tracelight debug FILE --record-from X`, `tracelight record --live`):
  * the stop reply of a pause that came before the recording started, and the `record` request.
  *
  * A `recordFrom` run is a run-all session in debug mode whose trace starts at a pause. A pause
@@ -48,7 +48,7 @@ export async function recordHere(session: Session, waitForPause: (action: () => 
   const d = session.debug;
   if (!d.paused) {
     if (d.active && session.running) throw new BridgeError('cannot start recording: the program is running', '`pause --live` stops it at its next statement; `record --live` then records from there');
-    throw new BridgeError('cannot start recording: no debug run is paused', 'start one with `pyokka debug FILE --record-from NAME`');
+    throw new BridgeError('cannot start recording: no debug run is paused', 'start one with `tracelight debug FILE --record-from NAME`');
   }
   if (!session.debugCtl.recordFrom || session.trace) return { result: undefined, already: true };
   // the runtime announces the same pause again as step 0, with its recorded stack

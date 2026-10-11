@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The version Pyokka ships under, and the rule that moves it.
+"""The version Tracelight ships under, and the rule that moves it.
 
 Four files carry the number. `package.json` is the one that decides it: the manifest
 generator keeps whatever is already there (`setdefault`), so regenerating never resets
@@ -113,7 +113,7 @@ def next_version() -> str:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description='Read and move Pyokka\'s version.')
+    ap = argparse.ArgumentParser(description='Read and move Tracelight\'s version.')
     ap.add_argument('level', nargs='?', choices=sorted(LEVELS) + sorted(SYNONYMS),
                     help='force a level instead of reading the Bump: trailers')
     ap.add_argument('--next', action='store_true', help='print the next version, write nothing')

@@ -1,5 +1,5 @@
 /**
- * Recording from a pause (`pyokka debug FILE --record-from X`): the launch and URI fields, the
+ * Recording from a pause (`tracelight debug FILE --record-from X`): the launch and URI fields, the
  * run config's `recordFrom`, a trace that starts mid-program in the Time Machine's moves, and the
  * provenance leaf that marks where the recording began.
  */

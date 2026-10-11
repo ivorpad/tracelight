@@ -1,7 +1,7 @@
 /**
  * The HTTP table (docs/PROTOCOL.md, "HTTP record and replay", HTTP table): a run's `http.exchange`
  * rows with their initiators, the totals and `run.finished.http`. Pure and shared by the bridge's
- * `http` reply, the panel's HTTP view and `pyokka http --live`; the Python builder
+ * `http` reply, the panel's HTTP view and `tracelight http --live`; the runtime's builder
  * (node/src/agent/http.ts) produces the same table from a saved run and
  * test/unit/fixtures/http-table*.json pins both. No node imports: the webview bundles the formatters.
  */

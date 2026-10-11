@@ -1,9 +1,9 @@
 #!/bin/zsh
 # Sequence runner. Each arg group: key:NAME | hot:cmd,shift,p | type:TEXT | cap:NAME | click:X,Y | move:X,Y | sleep:SECS
-# Screenshots go to $PYOKKA_SHOTS, or $TMPDIR/pyokka-shots. Needs cua-driver and macOS screencapture.
-S=${PYOKKA_SHOTS:-${TMPDIR:-/tmp}/pyokka-shots}
+# Screenshots go to $TRACELIGHT_SHOTS, or $TMPDIR/tracelight-shots. Needs cua-driver and macOS screencapture.
+S=${TRACELIGHT_SHOTS:-${TMPDIR:-/tmp}/tracelight-shots}
 mkdir -p "$S"
-D='{"session":"pyokka-fg","scope":"desktop"'
+D='{"session":"tracelight-fg","scope":"desktop"'
 for step in "$@"; do
   op=${step%%:*}; arg=${step#*:}
   case $op in

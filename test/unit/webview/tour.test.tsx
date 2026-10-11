@@ -138,7 +138,7 @@ describe('Tour section', () => {
 
   it('says what it is doing while computing, when it failed and when a narration failed', () => {
     expect(html({ model: { ...tour(), status: 'computing', chapters: [], stops: [] } })).toContain('COMPUTING THE TOUR');
-    expect(html({ model: { ...tour(), status: 'error', error: 'pyokka tour exited with 1' } })).toContain('No tour: pyokka tour exited with 1');
+    expect(html({ model: { ...tour(), status: 'error', error: 'tracelight tour exited with 1' } })).toContain('No tour: tracelight tour exited with 1');
     expect(html({ model: tour({ narrationError: 'the prose has 1 problems: c9: unknown chapter id' }) })).toContain('Narrate Tour failed: the prose has 1 problems: c9: unknown chapter id');
     expect(html({ model: null })).toContain('NO RUN YET');
     expect(html({ open: false })).not.toContain('pk-tour-map');

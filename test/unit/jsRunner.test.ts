@@ -49,7 +49,7 @@ describe.skipIf(!haveRuntime)('RunnerClient on Tracelight', () => {
   }, 30_000);
 });
 
-describe.skipIf(!haveRuntime)('the Debugger (record: false) on Pyokka JS', () => {
+describe.skipIf(!haveRuntime)('the Debugger (record: false) on Tracelight JS', () => {
   const client = new RunnerClient({ command: process.execPath, args: [ENTRY, 'serve'], cwd: ROOT });
   afterAll(() => client.dispose());
 
@@ -87,7 +87,7 @@ describe.skipIf(!haveRuntime)('the Debugger (record: false) on Pyokka JS', () =>
   }, 30_000);
 });
 
-describe.skipIf(!haveRuntime)('shadow values on Pyokka JS', () => {
+describe.skipIf(!haveRuntime)('shadow values on Tracelight JS', () => {
   const client = new RunnerClient({ command: process.execPath, args: [ENTRY, 'serve'], cwd: ROOT });
   afterAll(() => client.dispose());
 

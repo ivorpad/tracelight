@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { SessionManager } from '../session/sessionManager';
 
 /**
- * `pyokka.showInstrumentedFile`: the runtime's instrumented source in an untitled editor.
+ * `tracelight.showInstrumentedFile`: the runtime's instrumented source in an untitled editor.
  * The active editor's file when the last run instrumented it (a project or library module),
  * otherwise the session's main file. Library files are fetched from the runner on demand.
  */
@@ -15,11 +15,11 @@ export async function showInstrumentedFile(manager: SessionManager): Promise<voi
   try {
     src = fileId === undefined ? undefined : await s.instrumentedSource(fileId);
   } catch (err) {
-    void vscode.window.showErrorMessage(`Pyokka: could not get the instrumented source: ${err instanceof Error ? err.message : String(err)}`);
+    void vscode.window.showErrorMessage(`Tracelight: could not get the instrumented source: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
   if (!src) {
-    void vscode.window.showInformationMessage('Pyokka: no instrumented source is available yet (run the file first).');
+    void vscode.window.showInformationMessage('Tracelight: no instrumented source is available yet (run the file first).');
     return;
   }
   // the instrumented code is in the session's own language

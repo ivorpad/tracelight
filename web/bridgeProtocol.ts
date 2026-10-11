@@ -58,7 +58,7 @@ export type AgentCommand =
   /** run once under the runtime's profiler and read the hottest functions */
   | { action: 'profile' };
 
-/** The TOUR section's state for a run, as the bridge computed it with `pyokka tour`. */
+/** The TOUR section's state for a run, as the bridge computed it with `tracelight tour`. */
 export interface BridgeTour {
   runId: string;
   status: 'computing' | 'ready' | 'error';
@@ -127,7 +127,7 @@ export type PageToBridge =
   | { type: 'agent.result'; id: number; result: unknown; error?: string }
   /** one model call that glosses the last run's walkthrough */
   | { type: 'narrate' }
-  /** the tour of the last run (`pyokka tour`), or Narrate Tour */
+  /** the tour of the last run (`tracelight tour`), or Narrate Tour */
   | { type: 'tour'; action: 'compute' | 'narrate' }
   | { type: 'debug.start'; breakpoints: DebugBreakpointSpec[]; exceptions: DebugExceptionMode; content?: string; stopOnEntry?: boolean }
   /** a host request for the debugger's run (`debug`, `evaluate`, `expand`, `complete`), answered with `reply` */

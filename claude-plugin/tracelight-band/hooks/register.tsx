@@ -9,24 +9,24 @@ import { narrationPrompt } from './narration'
 import { baseName, descriptorsIn, errorMessage, jsonOf, NEEDS_RECORDING, statementLines, stepOutcome, toFindings, toOrigin, toSpot } from './parse'
 import type { RawContext, RawFinding, RawOrigin } from './parse'
 import { fixedText, originAnswer, planPath, planText } from './plans'
-import { cliFor, findingAt, FIXER, FOLLOW_MS, IDLE_MS, memory, NARRATOR, plainRun, POLL_MS, PYOKKA_COMMAND, TRACELIGHT, PYOKKA } from './state'
+import { cliFor, findingAt, FIXER, FOLLOW_MS, IDLE_MS, memory, NARRATOR, plainRun, POLL_MS, TRACELIGHT_COMMAND, TRACELIGHT, TRACELIGHT } from './state'
 import { scratchDir, WINDOW_AFTER, WINDOW_BEFORE } from './state'
 import { bugsView, errorView, explainView } from './views'
 
-const snapshot = atom({ plugin: 'pyokka-band', key: 'snapshot' } as const, null)
-const isHidden = atom({ plugin: 'pyokka-band', key: 'isHidden' } as const, false)
-const lastPyokkaAt = atom({ plugin: 'pyokka-band', key: 'lastPyokkaAt' } as const, 0)
-const prose = atom({ plugin: 'pyokka-band', key: 'prose' } as const, null)
-const isNarrating = atom({ plugin: 'pyokka-band', key: 'isNarrating' } as const, true)
-const mode = atom({ plugin: 'pyokka-band', key: 'mode' } as const, 'explain')
-const bugs = atom({ plugin: 'pyokka-band', key: 'bugs' } as const, null)
-const bugIndex = atom({ plugin: 'pyokka-band', key: 'bugIndex' } as const, 0)
-const fix = atom({ plugin: 'pyokka-band', key: 'fix' } as const, null)
-const whereFrom = atom({ plugin: 'pyokka-band', key: 'origin' } as const, null)
-const notice = atom({ plugin: 'pyokka-band', key: 'notice' } as const, null)
+const snapshot = atom({ plugin: 'tracelight-band', key: 'snapshot' } as const, null)
+const isHidden = atom({ plugin: 'tracelight-band', key: 'isHidden' } as const, false)
+const lastTracelightAt = atom({ plugin: 'tracelight-band', key: 'lastTracelightAt' } as const, 0)
+const prose = atom({ plugin: 'tracelight-band', key: 'prose' } as const, null)
+const isNarrating = atom({ plugin: 'tracelight-band', key: 'isNarrating' } as const, true)
+const mode = atom({ plugin: 'tracelight-band', key: 'mode' } as const, 'explain')
+const bugs = atom({ plugin: 'tracelight-band', key: 'bugs' } as const, null)
+const bugIndex = atom({ plugin: 'tracelight-band', key: 'bugIndex' } as const, 0)
+const fix = atom({ plugin: 'tracelight-band', key: 'fix' } as const, null)
+const whereFrom = atom({ plugin: 'tracelight-band', key: 'origin' } as const, null)
+const notice = atom({ plugin: 'tracelight-band', key: 'notice' } as const, null)
 
-// The band follows the Pyokka Time Machine of a VS Code session through the same
-// `pyokka … --live` commands an agent runs: after every pyokka command in the transcript,
+// The band follows the Tracelight Time Machine of a VS Code session through the same
+// `tracelight … --live` commands an agent runs: after every tracelight command in the transcript,
 // after each of its own buttons, and every few seconds for a minute after either (so a move
 // made in the editor shows up too).
 //
@@ -46,7 +46,7 @@ async function newestDescriptor($: EngineInterface, paths: string[]): Promise<st
 }
 
 /**
- * Runs `pyokka <verb> --live ...` (`tracelight` for a JS/TS session) against the followed session. When the CLI says several
+ * Runs `tracelight <verb> --live ...` (`tracelight` for a JS/TS session) against the followed session. When the CLI says several
  * sessions are live and none is named, it follows the descriptor that changed last.
  */
 async function live($: EngineInterface, args: string[]) {
@@ -88,7 +88,7 @@ async function sourceWindow($: EngineInterface, spot: Spot): Promise<Spot['windo
 
 async function stamp($: EngineInterface): Promise<void> {
   const now = await $.clock.now()
-  await update($, lastPyokkaAt, () => now)
+  await update($, lastTracelightAt, () => now)
 }
 
 /**
@@ -129,13 +129,13 @@ async function refresh($: EngineInterface): Promise<void> {
       await narrate($, next.spot)
     }
   } catch (error) {
-    $.ui.status(`pyokka band: ${String(error).slice(0, 60)}`)
+    $.ui.status(`tracelight band: ${String(error).slice(0, 60)}`)
   }
 }
 
 // ---- bugs
 
-/** The run's suspicious steps: `pyokka suspects` when this pyokka has it, else its exceptions. */
+/** The run's suspicious steps: `tracelight suspects` when this tracelight has it, else its exceptions. */
 async function scanBugs($: EngineInterface): Promise<Bugs> {
   const now = await $.clock.now()
   const suspects = jsonOf<{ findings?: RawFinding[] }>(await live($, ['suspects', '--json']))
@@ -277,7 +277,7 @@ async function settlePlans($: EngineInterface, findings: Finding[], count: numbe
 }
 
 /**
- * Asks the model for the smallest root-cause edit, checks it on a copy in `.pyokka/band-tmp/`
+ * Asks the model for the smallest root-cause edit, checks it on a copy in `.tracelight/band-tmp/`
  * (the program itself is left alone), and writes the plan. With an origin chain (passed in, or the finding's own) the
  * model is told which step to fix and the plan lists the chain.
  */
@@ -308,7 +308,7 @@ async function proposeFix($: EngineInterface, finding: Finding, spot: Spot, orig
     }
     const planFile = await writePlan($, finding, spot, ready, chain)
     await update($, fix, () => ({ ...ready, plan: planFile }))
-    $.ui.toast(`Fix plan written: .pyokka/findings/${baseName(planFile)}`)
+    $.ui.toast(`Fix plan written: .tracelight/findings/${baseName(planFile)}`)
   } catch (error) {
     await update($, fix, () => ({ ...base, status: 'failed' as const, error: String(error).slice(0, 200) }))
   }
@@ -355,7 +355,7 @@ async function look($: EngineInterface): Promise<Look> {
 }
 
 /**
- * Asks `pyokka origin` where the bad value of the finding came from, at the finding's step,
+ * Asks `tracelight origin` where the bad value of the finding came from, at the finding's step,
  * and holds the chain for the explain view. A CLI without `origin`, or a run with no locals,
  * gives a chain with no links and the CLI's own words.
  */
@@ -364,7 +364,7 @@ async function loadOrigin($: EngineInterface, finding: Finding): Promise<NonNull
   const raw = jsonOf<RawOrigin>(ran)
   const chain: NonNullable<ValueOrigin> = raw
     ? toOrigin(raw, finding.id)
-    : { findingId: finding.id, step: finding.step, links: [], error: errorMessage(ran.stderr || ran.stdout) || 'pyokka origin gave no answer' }
+    : { findingId: finding.id, step: finding.step, links: [], error: errorMessage(ran.stderr || ran.stdout) || 'tracelight origin gave no answer' }
   await update($, whereFrom, () => chain)
   return chain
 }
@@ -479,7 +479,7 @@ async function useTool($: EngineInterface, input: ToolInput): Promise<string> {
   const shown = await read($, snapshot)
   return shown?.kind === 'error'
     ? `The band has no session: ${shown.message}`
-    : 'The band is on; it shows the session after the next pyokka command.'
+    : 'The band is on; it shows the session after the next tracelight command.'
 }
 
 // ---- hooks
@@ -487,28 +487,28 @@ async function useTool($: EngineInterface, input: ToolInput): Promise<string> {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     $.clock.every(POLL_MS, async () => {
-      const since = (await $.clock.now()) - (await read($, lastPyokkaAt))
+      const since = (await $.clock.now()) - (await read($, lastTracelightAt))
       if (since < FOLLOW_MS && !(await read($, isHidden))) {
         await refresh($)
       }
     })
-    $.command.register({ name: 'pyokka-band', description: 'Show or hide the Pyokka band and refresh it' })
+    $.command.register({ name: 'tracelight-band', description: 'Show or hide the Tracelight band and refresh it' })
     $.command.register({
       name: 'pk',
-      description: 'Drive the Pyokka band from the prompt: n next, b back, i into, o out, w where from, f plan a fix, a apply, u undo, x bugs, e explain, r record again, p prose',
+      description: 'Drive the Tracelight band from the prompt: n next, b back, i into, o out, w where from, f plan a fix, a apply, u undo, x bugs, e explain, r record again, p prose',
     })
     await $.tool.register(TOOL_SPEC)
     return next(e)
   })
 
-  on('command.run', { command: 'pyokka-band' }, async $ => {
+  on('command.run', { command: 'tracelight-band' }, async $ => {
     const hidden = await read($, isHidden)
     await update($, isHidden, () => !hidden)
     if (hidden) {
       await stamp($)
       await refresh($)
     }
-    return { text: hidden ? 'Pyokka band on' : 'Pyokka band off' }
+    return { text: hidden ? 'Tracelight band on' : 'Tracelight band off' }
   })
 
   // `/pk <key>` does what the band's key does, from the prompt (the band's own keys answer
@@ -521,20 +521,20 @@ export const register: Register = on => {
     return said ? { text: said } : {}
   })
 
-  on('tool.call', { tool: 'mcp__pyokka-band__band' }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__tracelight-band__band' }, async ($, e) => {
     return { result: await useTool($, e as ToolInput) }
   })
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const ran = await next(e)
-    if (PYOKKA_COMMAND.test(e.command)) {
+    if (TRACELIGHT_COMMAND.test(e.command)) {
       const named = e.command.match(/--session\s+(\S+)/)?.[1]
-      // `pyokka debug FILE` names the program it starts: follow it by name, so the band reads
+      // `tracelight debug FILE` names the program it starts: follow it by name, so the band reads
       // its pause rather than a session it followed before
-      const started = e.command.match(/\b(?:pyokka|tracelight)\s+debug\s+([^\s-]\S*\.(?:py|[mc]?[jt]sx?))(?=\s|$)/)?.[1]
+      const started = e.command.match(/\b(?:tracelight|tracelight)\s+debug\s+([^\s-]\S*\.(?:py|[mc]?[jt]sx?))(?=\s|$)/)?.[1]
       // the agent's own command says which CLI the session speaks
-      const cli = e.command.match(/(?:^|[\s;&|/])(pyokka|tracelight)\s/)?.[1]
-      if (cli) memory.cli = cli === 'tracelight' ? TRACELIGHT : PYOKKA
+      const cli = e.command.match(/(?:^|[\s;&|/])(tracelight|tracelight)\s/)?.[1]
+      if (cli) memory.cli = cli === 'tracelight' ? TRACELIGHT : TRACELIGHT
       if (named) memory.session = named
       else if (started) memory.session = baseName(started)
       await stamp($)
@@ -548,7 +548,7 @@ export const register: Register = on => {
     if (e.props.hasSurvey || shown === null || (await read($, isHidden))) {
       return next(e)
     }
-    if ((await $.clock.now()) - (await read($, lastPyokkaAt)) > IDLE_MS) {
+    if ((await $.clock.now()) - (await read($, lastTracelightAt)) > IDLE_MS) {
       return next(e)
     }
     const ui = $.ui.resolve(e)

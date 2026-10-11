@@ -6,9 +6,9 @@ import { BAND, engine, newWorld, pk, PROGRAM, steps } from './world'
 
 // `/pk <key>`, the band's buttons and the model's `band` tool all end in the same `press`.
 
-const BAND_TOOL = 'mcp__pyokka-band__band'
-const mountBand = () => ({ plugin: 'pyokka-band', surface: 'terminal', component: 'AbovePrompt', props: BAND }) as const
-const PLAN = '/work/.pyokka/findings/invoices-swallowed-exception-invoices-py-34.md'
+const BAND_TOOL = 'mcp__tracelight-band__band'
+const mountBand = () => ({ plugin: 'tracelight-band', surface: 'terminal', component: 'AbovePrompt', props: BAND }) as const
+const PLAN = '/work/.tracelight/findings/invoices-swallowed-exception-invoices-py-34.md'
 // What the fixer model answered for this finding (checked by hand: the right fix).
 const FIX_REPLY = JSON.stringify({
   explanation: 'The function parse_price keeps "1,299.00" as text. The fix removes the comma before the number check.',
@@ -32,14 +32,14 @@ test('/pk f on a step with no finding says where the findings are', async ($, on
   const w = newWorld()
   w.context = CONTEXT_29
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 29' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 29' })
   expect((await $.command.run(pk('f')))?.text).toBe('No finding on this step: /pk x lists them')
 })
 
 test('the band buttons press the same keys', async ($, on) => {
   const w = newWorld()
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   const ui = await $.ui.mount(mountBand())
   await ui.press({ key: 'explain-n' })
   await ui.press({ key: 'explain-b' })
@@ -51,7 +51,7 @@ test('narration: the small model explains each new step, and p turns it off', as
   const w = newWorld()
   w.replies.haiku = 'The function subtotal adds qty times unit_price for each item. The sum fails on the text 1,299.00.'
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: /^The function subtotal adds qty/ })).toBeDefined()
   await $.command.run(pk('p'))
@@ -65,7 +65,7 @@ test('tool: show reports the step, hide hides the band, session is passed on', a
   engine(on, w)
   const shown = await $.tool.call({ tool: BAND_TOOL, action: 'show', session: 'invoices.py' })
   expect(JSON.stringify(shown)).toContain('The band shows invoices.py:34 at step 64 of 81 in subtotal, 1 bug finding(s) in this run.')
-  expect(w.runs[0]).toEqual(['pyokka', 'context', '--json', '--live', '--session', 'invoices.py'])
+  expect(w.runs[0]).toEqual(['tracelight', 'context', '--json', '--live', '--session', 'invoices.py'])
   const hidden = await $.tool.call({ tool: BAND_TOOL, action: 'hide' })
   expect(JSON.stringify(hidden)).toContain('The band is hidden.')
   const ui = await $.ui.mount(mountBand())
@@ -80,16 +80,16 @@ test('tool: step moves the Time Machine, bugs opens the bugs view', async ($, on
   expect(steps(w)).toEqual(['--to 63 --live'])
   await $.tool.call({ tool: BAND_TOOL, action: 'bugs' })
   const ui = await $.ui.mount(mountBand())
-  expect(await ui.find({ type: 'Text', text: 'pyokka bugs ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'tracelight bugs ' })).toBeDefined()
   await ui.unmount()
 })
 
 test('w: where from, under the finding: newest first, the root marked, inferred links dim', async ($, on) => {
   const w = newWorld()
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64 --session invoices.py' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64 --session invoices.py' })
   await $.command.run(pk('w'))
-  expect(w.runs).toContainEqual(['pyokka', 'origin', '--json', '64', '--live', '--session', 'invoices.py'])
+  expect(w.runs).toContainEqual(['tracelight', 'origin', '--json', '64', '--live', '--session', 'invoices.py'])
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: 'where from, newest first:' })).toBeDefined()
   const links = await ui.findAll({ type: 'Button', text: /^[▶ ] #\d+ / })
@@ -109,7 +109,7 @@ test('w: where from, under the finding: newest first, the root marked, inferred 
 test('w again hides the chain; the button says which', async ($, on) => {
   const w = newWorld()
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   const ui = await $.ui.mount(mountBand())
   await ui.press({ key: 'explain-w' })
   expect(await ui.find({ type: 'Button', text: 'hide where from' })).toBeDefined()
@@ -123,7 +123,7 @@ test('w: a chain with no root says root: not known, and why', async ($, on) => {
   const w = newWorld()
   w.origin = ORIGIN_UNKNOWN
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   await $.command.run(pk('w'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.findAll({ type: 'Button', text: /^[▶ ] #\d+ / })).toHaveLength(3)
@@ -132,14 +132,14 @@ test('w: a chain with no root says root: not known, and why', async ($, on) => {
   await ui.unmount()
 })
 
-test('w: a pyokka without origin says so in the band', async ($, on) => {
+test('w: a tracelight without origin says so in the band', async ($, on) => {
   const w = newWorld()
-  w.origin = "pyokka: error: argument command: invalid choice: 'origin'"
+  w.origin = "tracelight: error: argument command: invalid choice: 'origin'"
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   await $.command.run(pk('w'))
   const ui = await $.ui.mount(mountBand())
-  expect(await ui.find({ type: 'Text', text: "where from: pyokka: error: argument command: invalid choice: 'origin'" })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: "where from: tracelight: error: argument command: invalid choice: 'origin'" })).toBeDefined()
   await ui.unmount()
 })
 
@@ -147,7 +147,7 @@ test('w on a step with no finding says where the findings are', async ($, on) =>
   const w = newWorld()
   w.context = CONTEXT_29
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 29' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 29' })
   expect((await $.command.run(pk('w')))?.text).toBe('No finding on this step: /pk x lists them')
 })
 
@@ -179,35 +179,35 @@ test('fix: plan, check on a copy, apply, the fresh run marks the plan fixed, und
   const w = newWorld()
   w.replies.sonnet = FIX_REPLY
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   const said = await $.tool.call({ tool: BAND_TOOL, action: 'fix' })
   expect(JSON.stringify(said)).toContain(`Fix plan written to ${PLAN}`)
 
-  // the patched copy ran from .pyokka/band-tmp next to the program, which stayed as it was
-  expect(w.runs).toContainEqual(['python3', '/work/.pyokka/band-tmp/invoices.py'])
-  expect(w.files.get('/work/.pyokka/band-tmp/invoices.py')).toContain(`text = raw.strip('"').replace(",", "")`)
+  // the patched copy ran from .tracelight/band-tmp next to the program, which stayed as it was
+  expect(w.runs).toContainEqual(['python3', '/work/.tracelight/band-tmp/invoices.py'])
+  expect(w.files.get('/work/.tracelight/band-tmp/invoices.py')).toContain(`text = raw.strip('"').replace(",", "")`)
   expect(w.files.get(PROGRAM)).toBe(INVOICES_SOURCE)
   const plan = w.files.get(PLAN) ?? ''
   expect(plan).toStartWith('---\nstatus: open\n')
   expect(plan).toContain('- swallowed exceptions: 1 -> 0')
-  // the band asked `pyokka origin` first, and the fixer and the plan got the chain
+  // the band asked `tracelight origin` first, and the fixer and the plan got the chain
   const fixerPrompt = w.prompts.find(p => p.startsWith('A Python program ran')) ?? ''
   expect(fixerPrompt).toContain('Fix the step marked root, not the line that raised.')
   expect(fixerPrompt).toContain('#29 invoices.py:18 parse_price: return float(text)')
   expect(plan).toContain('## Where from')
   expect(plan).toContain('- output after: `4 invoices, revenue 1398.79 / average invoice 349.70`')
-  expect(w.toasts).toContain('Fix plan written: .pyokka/findings/invoices-swallowed-exception-invoices-py-34.md')
+  expect(w.toasts).toContain('Fix plan written: .tracelight/findings/invoices-swallowed-exception-invoices-py-34.md')
 
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: 'fix plan' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^\+  16      text = raw\.strip/ })).toBeDefined()
 
-  // the recording of the patched file: 80 steps and no exceptions (`pyokka run` on it says so)
+  // the recording of the patched file: 80 steps and no exceptions (`tracelight run` on it says so)
   w.context = { ...CONTEXT_64, count: 80 }
   w.exceptions = { rows: [] }
   await ui.press({ key: 'fix-a' })
   expect(w.files.get(PROGRAM)).toContain(`text = raw.strip('"').replace(",", "")`)
-  expect(w.runs).toContainEqual(['pyokka', 'debug', PROGRAM, '--record', '--no-focus'])
+  expect(w.runs).toContainEqual(['tracelight', 'debug', PROGRAM, '--record', '--no-focus'])
   const fixed = w.files.get(PLAN) ?? ''
   expect(fixed).toContain('status: fixed\n')
   expect(fixed).toContain('(80 steps) no longer shows this finding.')
@@ -221,7 +221,7 @@ test('fix: plan, check on a copy, apply, the fresh run marks the plan fixed, und
 test('fix: a model with no answer leaves a failed box with try again', async ($, on) => {
   const w = newWorld()
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   await $.command.run(pk('f'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: 'fix failed: Error: no answer: empty-reply' })).toBeDefined()
@@ -237,7 +237,7 @@ test('errors read as words everywhere: the origin chain and the bug scan never s
   const w = newWorld()
   w.origin = OLD_EXTENSION
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   await $.command.run(pk('w'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: /^where from: The VS Code extension is older than this CLI \(no recording request\)/ })).toBeDefined()

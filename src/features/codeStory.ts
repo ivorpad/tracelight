@@ -21,7 +21,7 @@ import type { InlineKind } from '../decorations/styles';
 import { renderWalkthroughLines, type Walkthrough } from '../session/walkthrough';
 import { setting } from '../config/settings';
 
-export const STORY_SCHEME = 'pyokka-code-timeline';
+export const STORY_SCHEME = 'tracelight-code-timeline';
 const INLINE_KINDS: InlineKind[] = ['log', 'system', 'error'];
 /** The story sits in a side pane, so its values are cut shorter than an editor's. The hover has the whole thing. */
 const STORY_VALUE_MAX = 120;
@@ -56,7 +56,7 @@ export class CodeStory implements vscode.TextDocumentContentProvider, vscode.Def
     private readonly manager: SessionManager,
     private readonly timeMachine: TimeMachine,
     private readonly types: DecorationTypes,
-    /** the walkthrough of the session's last run (the Narrator); listed at the top when `pyokka.story.walkthrough` is on (off by default) */
+    /** the walkthrough of the session's last run (the Narrator); listed at the top when `tracelight.story.walkthrough` is on (off by default) */
     private readonly walkthroughFor: (session: Session) => Walkthrough | undefined = () => undefined,
   ) {
     this.disposables.push(
@@ -65,7 +65,7 @@ export class CodeStory implements vscode.TextDocumentContentProvider, vscode.Def
       vscode.window.onDidChangeTextEditorSelection((e) => this.onSelection(e)),
       vscode.window.onDidChangeVisibleTextEditors(() => this.highlightAll()),
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (!e.affectsConfiguration('pyokka.story')) return;
+        if (!e.affectsConfiguration('tracelight.story')) return;
         // the walkthrough prefix changes the text, the values mode only the paint
         for (const s of this.manager.all()) {
           this.models.delete(s.key);
@@ -98,7 +98,7 @@ export class CodeStory implements vscode.TextDocumentContentProvider, vscode.Def
   }
 
   uriFor(session: Session): vscode.Uri {
-    return vscode.Uri.from({ scheme: STORY_SCHEME, path: 'Pyokka Code Story', query: `session=${encodeURIComponent(session.key)}` });
+    return vscode.Uri.from({ scheme: STORY_SCHEME, path: 'Tracelight Code Story', query: `session=${encodeURIComponent(session.key)}` });
   }
 
   private sessionFor(uri: vscode.Uri): Session | undefined {
@@ -131,7 +131,7 @@ export class CodeStory implements vscode.TextDocumentContentProvider, vscode.Def
   async open(): Promise<void> {
     const s = this.manager.active();
     if (!s) {
-      void vscode.window.showInformationMessage('Pyokka: start a session first (Cmd/Ctrl+K Q).');
+      void vscode.window.showInformationMessage('Tracelight: start a session first (Cmd/Ctrl+K Q).');
       return;
     }
     if (!s.nav.active) {
@@ -143,7 +143,7 @@ export class CodeStory implements vscode.TextDocumentContentProvider, vscode.Def
     const uri = this.uriFor(s);
     const doc = await vscode.workspace.openTextDocument(uri);
     // a JS/TS session's story is coloured as TypeScript, a Python one's as Python
-    const storyLanguage = s.interpreter.language === 'javascript' ? 'pyokka-story-js' : 'pyokka-story';
+    const storyLanguage = s.interpreter.language === 'javascript' ? 'tracelight-story-js' : 'tracelight-story';
     if (doc.languageId !== storyLanguage) await vscode.languages.setTextDocumentLanguage(doc, storyLanguage);
     const existing = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === uri.toString());
     await vscode.window.showTextDocument(doc, { viewColumn: existing?.viewColumn ?? vscode.ViewColumn.Beside, preserveFocus: true, preview: false });
@@ -186,7 +186,7 @@ export class CodeStory implements vscode.TextDocumentContentProvider, vscode.Def
     const blocks: StoryBlock[] = [];
     if (!trace || trace.count === 0) {
       const lines: StoryLine[] = [{ kind: 'note' }, { kind: 'note' }];
-      return { text: '# Pyokka Code Story\n# No execution recorded yet.\n', lines, blocks, runId: s.state.runId };
+      return { text: '# Tracelight Code Story\n# No execution recorded yet.\n', lines, blocks, runId: s.state.runId };
     }
     const sources = new Map<number, string[]>();
     const sourceLines = (fileId: number): string[] => {
@@ -367,7 +367,7 @@ export class CodeStory implements vscode.TextDocumentContentProvider, vscode.Def
   }
 
   /**
-   * The values on the story's lines, by `pyokka.story.values` (`storyValueWanted`): `all` paints
+   * The values on the story's lines, by `tracelight.story.values` (`storyValueWanted`): `all` paints
    * every entry in the block whose steps produced it (so the two turns of a loop carry their own),
    * `asOf` only those at or before the current step, `step` only the current step's (Quokka's V1).
    * Placement is `storyValueRow`.

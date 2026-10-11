@@ -78,7 +78,7 @@ export function stopRunner(ds: DebugSession): StopRunner {
         await action();
       } catch (err) {
         next.catch(() => undefined);
-        throw err instanceof BridgeError ? err : new BridgeError(err instanceof Error ? err.message : String(err), 'see the Pyokka output channel');
+        throw err instanceof BridgeError ? err : new BridgeError(err instanceof Error ? err.message : String(err), 'see the Tracelight output channel');
       }
       return next;
     },

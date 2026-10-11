@@ -14,7 +14,7 @@ const FIXTURES = path.join(__dirname, 'fixtures');
 
 const ev = (over: Partial<HttpExchangeEvent> = {}): HttpExchangeEvent => ({ type: 'http.exchange', runId: 'r-1', seq: 1, n: 1, client: 'httpx', method: 'POST', url: 'https://api.openai.com/v1/responses?key&v=1', status: 200, reason: 'OK', bytes: 6812, ms: 1834, source: 'live', rid: 17, step: 88, ...over });
 const locate = (rid: number) => (rid === 17 ? { fileId: 1, file: '/abs/agent.py', line: 16, col: 0 } : undefined);
-const summary = (over: Partial<HttpSummary> = {}): HttpSummary => ({ mode: 'off', requests: 1, recorded: 0, served: 0, misses: 0, file: '/w/.pyokka/replay/3f2a.jsonl', exists: false, recordedAt: null, entries: null, ...over });
+const summary = (over: Partial<HttpSummary> = {}): HttpSummary => ({ mode: 'off', requests: 1, recorded: 0, served: 0, misses: 0, file: '/w/.tracelight/replay/3f2a.jsonl', exists: false, recordedAt: null, entries: null, ...over });
 
 describe('buildHttpTable', () => {
   it('names rows by the last path segment (else the host), locates the initiator and sums the totals', () => {
@@ -93,8 +93,8 @@ describe('formatters', () => {
   it('shortens the recording timestamp and the recording name', () => {
     expect(formatRecordedAt('2026-09-11T10:12:03Z')).toBe('2026-09-11 10:12Z');
     expect(formatRecordedAt('yesterday')).toBe('yesterday');
-    expect(recordingLabel(summary({ file: '/w/.pyokka/replay/3f2a9c1e5b7d0f42.jsonl', recordedAt: '2026-09-11T10:12:03Z' }))).toBe('3f2a….jsonl (2026-09-11 10:12Z)');
-    expect(recordingLabel(summary({ file: '/w/.pyokka/replay/3f2a.jsonl' }))).toBe('3f2a.jsonl');
+    expect(recordingLabel(summary({ file: '/w/.tracelight/replay/3f2a9c1e5b7d0f42.jsonl', recordedAt: '2026-09-11T10:12:03Z' }))).toBe('3f2a….jsonl (2026-09-11 10:12Z)');
+    expect(recordingLabel(summary({ file: '/w/.tracelight/replay/3f2a.jsonl' }))).toBe('3f2a.jsonl');
     expect(recordingLabel(summary({ file: null }))).toBe('?');
   });
 });

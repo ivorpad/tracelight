@@ -7,7 +7,7 @@ running.
 
 Two things before the first command.
 
-**The window answers only with `pyokka.agentAccess` on.** With it off, a cold `tracelight debug
+**The window answers only with `tracelight.agentAccess` on.** With it off, a cold `tracelight debug
 FILE` makes the window ask the user to allow agent access. **Allow** turns the setting on and
 starts that same launch; anything else starts nothing. Tell the user to look at VS Code for the
 question; you cannot answer it.
@@ -30,7 +30,7 @@ the CLI runs in a terminal and the editor would otherwise move behind it. `--no-
 `TRACELIGHT_NO_FOCUS=1` turns that off.
 
 Every `tracelight debug` is remembered per directory (`last-debug.json`, beside
-`$PYOKKA_HOME/sessions`). When the program has exited, `continue --live`, `break --live FILE:LINE`
+`$TRACELIGHT_HOME/sessions`). When the program has exited, `continue --live`, `break --live FILE:LINE`
 and `restart --live` start that launch again and print its first stop, with a first line saying
 what they re-ran: `break` stops at the breakpoint it was given, `continue --to F:L` at that line,
 `continue` at the launch's own `--at`. Re-running repeats the program's side effects (a paid API
@@ -39,7 +39,7 @@ call is paid again), so say so when it happens; `--no-start` refuses instead and
 A file implies `--live`; there is no `--module` launch for Node. `--args` takes everything after
 it and hands it to the program as `process.argv.slice(2)`, so it comes last. `--env` repeats.
 `--node PATH` picks the Node that runs the program (default `$TRACELIGHT_NODE`, else the window's
-`pyokka.nodePath`). The reply is the first stop: the breakpoint `--at` named, the first enabled
+`tracelight.nodePath`). The reply is the first stop: the breakpoint `--at` named, the first enabled
 gutter breakpoint, or the first statement when nothing is set. When the program never reaches
 that breakpoint it runs to the end without pausing, exits normally, and `stop --live` says
 `0 steps`. The launch worked; the breakpoint did not. Only a stop whose `paused at` names the code
@@ -77,16 +77,16 @@ A cold `tracelight debug FILE` tries, in order:
 
 1. an existing `kind: "debug"` session whose launch matches;
 2. a recording session on that file, which asks its own window (no URI needed);
-3. `vscode://ivor.pyokka/debug?...` through `code --open-url` (`$TRACELIGHT_CODE` if set).
+3. `vscode://ivor.tracelight/debug?...` through `code --open-url` (`$TRACELIGHT_CODE` if set).
 
-Route 3 makes VS Code ask the user to allow Pyokka to open a URI, the first time. It waits for
+Route 3 makes VS Code ask the user to allow Tracelight to open a URI, the first time. It waits for
 an answer, so the CLI can time out after 20 s while the dialog is still up: it polls
-`$PYOKKA_HOME/sessions` for 20 s. **That timeout is not a failure.** When the human clicks Open
+`$TRACELIGHT_HOME/sessions` for 20 s. **That timeout is not a failure.** When the human clicks Open
 the session starts, however late, so the next command is `tracelight state --live`. A second
-`tracelight debug` only asks another window to answer. Adding `ivor.pyokka` to VS Code's
+`tracelight debug` only asks another window to answer. Adding `ivor.tracelight` to VS Code's
 `extensions.confirmedUriHandlerExtensionIds` stops the question coming back.
 
-The URI handler obeys `pyokka.agentAccess` too: with the setting off it asks first (Allow above),
+The URI handler obeys `tracelight.agentAccess` too: with the setting off it asks first (Allow above),
 because a paused program nobody can continue is worse than a refusal. A click after the CLI's 20 s
 is still a start: the next command is `tracelight state --live`.
 
@@ -98,9 +98,9 @@ launch anyway: the program starts and serves requests, but nothing is instrument
 nothing you ask for works.
 
 Check it before you debug the debugger: the descriptor's `workspace` in
-`$PYOKKA_HOME/sessions/*.json` should contain the program. When it does not, ask the user to focus
+`$TRACELIGHT_HOME/sessions/*.json` should contain the program. When it does not, ask the user to focus
 the right window, or open the file there first so the CLI finds its socket instead of going
-through the URI. `$PYOKKA_HOME/sessions` staying empty for the full 20 s with no dialog on screen is
+through the URI. `$TRACELIGHT_HOME/sessions` staying empty for the full 20 s with no dialog on screen is
 the same symptom seen earlier.
 
 The mirror of this is a session that ended. When the debug run is over, `--live` falls back to
@@ -253,7 +253,7 @@ Two requests that hit the same breakpoint pause one after the other, never at on
 handler at a time on its one thread. `watch --live` streams `paused` / `resumed` / `output` /
 `finished` until Ctrl-C, which is how you follow a server's log while it runs.
 
-`pyokka.runTimeout` does not apply to a debug session: a paused server outlives any clock.
+`tracelight.runTimeout` does not apply to a debug session: a paused server outlives any clock.
 
 Under HTTP Replay a continue never spends a token, which is the mode to debug API-driven code
 in. HTTP is only observed while a run records, so a session without `--record` leaves `fetch`,

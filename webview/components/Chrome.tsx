@@ -28,7 +28,7 @@ export function DebugToolbar({ state, session, onAction, onStop, onShowDiagram, 
   return (
     <div class="pk-header">
       <span class="pk-session">
-        {session.name ?? 'Pyokka'}
+        {session.name ?? 'Tracelight'}
         {session.running ? <i class="codicon codicon-loading codicon-modifier-spin" /> : session.durationMs !== undefined ? <span class="pk-dim"> {formatMs(session.durationMs)}{session.replayed ? ' · replayed' : ''}</span> : null}
       </span>
       <span class="pk-toolbar pk-debug-toolbar">
@@ -44,10 +44,10 @@ export function DebugToolbar({ state, session, onAction, onStop, onShowDiagram, 
 export function railMenuItems(onView: (v: ViewId) => void, onCommand: (command: string, args?: unknown[]) => void): MenuItem[] {
   return [
     { label: 'Show Execution Diagram', onSelect: () => onView('run-diagram') },
-    { label: 'View Recent Files', separatorAbove: true, onSelect: () => onCommand('pyokka.viewRecentFiles') },
-    { label: 'Show Instrumented File', onSelect: () => onCommand('pyokka.showInstrumentedFile') },
-    { label: 'Edit Session Settings', onSelect: () => onCommand('pyokka.editSessionSettings') },
-    { label: 'Show Pyokka Logs', separatorAbove: true, onSelect: () => onCommand('pyokka.showLogs') },
+    { label: 'View Recent Files', separatorAbove: true, onSelect: () => onCommand('tracelight.viewRecentFiles') },
+    { label: 'Show Instrumented File', onSelect: () => onCommand('tracelight.showInstrumentedFile') },
+    { label: 'Edit Session Settings', onSelect: () => onCommand('tracelight.editSessionSettings') },
+    { label: 'Show Tracelight Logs', separatorAbove: true, onSelect: () => onCommand('tracelight.showLogs') },
   ];
 }
 
@@ -68,19 +68,19 @@ export function Rail({ view, debuggerActive, debugSessionActive = false, running
   const httpTitle = http === 'record' ? 'HTTP requests · recording the next run' : http === 'replay' ? 'HTTP requests · replaying from the recording' : 'HTTP requests';
   return (
     <nav class="pk-rail" aria-label="Views">
-      <IconButton icon={running ? 'loading' : 'play'} spin={running} title={running ? 'Running… (click to restart the run)' : 'Re-execute file (F5)'} onClick={() => onCommand('pyokka.reexecute')} />
-      <IconButton icon="output" title="Show Output" active={view === 'output'} onClick={() => { onView('output'); onCommand('pyokka.showOutput'); }} />
+      <IconButton icon={running ? 'loading' : 'play'} spin={running} title={running ? 'Running… (click to restart the run)' : 'Re-execute file (F5)'} onClick={() => onCommand('tracelight.reexecute')} />
+      <IconButton icon="output" title="Show Output" active={view === 'output'} onClick={() => { onView('output'); onCommand('tracelight.showOutput'); }} />
       <IconButton
         icon="history"
         title={debuggerActive ? 'Show Time Machine' : 'Start Time Machine on the current line'}
         active={view === 'debugger'}
-        onClick={() => (debuggerActive ? onView('debugger') : onCommand('pyokka.debug'))}
+        onClick={() => (debuggerActive ? onView('debugger') : onCommand('tracelight.debug'))}
       />
       {debugSessionActive && <IconButton icon="debug-alt" title="Show Debugger" active={view === 'debug'} onClick={() => onView('debug')} />}
-      <IconButton icon="book" title="View Code Story" onClick={() => onCommand('pyokka.viewCodeStory')} />
+      <IconButton icon="book" title="View Code Story" onClick={() => onCommand('tracelight.viewCodeStory')} />
       <IconButton icon="symbol-variable" title="Variable History" active={view === 'variable'} onClick={() => onView(view === 'variable' ? 'output' : 'variable')} />
       <IconButton icon="globe" title={httpTitle} active={view === 'http'} class={http === 'off' ? undefined : `pk-rail-badge mode-${http}`} onClick={() => onView(view === 'http' ? 'output' : 'http')} />
-      <IconButton icon="pulse" title="Profile" onClick={() => onCommand('pyokka.profile')} />
+      <IconButton icon="pulse" title="Profile" onClick={() => onCommand('tracelight.profile')} />
       <IconButton icon="settings-gear" title="Settings" active={view === 'settings'} onClick={() => onView(view === 'settings' ? 'output' : 'settings')} />
       <MenuButton
         icon="ellipsis"
@@ -96,12 +96,12 @@ export function Rail({ view, debuggerActive, debugSessionActive = false, running
 export function NoSession({ onCommand }: { onCommand: (command: string) => void }) {
   return (
     <div class="pk-no-session">
-      <div class="pk-dim">No Pyokka session is running.</div>
+      <div class="pk-dim">No Tracelight session is running.</div>
       <div class="pk-no-session-actions">
-        <button type="button" class="pk-exec-btn" onClick={() => onCommand('pyokka.startOnCurrentFile')}>
+        <button type="button" class="pk-exec-btn" onClick={() => onCommand('tracelight.startOnCurrentFile')}>
           <i class="codicon codicon-debug-start" /> Start on current file
         </button>
-        <button type="button" class="pk-exec-btn" onClick={() => onCommand('pyokka.debugCurrentFile')}>
+        <button type="button" class="pk-exec-btn" onClick={() => onCommand('tracelight.debugCurrentFile')}>
           <i class="codicon codicon-debug-alt" /> Debug current file
         </button>
       </div>

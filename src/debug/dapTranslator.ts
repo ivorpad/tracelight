@@ -1,5 +1,5 @@
 /**
- * The Debug Adapter Protocol face of Pyokka's debugger, as a pure translator: DAP requests
+ * The Debug Adapter Protocol face of Tracelight's debugger, as a pure translator: DAP requests
  * become calls on a `DebugSessionLike`, and the session's pause, resume and finish become DAP
  * events. No vscode import, so vitest covers it (test/unit/dapTranslator.test.ts); the glue that
  * hands a real Session in and posts the messages is dapAdapter.ts.
@@ -120,7 +120,7 @@ export class DapTranslator {
         return {};
       }
       case 'attach':
-        throw new Error('Pyokka debugs programs it runs; use a launch configuration with "program" or "module"');
+        throw new Error('Tracelight debugs programs it runs; use a launch configuration with "program" or "module"');
       case 'configurationDone':
         this.configured = true;
         return {};

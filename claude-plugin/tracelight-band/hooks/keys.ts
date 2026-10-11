@@ -17,7 +17,7 @@ export type Look = {
   /** The finding the bugs view points at. */
   picked?: Finding
   proposal: Fix
-  /** The `pyokka origin` chain the band holds, for whichever finding asked last. */
+  /** The `tracelight origin` chain the band holds, for whichever finding asked last. */
   origin: ValueOrigin
   narrating: boolean
   /** One line the band shows until the next stop: what a key could not do here. */
@@ -78,7 +78,7 @@ export const KEY_HELP = [
   'r record again (rescan in the bugs view; record from here at a pause without a recording)', 'p prose',
 ].join(' · ')
 
-/** The keys that move the Time Machine, as `pyokka step` flags. */
+/** The keys that move the Time Machine, as `tracelight step` flags. */
 export const MOVES: Record<string, string> = { n: '--over', b: '--back', i: '--into', o: '--out' }
 
 /** Tool actions that are a key press; `show`, `hide` and `step` are served in `useTool`. */
@@ -89,12 +89,12 @@ export type ToolInput = { action?: string; step?: number; session?: string }
 export const TOOL_SPEC = {
   name: 'band',
   description: [
-    'Shows or hides the Pyokka band above the person\'s prompt and sets what it shows.',
-    'The band follows the Pyokka Time Machine of a VS Code session: the code around the current step, the recorded values, the call stack, a short explanation, and bugs found in the run.',
+    'Shows or hides the Tracelight band above the person\'s prompt and sets what it shows.',
+    'The band follows the Tracelight Time Machine of a VS Code session: the code around the current step, the recorded values, the call stack, a short explanation, and bugs found in the run.',
     'Call action "show" when you start to step through a run with the person, "hide" when the work moves to something else (planning, editing other code).',
-    '"explain" and "bugs" pick the view; "step" moves the Time Machine to `step`; "origin" shows and returns where the bad value of the bug on the current step came from (`pyokka origin`), newest step first, with the root to fix; "fix" writes a fix plan for that bug, aimed at the root, to .pyokka/findings and leaves the source file as it is.',
+    '"explain" and "bugs" pick the view; "step" moves the Time Machine to `step`; "origin" shows and returns where the bad value of the bug on the current step came from (`tracelight origin`), newest step first, with the root to fix; "fix" writes a fix plan for that bug, aimed at the root, to .tracelight/findings and leaves the source file as it is.',
     'Applying the fix is the person\'s choice: point them to `/pk a` (apply) and `/pk u` (undo).',
-    'At a `pyokka debug` pause without a recording the band shows the paused frame: "show" and "explain" work, "step", "bugs", "origin" and "fix" answer that they need a recording.',
+    'At a `tracelight debug` pause without a recording the band shows the paused frame: "show" and "explain" work, "step", "bugs", "origin" and "fix" answer that they need a recording.',
     'Pass `session` (a file name such as "invoices.py" or "invoices.ts") when several VS Code sessions are live.',
   ].join(' '),
   inputSchema: {

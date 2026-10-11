@@ -217,7 +217,7 @@ export function Details(props: DetailsProps) {
     };
 
     editor.addAction({
-      id: 'pyokka.copyValue',
+      id: 'tracelight.copyValue',
       label: 'Copy value',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC],
       contextMenuGroupId: 'navigation',
@@ -225,7 +225,7 @@ export function Details(props: DetailsProps) {
       run: copyValue,
     });
     editor.addAction({
-      id: 'pyokka.copyPath',
+      id: 'tracelight.copyPath',
       label: 'Copy path',
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 2,
@@ -235,23 +235,23 @@ export function Details(props: DetailsProps) {
       },
     });
     editor.addAction({
-      id: 'pyokka.loadFullString',
+      id: 'tracelight.loadFullString',
       label: 'Load full string value',
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 3,
-      precondition: 'pyokka.cappedString',
+      precondition: 'tracelight.cappedString',
       run: () => expandAt(nodeAtCursor()),
     });
     editor.addAction({
-      id: 'pyokka.loadMore',
+      id: 'tracelight.loadMore',
       label: 'Load more',
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 4,
-      precondition: 'pyokka.loadable',
+      precondition: 'tracelight.loadable',
       run: () => expandAt(nodeAtCursor()),
     });
-    const cappedKey = editor.createContextKey<boolean>('pyokka.cappedString', false);
-    const loadKey = editor.createContextKey<boolean>('pyokka.loadable', false);
+    const cappedKey = editor.createContextKey<boolean>('tracelight.cappedString', false);
+    const loadKey = editor.createContextKey<boolean>('tracelight.loadable', false);
     editor.onDidChangeCursorPosition(() => {
       const meta = nodeAtCursor();
       cappedKey.set(meta?.kind === 'string-capped');
@@ -324,11 +324,11 @@ export function Details(props: DetailsProps) {
     const editor = editorRef.current;
     if (!editor) return;
     if (findOpen) {
-      editor.trigger('pyokka', 'closeFindWidget', null);
+      editor.trigger('tracelight', 'closeFindWidget', null);
       setFindOpen(false);
     } else {
       editor.focus();
-      editor.trigger('pyokka', 'actions.find', null);
+      editor.trigger('tracelight', 'actions.find', null);
       setFindOpen(true);
     }
   };

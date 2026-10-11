@@ -14,12 +14,12 @@ import type { HttpTable, Provenance, ProvenanceNode, VariableHistory } from '../
 import type { ExecutionGraph, GraphNode } from '../session/executionGraphTypes';
 import type { ExceptionReport } from '../session/exceptionReportTypes';
 import { redact, redactValueBag } from '../util/redact';
-import { pyokkaHome } from '../util/paths';
+import { tracelightHome } from '../util/paths';
 import { recordingDoc } from './bridgeRecording';
 
-/** `$PYOKKA_SESSIONS_DIR`, else `<PYOKKA_HOME>/sessions`: the directory the CLI reads (`live.py`, `sessions_dir`). */
+/** `$TRACELIGHT_SESSIONS_DIR`, else `<TRACELIGHT_HOME>/sessions`: the directory the CLI reads (`node/src/home.ts` `sessionsDir`). */
 export function sessionsDir(): string {
-  return process.env['PYOKKA_SESSIONS_DIR'] || path.join(pyokkaHome(), 'sessions');
+  return process.env['TRACELIGHT_SESSIONS_DIR'] || path.join(tracelightHome(), 'sessions');
 }
 
 /** macOS caps a Unix socket path (sun_path) at 104 bytes including the NUL. */
@@ -32,7 +32,7 @@ const SOCKET_PATH_MAX = 103;
 export function socketPathFor(dir: string, base: string): string {
   const beside = path.join(dir, `${base}.sock`);
   if (Buffer.byteLength(beside) <= SOCKET_PATH_MAX) return beside;
-  return path.join(os.tmpdir(), `pyokka-${base}-${crypto.randomBytes(3).toString('hex')}.sock`);
+  return path.join(os.tmpdir(), `tracelight-${base}-${crypto.randomBytes(3).toString('hex')}.sock`);
 }
 
 export class BridgeError extends Error {

@@ -1,5 +1,5 @@
 {
-  "scopeName": "source.pyokka-recent",
+  "scopeName": "source.tracelight-recent",
   "patterns": [
     { "include": "#python_fragment" },
     { "comment": "file", "match": "⁠{1}[^⁠]+⁠{1}", "name": "string.value markup.underline" },

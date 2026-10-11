@@ -131,18 +131,18 @@ export class TimeMachine implements vscode.Disposable {
   async start(session: Session, opts: { line?: number; fileId?: number; autoPlay?: boolean } = {}): Promise<boolean> {
     let trace = session.trace;
     if (!trace && !session.running && !session.implicitRunsAllowed) {
-      void vscode.window.showWarningMessage(`Pyokka: no execution trace yet and the run mode is ${session.runMode === 'onSave' ? 'on save' : 'on demand'}. Re-execute the file first.`);
+      void vscode.window.showWarningMessage(`Tracelight: no execution trace yet and the run mode is ${session.runMode === 'onSave' ? 'on save' : 'on demand'}. Re-execute the file first.`);
       return false;
     }
     if (!trace || session.running) {
       trace = await this.waitForTrace(session);
       if (!trace) {
-        void vscode.window.showWarningMessage('Pyokka: no execution trace is available yet for this file.');
+        void vscode.window.showWarningMessage('Tracelight: no execution trace is available yet for this file.');
         return false;
       }
     }
     if (trace.count === 0) {
-      void vscode.window.showInformationMessage(`Pyokka: ${session.displayName} ran no statement (only comments, definitions or an empty file), so there is nothing to step through. Add some code, then start the Time Machine.`);
+      void vscode.window.showInformationMessage(`Tracelight: ${session.displayName} ran no statement (only comments, definitions or an empty file), so there is nothing to step through. Add some code, then start the Time Machine.`);
       return false;
     }
     const nav = session.nav;
@@ -155,7 +155,7 @@ export class TimeMachine implements vscode.Disposable {
     nav.showCallStack = false;
     this.anchors.set(session.key, { trace, content: session.state.content, files: session.files });
     this.goto(session, trace.startStep(fileId, line));
-    if (!session.autoLog && vscode.workspace.getConfiguration('pyokka').get<boolean>('timeMachine.autoLog', true)) {
+    if (!session.autoLog && vscode.workspace.getConfiguration('tracelight').get<boolean>('timeMachine.autoLog', true)) {
       // show the value of every step while navigating; the re-run re-anchors the current step
       nav.autoLogByTimeMachine = true;
       session.setAutoLog(true);
@@ -261,7 +261,7 @@ export class TimeMachine implements vscode.Disposable {
   private cursorLocation(session: Session): { fileId: number; line: number } | undefined {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return undefined;
-    if (editor.document.uri.scheme === 'pyokka-code-timeline' && this.storyResolver) {
+    if (editor.document.uri.scheme === 'tracelight-code-timeline' && this.storyResolver) {
       const r = this.storyResolver(editor.document, editor.selection.active.line);
       return r ? { fileId: r.fileId, line: r.line } : undefined;
     }
@@ -452,7 +452,7 @@ export class TimeMachine implements vscode.Disposable {
       }
       const target = range ? toVsRange(range) : new vscode.Range(line - 1, col, line - 1, col);
       const active = vscode.window.activeTextEditor;
-      if (active === editor || (active && active.document.uri.scheme !== 'pyokka-code-timeline')) {
+      if (active === editor || (active && active.document.uri.scheme !== 'tracelight-code-timeline')) {
         editor.selection = new vscode.Selection(target.start, target.start);
       }
       editor.revealRange(target, vscode.TextEditorRevealType.InCenterIfOutsideViewport);

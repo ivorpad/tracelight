@@ -8,7 +8,7 @@ import type { SessionManager } from '../session/sessionManager';
 import { setting } from '../config/settings';
 import { log } from '../util/log';
 
-const SHOWN_KEY = 'pyokka.startViewShown.v1';
+const SHOWN_KEY = 'tracelight.startViewShown.v1';
 
 export class StartView implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
@@ -22,7 +22,7 @@ export class StartView implements vscode.Disposable {
     this.panel?.dispose();
   }
 
-  /** Shown once after the first activation unless `pyokka.showStartViewOnFeatureRelease` is off. */
+  /** Shown once after the first activation unless `tracelight.showStartViewOnFeatureRelease` is off. */
   maybeShowOnFirstActivation(): void {
     if (!setting<boolean>('showStartViewOnFeatureRelease', true)) return;
     if (this.context.globalState.get<boolean>(SHOWN_KEY)) return;
@@ -35,7 +35,7 @@ export class StartView implements vscode.Disposable {
       this.panel.reveal();
       return;
     }
-    const panel = vscode.window.createWebviewPanel('pyokka.startView', 'Pyokka', vscode.ViewColumn.Active, { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')] });
+    const panel = vscode.window.createWebviewPanel('tracelight.startView', 'Tracelight', vscode.ViewColumn.Active, { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')] });
     this.panel = panel;
     panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'logo.png');
     panel.webview.html = this.html(panel.webview);
@@ -51,19 +51,19 @@ export class StartView implements vscode.Disposable {
         await this.launchDemo();
         return;
       case 'newJsFile':
-        await vscode.commands.executeCommand('pyokka.newJavaScriptFile');
+        await vscode.commands.executeCommand('tracelight.newJavaScriptFile');
         return;
       case 'newTsFile':
-        await vscode.commands.executeCommand('pyokka.newTypeScriptFile');
+        await vscode.commands.executeCommand('tracelight.newTypeScriptFile');
         return;
       case 'node':
-        await vscode.commands.executeCommand('pyokka.selectNode');
+        await vscode.commands.executeCommand('tracelight.selectNode');
         return;
       case 'recent':
-        await vscode.commands.executeCommand('pyokka.viewRecentFiles');
+        await vscode.commands.executeCommand('tracelight.viewRecentFiles');
         return;
       case 'settings':
-        await vscode.commands.executeCommand('workbench.action.openSettings', 'pyokka');
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'tracelight');
         return;
       default:
         return;
@@ -79,7 +79,7 @@ export class StartView implements vscode.Disposable {
     try {
       content = fs.readFileSync(file, 'utf8');
     } catch {
-      void vscode.window.showErrorMessage(`Pyokka: ${rel} is missing from the extension.`);
+      void vscode.window.showErrorMessage(`Tracelight: ${rel} is missing from the extension.`);
       return;
     }
     const doc = await vscode.workspace.openTextDocument({ language, content });
@@ -108,7 +108,7 @@ export class StartView implements vscode.Disposable {
     return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
-<title>Pyokka</title>
+<title>Tracelight</title>
 <style nonce="${nonce}">
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 24px 32px; max-width: 880px; margin: 0 auto; }
   header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
@@ -159,5 +159,5 @@ const intro = (logo: string): string => `<header><img src="${logo}" alt=""><div>
   <div class="card"><b>Live values</b>Type a variable name on its own line, use <code>console.log()</code>, or add <code>&nbsp;// ?</code> after any expression. <code>?.</code> times it, <code>?+</code> expands it.</div>
   <div class="card"><b>Time Machine</b>Press <code>Shift+F5</code> on any line. Step forwards and backwards; the panel shows the timeline, call stack and watches.</div>
   <div class="card"><b>Debugger</b>Press <code>F5</code> with a breakpoint set: the program runs at full speed and stops there with the frame live.</div>
-  <div class="card"><b>Requirements</b>Node.js 22.18 or newer (<code>pyokka.nodePath</code>, else <code>node</code> on PATH). The runtime ships inside the extension; nothing is installed into your project.</div>
+  <div class="card"><b>Requirements</b>Node.js 22.18 or newer (<code>tracelight.nodePath</code>, else <code>node</code> on PATH). The runtime ships inside the extension; nothing is installed into your project.</div>
 </div>`;

@@ -4,14 +4,14 @@ import * as fs from 'node:fs';
 import * as crypto from 'node:crypto';
 
 /**
- * Where Pyokka keeps its per-user state: `$PYOKKA_HOME`, else `~/.pyokka`. A leading `~` is
+ * Where Tracelight keeps its per-user state: `$TRACELIGHT_HOME`, else `~/.tracelight`. A leading `~` is
  * expanded and an empty value counts as unset. The runtime resolves it with the same rule
  * (`node/src/home.ts`), so a CLI in a terminal finds the sessions of a window that
- * sees the same `PYOKKA_HOME`.
+ * sees the same `TRACELIGHT_HOME`.
  */
-export function pyokkaHome(env: Record<string, string | undefined> = process.env): string {
-  const value = env['PYOKKA_HOME'];
-  if (!value) return path.join(os.homedir(), '.pyokka');
+export function tracelightHome(env: Record<string, string | undefined> = process.env): string {
+  const value = env['TRACELIGHT_HOME'];
+  if (!value) return path.join(os.homedir(), '.tracelight');
   const expanded = value === '~' ? os.homedir() : value.startsWith('~/') ? path.join(os.homedir(), value.slice(2)) : value;
   return path.resolve(expanded);
 }
@@ -35,7 +35,7 @@ export function writeJsonFile(file: string, value: unknown): void {
   fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', 'utf8');
 }
 
-/** Good enough for .code-snippets / .pyokka files: strips line and block comments outside strings. */
+/** Good enough for .code-snippets / .tracelight files: strips line and block comments outside strings. */
 export function stripJsonComments(text: string): string {
   let out = '';
   let inStr = false;

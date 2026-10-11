@@ -152,7 +152,7 @@ source range or focus` tells you which card to fix.
 The source is coloured by Shiki here, while the file is being written, and the page carries the
 tokens as data. The grammar comes from each file's extension: `.js`, `.mjs`, `.cjs` and `.jsx`
 are JavaScript, `.ts`, `.mts` and `.cts` TypeScript, `.tsx` TSX (and `.py` Python, for a page
-`pyokka history` wrote). A file with another name takes `codeLang` from the data (`js`, `ts`,
+`tracelight history` wrote). A file with another name takes `codeLang` from the data (`js`, `ts`,
 `tsx`), else the run's `meta.language`, else stays monochrome. That is why it still opens with nothing to fetch. `--theme` takes any Shiki
 theme; the default is `github-dark-dimmed`, whose background is the panel colour the
 design already uses. The renderer drops a file's colours rather than shift them when the token
@@ -166,7 +166,7 @@ one the page is monochrome with a line on stderr saying why. Install it in that 
 the user's project, its `package.json` and its lockfile untouched:
 `npm install --prefix ~/.cache/tracelight/render shiki`. `--handlebars-module /absolute/path` uses
 another Handlebars instead of the bundled one. `node scripts/build-render-deps.mjs` in the
-Pyokka checkout rebuilds the bundle after either package is upgraded.
+Tracelight checkout rebuilds the bundle after either package is upgraded.
 
 Check the page before you hand it over. Headless Chrome, and the virtual time budget matters
 because without it the shot is blank:

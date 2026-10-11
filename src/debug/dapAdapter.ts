@@ -1,11 +1,11 @@
 /**
  * The vscode glue of the DAP adapter (dapTranslator.ts does the protocol): an inline debug adapter
- * registered for the `pyokka` debugger type, a configuration provider that fills in the active
+ * registered for the `tracelight` debugger type, a configuration provider that fills in the active
  * file, and the two `DebugTarget` views the translator drives.
  *
  * One door. Every start of a debug run goes through `vscode.debug.startDebugging`, so the standard
- * debug views open with the panel: the command "Pyokka: Debug Current File", F5 on a Python file
- * (a `pyokka` launch configuration or none at all), the URI handler, and the bridge's `debug`
+ * debug views open with the panel: the command "Tracelight: Debug Current File", F5 on a JS/TS file
+ * (a `tracelight` launch configuration or none at all), the URI handler, and the bridge's `debug`
  * request from the CLI. `resolve` then routes by `record`:
  *
  * - `record: false` (the default) is the Debugger: a `DebugSession` of its own, no run-all session,
@@ -42,9 +42,9 @@ import type { TimeMachine } from '../timeMachine/navigator';
 import { log } from '../util/log';
 
 export { DEBUG_TYPE } from './dapShared';
-export const LAUNCH_NAME = 'Pyokka: Debug Current File';
+export const LAUNCH_NAME = 'Tracelight: Debug Current File';
 
-/** the VS Code debug session showing each Pyokka session, while one is alive */
+/** the VS Code debug session showing each Tracelight session, while one is alive */
 const attached = new Map<Session, vscode.DebugSession>();
 /** the same for a `record: false` debug session */
 const attachedDebug = new Map<DebugSession, vscode.DebugSession>();
@@ -53,7 +53,7 @@ const attachedDebug = new Map<DebugSession, vscode.DebugSession>();
 /** Sessions whose debug run is being restarted, with the run being replaced: its finish must not end the VS Code debug session showing them. */
 const restarting = new Map<Session, string | undefined>();
 
-/** The VS Code debug session showing this Pyokka session, if any. */
+/** The VS Code debug session showing this Tracelight session, if any. */
 export function debugSessionOf(session: Session): vscode.DebugSession | undefined {
   return attached.get(session);
 }
@@ -76,7 +76,7 @@ export async function startDebugSession(launch: LaunchConfig, opts: { stopOnEntr
   const config: vscode.DebugConfiguration = {
     type: DEBUG_TYPE,
     request: 'launch',
-    name: launch.module ? `Pyokka: Debug ${launchName(launch)}` : LAUNCH_NAME,
+    name: launch.module ? `Tracelight: Debug ${launchName(launch)}` : LAUNCH_NAME,
     ...(launch.program ? { program: launch.program } : {}),
     ...(launch.module ? { module: launch.module } : {}),
     ...(launch.args.length ? { args: launch.args } : {}),
@@ -88,7 +88,7 @@ export async function startDebugSession(launch: LaunchConfig, opts: { stopOnEntr
     libraryCode: launch.libraryCode,
     record: launch.record,
     ...(launch.recordFrom ? { recordFrom: launch.recordFrom } : {}),
-    // the Pyokka panel is where a run is read; the Debug Console opens when the user asks for it
+    // the Tracelight panel is where a run is read; the Debug Console opens when the user asks for it
     internalConsoleOptions: 'neverOpen',
   };
   const ok = await vscode.debug.startDebugging(folder, config);
@@ -111,7 +111,7 @@ export async function debugDocument(doc: vscode.TextDocument, existing?: Session
   await startDebugSession({ program: doc.uri.fsPath, args: [], cwd, env: {}, stopOnEntry: !!opts.stopOnEntry, breakOnException: 'uncaught', libraryCode: false, record, ...(opts.recordFrom ? { recordFrom: opts.recordFrom } : {}) }, { stopOnEntry: !!opts.stopOnEntry });
 }
 
-/** What "Pyokka: Stop Debugging" does, then wait until the run is gone: leave debug mode, stop the run. Resolves at once when no run is in flight. */
+/** What "Tracelight: Stop Debugging" does, then wait until the run is gone: leave debug mode, stop the run. Resolves at once when no run is in flight. */
 export async function stopDebugging(session: Session): Promise<void> {
   session.stopDebug();
   if (!session.running) return;
@@ -122,7 +122,7 @@ export async function stopDebugging(session: Session): Promise<void> {
 /**
  * Stop the debug run, wait for it to be gone, then start a fresh debug run of the same file.
  * `onStopped` runs between the two (the bridge registers its wait for the first stop there). The
- * VS Code debug session showing the Pyokka session is kept: the old run's finish is not reported
+ * VS Code debug session showing the Tracelight session is kept: the old run's finish is not reported
  * to it, and the new run opens inside it through `debugDocument`.
  */
 export async function restartDebugging(session: Session, opts: { stopOnEntry?: boolean; onStopped?: () => void } = {}): Promise<void> {
@@ -137,7 +137,7 @@ export async function restartDebugging(session: Session, opts: { stopOnEntry?: b
   }
 }
 
-export class PyokkaDebugAdapter implements vscode.DebugAdapter {
+export class TracelightDebugAdapter implements vscode.DebugAdapter {
   private readonly emitter = new vscode.EventEmitter<vscode.DebugProtocolMessage>();
   readonly onDidSendMessage = this.emitter.event;
   private readonly translator: DapTranslator;
@@ -210,7 +210,7 @@ export class PyokkaDebugAdapter implements vscode.DebugAdapter {
   private async resolveReplay(key: string): Promise<DebugSessionLike> {
     const session = this.mgr.getByKey(key);
     const tm = this.timeMachine;
-    if (!session || !tm) throw new Error('the Pyokka session to replay is gone: start the Time Machine again');
+    if (!session || !tm) throw new Error('the Tracelight session to replay is gone: start the Time Machine again');
     log.info(`[${session.displayName}] DAP launch (replay of the recording at step ${session.nav.currentStep})`);
     return wrapReplay(session, tm, { closesTimeMachine: () => !replayGivingWay.has(session) });
   }
@@ -249,7 +249,7 @@ export class PyokkaDebugAdapter implements vscode.DebugAdapter {
   /** `record: true`: today's run-all session in debug mode, with the Time Machine over its recording. */
   private async resolveRecording(launch: LaunchConfig, opts: { stopOnEntry: boolean }): Promise<DebugSessionLike> {
     const program = launch.program;
-    if (!program) throw new Error('a recording debug session needs "program": "record": true runs the file as a Pyokka run-all session');
+    if (!program) throw new Error('a recording debug session needs "program": "record": true runs the file as a Tracelight run-all session');
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(program));
     // in an editor, not only loaded: a recording session ends with its document, and VS Code closes
     // a document nobody shows (a `--record` start through the URI, on a file that was not open,
@@ -262,7 +262,7 @@ export class PyokkaDebugAdapter implements vscode.DebugAdapter {
     if (existing && launch.python && existing.interpreter.path !== launch.python) throw new Error(interpreterRefusal(existing.displayName));
     const recordFrom = recordFromSpec(launch);
     const session = existing ?? (await this.mgr.start(doc, { debug: true, stopOnEntry: opts.stopOnEntry, ...(recordFrom ? { recordFrom } : {}), ...(launch.python ? { interpreter: launch.python } : {}) }));
-    if (!session) throw new Error(`Pyokka could not start a session on ${program}`);
+    if (!session) throw new Error(`Tracelight could not start a session on ${program}`);
     applyLaunchOverrides(session, launch);
     log.info(`[${session.displayName}] DAP launch${existing ? '' : ' (fresh session: its first run is the paused one)'} (recording)`);
     if (this.debugSession) {
@@ -358,7 +358,7 @@ export function wrapSession(session: Session, mgr: SessionManager, opts: { debug
       const loc = session.files.locate(rid);
       return loc ? { path: loc.path, line: loc.range[0] } : undefined;
     },
-    // Stop in the toolbar ends the run and leaves debug mode, like "Pyokka: Stop Debugging"; the
+    // Stop in the toolbar ends the run and leaves debug mode, like "Tracelight: Stop Debugging"; the
     // session and its recording stay (the panel is still there to read what ran)
     terminate: () => {
       if (!superseded()) void session.stopRun().catch(() => undefined);
@@ -394,7 +394,7 @@ export function wrapSession(session: Session, mgr: SessionManager, opts: { debug
         reported = ev.runId;
         fn(ev.exitCode);
       };
-      const disposed = (): void => fn(null); // the Pyokka session went away under the debug session
+      const disposed = (): void => fn(null); // the Tracelight session went away under the debug session
       session.on('runFinished', handler);
       session.once('disposed', disposed);
       return () => {
@@ -412,7 +412,7 @@ export function registerDapAdapter(mgr: SessionManager, debugMgr: DebugSessionMa
   if (timeMachine) followTimeMachine(mgr, (s) => attached.has(s) || [...attachedDebug.keys()].some((ds) => s.document.uri.scheme === 'file' && ds.launch.program === s.document.uri.fsPath));
   return [
     vscode.debug.registerDebugAdapterDescriptorFactory(DEBUG_TYPE, {
-      createDebugAdapterDescriptor: (debugSession) => new vscode.DebugAdapterInlineImplementation(new PyokkaDebugAdapter(mgr, debugMgr, debugSession, timeMachine)),
+      createDebugAdapterDescriptor: (debugSession) => new vscode.DebugAdapterInlineImplementation(new TracelightDebugAdapter(mgr, debugMgr, debugSession, timeMachine)),
     }),
     vscode.debug.registerDebugConfigurationProvider(DEBUG_TYPE, {
       resolveDebugConfiguration(_folder, config) {
@@ -430,12 +430,12 @@ export function registerDapAdapter(mgr: SessionManager, debugMgr: DebugSessionMa
           config.name = LAUNCH_NAME;
         }
         if (!config['program'] && !config['module']) config['program'] = editor?.document.uri.scheme === 'file' ? editor.document.uri.fsPath : '${file}';
-        // the Pyokka panel is where a run is read; the Debug Console opens when the user asks for it
+        // the Tracelight panel is where a run is read; the Debug Console opens when the user asks for it
         if (!config['internalConsoleOptions']) config['internalConsoleOptions'] = 'neverOpen';
         // a launch the parser refuses must not open a session that then fails: report it here,
         // where `undefined` aborts the start and `startDebugging` answers false
         if (config['module'] && config['record'] === true) {
-          void vscode.window.showErrorMessage('Pyokka: "record": true runs the file as a Pyokka run-all session, which has no module launch; use "record": false, or a "program" launch.');
+          void vscode.window.showErrorMessage('Tracelight: "record": true runs the file as a Tracelight run-all session, which has no module launch; use "record": false, or a "program" launch.');
           return undefined;
         }
         // a second start on a launch key a live debug session already holds restarts it in place and

@@ -13,7 +13,7 @@ import { findSnaps as findFences, fenceAt, insideFence, outputPrefix, type SnapF
 import { RUNNABLE_SELECTOR, runtimeLanguage } from '../runtime/language';
 export { fenceAt, OUTPUT_PREFIX, type SnapFence } from './snapFences';
 
-/** The fence syntax of `doc`, or undefined for a language Pyokka does not run. */
+/** The fence syntax of `doc`, or undefined for a language Tracelight does not run. */
 function syntaxOf(doc: vscode.TextDocument): SnapSyntax | undefined {
   return runtimeLanguage(doc);
 }
@@ -23,8 +23,8 @@ function findSnaps(doc: vscode.TextDocument): SnapFence[] {
   return syntax ? findFences(doc.getText(), syntax) : [];
 }
 
-const ALLOWED_KEY = 'pyokka.snapsAllowed';
-const DISCOVERY_OFF_KEY = 'pyokka.snapsDiscoveryOff';
+const ALLOWED_KEY = 'tracelight.snapsAllowed';
+const DISCOVERY_OFF_KEY = 'tracelight.snapsDiscoveryOff';
 
 export class Snaps implements vscode.HoverProvider, vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -84,11 +84,11 @@ export class Snaps implements vscode.HoverProvider, vscode.Disposable {
     const f = fenceAt(fences, position.line);
     if (!f || position.line !== f.openLine) return undefined;
     if (this.isAllowed(document)) {
-      const md = new vscode.MarkdownString('**Pyokka snap** (execution allowed) · [Insert output](command:pyokka.insertSnapOutput) · [Delete output](command:pyokka.deleteSnapOutput)');
+      const md = new vscode.MarkdownString('**Tracelight snap** (execution allowed) · [Insert output](command:tracelight.insertSnapOutput) · [Delete output](command:tracelight.deleteSnapOutput)');
       md.isTrusted = true;
       return new vscode.Hover(md, new vscode.Range(f.openLine, 0, f.openLine, document.lineAt(f.openLine).text.length));
     }
-    const md = new vscode.MarkdownString('**Pyokka snaps detected.** Snaps run the fenced code in module scope. [Allow](command:pyokka.allowFileSnapsExecution "Allow snaps execution in this file") (or press Space twice inside the fence)');
+    const md = new vscode.MarkdownString('**Tracelight snaps detected.** Snaps run the fenced code in module scope. [Allow](command:tracelight.allowFileSnapsExecution "Allow snaps execution in this file") (or press Space twice inside the fence)');
     md.isTrusted = true;
     return new vscode.Hover(md, new vscode.Range(f.openLine, 0, f.openLine, document.lineAt(f.openLine).text.length));
   }
@@ -118,7 +118,7 @@ export class Snaps implements vscode.HoverProvider, vscode.Disposable {
     const prevCount = this.fenceCounts.get(key) ?? fences.length;
     this.fenceCounts.set(key, fences.length);
     if (fences.length > prevCount && this.isAllowed(doc) && setting<boolean>('snapsAutoRunConfirmOnEdit', true, doc.uri)) {
-      void vscode.window.showInformationMessage('Pyokka: a new snap was added. Run all snaps in this file?', 'Run', 'Stop running snaps').then(async (pick) => {
+      void vscode.window.showInformationMessage('Tracelight: a new snap was added. Run all snaps in this file?', 'Run', 'Stop running snaps').then(async (pick) => {
         if (pick === 'Stop running snaps') {
           await this.setAllowed(doc, false);
           const s = this.manager.get(doc);
@@ -148,7 +148,7 @@ export class Snaps implements vscode.HoverProvider, vscode.Disposable {
     this.fenceCounts.set(doc.uri.toString(), fences.length);
     if (!fences.length) return;
     if (setting<boolean>('snapsAutoRunConfirmOnOpen', true, doc.uri)) {
-      const pick = await vscode.window.showInformationMessage(`Pyokka: ${doc.fileName.split(/[\\/]/).pop()} has ${fences.length} snap(s) allowed earlier. Run them?`, 'Run snaps', 'Not now');
+      const pick = await vscode.window.showInformationMessage(`Tracelight: ${doc.fileName.split(/[\\/]/).pop()} has ${fences.length} snap(s) allowed earlier. Run them?`, 'Run snaps', 'Not now');
       if (pick !== 'Run snaps') return;
     }
     session.mode = 'snaps';
@@ -175,7 +175,7 @@ export class Snaps implements vscode.HoverProvider, vscode.Disposable {
     if (on) set.delete(doc.uri.toString());
     else set.add(doc.uri.toString());
     await this.context.workspaceState.update(DISCOVERY_OFF_KEY, [...set]);
-    vscode.window.setStatusBarMessage(`Pyokka: snaps discovery ${on ? 'started' : 'stopped'} for this file`, 2500);
+    vscode.window.setStatusBarMessage(`Tracelight: snaps discovery ${on ? 'started' : 'stopped'} for this file`, 2500);
   }
 
   private outputBlock(doc: vscode.TextDocument, fence: SnapFence): vscode.Range {
@@ -192,7 +192,7 @@ export class Snaps implements vscode.HoverProvider, vscode.Disposable {
     const fences = findSnaps(editor.document);
     const fence = fenceAt(fences, editor.selection.active.line) ?? fences[0];
     if (!fence) {
-      void vscode.window.showInformationMessage('Pyokka: no snap fence at the cursor.');
+      void vscode.window.showInformationMessage('Tracelight: no snap fence at the cursor.');
       return;
     }
     const lines: string[] = [];

@@ -4,15 +4,15 @@ import { CONTEXT_29, CONTEXT_STALE, SUSPECTS } from './fixtures'
 import { BAND, engine, newWorld, pk, steps } from './world'
 
 // The band as drawn, from the CLI's real answers. The plugin's state is seeded by driving its
-// hooks: a pyokka command in Bash makes it ask the CLI and draw.
+// hooks: a tracelight command in Bash makes it ask the CLI and draw.
 
 const mountBand = (surface: 'terminal' | 'desktop' = 'terminal') =>
-  ({ plugin: 'pyokka-band', surface, component: 'AbovePrompt', props: BAND }) as const
+  ({ plugin: 'tracelight-band', surface, component: 'AbovePrompt', props: BAND }) as const
 
 test('explain view: place, progress, code, values, stack and the finding on this step', async ($, on) => {
   const w = newWorld()
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount(mountBand(surface))
     expect(await ui.find({ type: 'Text', text: 'invoices.py:34' })).toBeDefined()
@@ -37,7 +37,7 @@ test('explain view: findings later in the run are ahead, earlier ones reached', 
   w.context = CONTEXT_29
   w.suspects = SUSPECTS
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 29' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 29' })
   const ui = await $.ui.mount(mountBand())
   // the dead store at step 6 is behind this step, the swallowed TypeError at step 64 ahead
   expect(await ui.find({ type: 'Text', text: '  ⚠ 1' })).toBeDefined()
@@ -53,14 +53,14 @@ test('a stale recording: a notice, record again, and no findings', async ($, on)
   const w = newWorld()
   w.context = CONTEXT_STALE
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka context --live' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight context --live' })
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: /^◌ The file changed since this recording/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /⚠/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /^(swallowed exception|caught-exception|dead-store): / })).toBeUndefined()
   expect(await ui.findAll({ type: 'Text', text: '●' })).toHaveLength(0)
   await ui.press({ key: 'stale-r' })
-  expect(w.runs).toContainEqual(['pyokka', 'debug', '/work/stale/invoices.py', '--record', '--no-focus'])
+  expect(w.runs).toContainEqual(['tracelight', 'debug', '/work/stale/invoices.py', '--record', '--no-focus'])
   await ui.unmount()
 })
 
@@ -68,10 +68,10 @@ test('bugs view: the list from suspects, the picked finding, j/k and go to step'
   const w = newWorld()
   w.suspects = SUSPECTS
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   await $.command.run(pk('x'))
   const ui = await $.ui.mount(mountBand())
-  expect(await ui.find({ type: 'Text', text: 'pyokka bugs ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'tracelight bugs ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '2 suspicious steps · from suspects' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'caught-exception  invoices.py:34  #64' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'dead-store  invoices.py:22  #6' })).toBeDefined()
@@ -80,14 +80,14 @@ test('bugs view: the list from suspects, the picked finding, j/k and go to step'
   await ui.press({ key: 'bugs-g' })
   expect(steps(w)).toContain('--to 6 --live')
   await ui.press({ key: 'bugs-e' })
-  expect(await ui.find({ type: 'Text', text: 'pyokka bugs ' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: 'tracelight bugs ' })).toBeUndefined()
   await ui.unmount()
 })
 
 test('without suspects the band falls back to exceptions', async ($, on) => {
   const w = newWorld()
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   await $.command.run(pk('x'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: '1 suspicious step · from exceptions' })).toBeDefined()
@@ -96,18 +96,18 @@ test('without suspects the band falls back to exceptions', async ($, on) => {
 
 test('the CLI saying no session is one dim line', async ($, on) => {
   const w = newWorld()
-  w.context = 'no live session\nhint: open VS Code with pyokka.agentAccess on'
+  w.context = 'no live session\nhint: open VS Code with tracelight.agentAccess on'
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka state --live' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight state --live' })
   const ui = await $.ui.mount(mountBand())
-  expect(await ui.find({ type: 'Text', text: 'pyokka  no live session' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'tracelight  no live session' })).toBeDefined()
   await ui.unmount()
 })
 
 test('the band stays out of the way during a survey, and after 10 idle minutes', async ($, on) => {
   const w = newWorld()
   const clock = engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64' })
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   const survey = await $.ui.mount({ ...mountBand(), props: { ...BAND, hasSurvey: true } })
   expect(await survey.find({ type: 'Text', text: /invoices\.py/ })).toBeUndefined()
   await survey.unmount()
@@ -117,11 +117,11 @@ test('the band stays out of the way during a survey, and after 10 idle minutes',
   await idle.unmount()
 })
 
-test('a Bash command that is not pyokka leaves the band alone', async ($, on) => {
+test('a Bash command that is not tracelight leaves the band alone', async ($, on) => {
   const w = newWorld()
   engine(on, w)
-  await $.tool.call({ tool: 'Bash', command: 'ls pyokka-notes' })
+  await $.tool.call({ tool: 'Bash', command: 'ls tracelight-notes' })
   expect(w.runs).toEqual([])
-  await $.tool.call({ tool: 'Bash', command: 'pyokka step --live --to 64 --session invoices.py' })
-  expect(w.runs[0]).toEqual(['pyokka', 'context', '--json', '--live', '--session', 'invoices.py'])
+  await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64 --session invoices.py' })
+  expect(w.runs[0]).toEqual(['tracelight', 'context', '--json', '--live', '--session', 'invoices.py'])
 })

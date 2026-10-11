@@ -2,7 +2,7 @@
  * The host's walkthrough builder over `fixtures/walkthrough-calls-run.json` (callbacks from
  * unrecorded code, a tail call), written by python/tests/test_walkthrough_calls.py: it must build
  * the moments the Python builder wrote to `fixtures/walkthrough-calls-moments.json`. Regenerate
- * both from the Python side with PYOKKA_WRITE_FIXTURES=1.
+ * both from the Python side with TRACELIGHT_WRITE_FIXTURES=1.
  */
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';

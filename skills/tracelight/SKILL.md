@@ -43,18 +43,18 @@ a shell, the same commands are MCP tools: [references/mcp.md](references/mcp.md)
 ## Before the first command: find the runtime and the editor
 
 Find the runtime fresh on this machine, each session. Extension folders carry a version
-(`ivor.pyokka-0.1.3`), so a path saved in a note or another session goes stale on the next update
+(`ivor.tracelight-0.1.3`), so a path saved in a note or another session goes stale on the next update
 and fails as `Cannot find module`. Look in this order:
 
 1. `tracelight` on PATH (`command -v tracelight`), else `~/.local/bin/tracelight` by its full
    path. A stock macOS PATH does not include `~/.local/bin`, so call it by that full path; the
    user's shell profile stays as it is.
-2. `scripts/tracelight.sh` next to this file does the same search, and inside a Pyokka checkout
+2. `scripts/tracelight.sh` next to this file does the same search, and inside a Tracelight checkout
    runs the checkout's own `node/bin/` entry with `node`.
 3. The installed extension ships the runtime under `dist/node`. Look in the editor's extensions
    directory (`~/.vscode/extensions`, `~/.vscode-insiders/extensions`, `~/.cursor/extensions`,
    `~/.vscode-server/extensions`, or `%USERPROFILE%\.vscode\extensions` on Windows) for
-   `ivor.pyokka-*`, take the highest version, and run the `.mjs` file in its `dist/node/bin` with
+   `ivor.tracelight-*`, take the highest version, and run the `.mjs` file in its `dist/node/bin` with
    `node`.
 
 The CLI needs Node 22.15 or newer, since it runs its own TypeScript sources: `node --version`.
@@ -95,16 +95,16 @@ sent before it answers `no live session`. Every `--live` command after the first
 session.
 
 **A recording session (`show`, `explain`) is the user's.** It exists only when the user started
-Pyokka on the file in VS Code ("Start on Current File", or a smart-start rule); having the file open
-is not enough, and `pyokka.agentAccess` only lets you reach a session, it starts none. Check with
+Tracelight on the file in VS Code ("Start on Current File", or a smart-start rule); having the file open
+is not enough, and `tracelight.agentAccess` only lets you reach a session, it starts none. Check with
 `state --live`, which moves nothing. On `no live session`, move on at once: record it yourself with
 `tracelight run FILE --save run.json` and use `run.json` instead of `--live`, or ask the user to
-start Pyokka on the file if they want the editor to follow along.
+start Tracelight on the file if they want the editor to follow along.
 
 The CLI finds a live session by the file the command names, by the current directory's workspace,
 or by `--session demo.ts`; when two windows show the same file, `--session
-$PYOKKA_HOME/sessions/<pid>-<n>.json` picks one and the error lists them (`PYOKKA_HOME` is the
-extension's directory, `~/.pyokka` unless set; give the CLI the same value as the window). A file
+$TRACELIGHT_HOME/sessions/<pid>-<n>.json` picks one and the error lists them (`TRACELIGHT_HOME` is the
+extension's directory, `~/.tracelight` unless set; give the CLI the same value as the window). A file
 can have a recording session and a debug session at once, and the CLI routes by verb.
 
 **Keep the session you chose.** Once more than one exists, commands that read the past may refuse
@@ -115,19 +115,19 @@ pass `--session NAME` on every `--live` command from then on.
 somewhere. To find out where a recording session is, use the reads, which move nothing: `state`,
 `context`, `values`, `var`, `why`, `origin`, `walkthrough`, `graph`, `http`, `exceptions`, `history`.
 
-**Under a sandbox (Codex).** The CLI reaches VS Code through `$PYOKKA_HOME/sessions/*.sock`. If a
+**Under a sandbox (Codex).** The CLI reaches VS Code through `$TRACELIGHT_HOME/sessions/*.sock`. If a
 command fails with `Operation not permitted` or `stopped answering` right after connecting, your
 sandbox blocked the socket or the runner: ask to run that command outside the sandbox. It is not a
 missing session.
 
 ## In Claude Code: the band
 
-When `printenv CLAUDECODE` prints `1`, you run inside Claude Code, and the Pyokka band can show
+When `printenv CLAUDECODE` prints `1`, you run inside Claude Code, and the Tracelight band can show
 the person what the Time Machine shows: the code around the current step, its recorded values, the
 call stack, a two-sentence explanation and the bugs found in the run, above their prompt. It reads
 the same `--live` session your commands drive.
 
-- Call the `band` tool (`mcp__pyokka-band__band`) with `{"action": "show"}` when you start to step
+- Call the `band` tool (`mcp__tracelight-band__band`) with `{"action": "show"}` when you start to step
   through a run with the person, and with `{"action": "hide"}` when the work moves on (planning,
   editing other code).
 - Pass `--session NAME` on every `--live` command. The band follows the session the last command
@@ -139,10 +139,10 @@ the same `--live` session your commands drive.
   `step --into` before a fix rests on it.
 - To leave a fix plan for a bug on the current step, call the tool with `{"action": "fix"}`. The
   plan aims at the root of the origin chain. It writes
-  `<program dir>/.pyokka/findings/<file>-<finding>-<where>.md` with the reproduce commands, the
+  `<program dir>/.tracelight/findings/<file>-<finding>-<where>.md` with the reproduce commands, the
   diff and a check on a patched copy, and marks it `status: fixed` once a fresh run no longer
   shows the finding. The plan is a local file for the person and stays out of commits
-  (`.pyokka/findings/` is gitignored). Give the person the plan's path.
+  (`.tracelight/findings/` is gitignored). Give the person the plan's path.
 - Applying a fix is the person's choice. Point them to `/pk a` to write the planned edit to the
   file (it records the run again) and `/pk u` to put the original back, and leave the source file
   as it is yourself.
@@ -155,7 +155,7 @@ the same `--live` session your commands drive.
   records from the paused line ([references/debug.md](references/debug.md)).
 
 When the `band` tool is not in your tool list, the band is not installed. Say once that
-`claude plugin marketplace add ivorpad/pyokka` and `claude plugin install pyokka-band@pyokka` add
+`claude plugin marketplace add ivorpad/tracelight` and `claude plugin install tracelight-band@tracelight` add
 it (README, "In Claude Code"), and carry on with the CLI.
 
 ## Stay out of the user's project

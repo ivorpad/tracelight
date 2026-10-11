@@ -1,7 +1,7 @@
 /**
  * The host's exceptions report: byte equality with what the Python builder wrote to
  * `fixtures/exceptions.json` over the shared fixture run `fixtures/exceptions-run.json`
- * (python/tests, PYOKKA_WRITE_FIXTURES=1; program: `fixtures/exceptions/`), and the folding,
+ * (python/tests, TRACELIGHT_WRITE_FIXTURES=1; program: `fixtures/exceptions/`), and the folding,
  * ordering and text rules of docs/PROTOCOL.md over synthetic events.
  */
 import { describe, expect, it } from 'vitest';
@@ -41,7 +41,7 @@ function loadInputs(runFile: string): ExceptionReportInputs {
 
 describe('exceptions fixture', () => {
   it('produces the report the Python builder wrote', () => {
-    for (const f of [RUN, EXPECTED]) if (!fs.existsSync(f)) throw new Error(`${f} is missing: the Python side writes it (python/tests, PYOKKA_WRITE_FIXTURES=1)`);
+    for (const f of [RUN, EXPECTED]) if (!fs.existsSync(f)) throw new Error(`${f} is missing: the Python side writes it (python/tests, TRACELIGHT_WRITE_FIXTURES=1)`);
     const report = buildExceptionReport(loadInputs(RUN));
     const expected = JSON.parse(fs.readFileSync(EXPECTED, 'utf8')) as ExceptionReport;
     expect(report.rows.map((r) => `${r.kind} ${r.errorType} ×${r.count}`)).toEqual(expected.rows.map((r) => `${r.kind} ${r.errorType} ×${r.count}`));

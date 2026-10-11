@@ -192,7 +192,7 @@ async function flush(): Promise<void> {
 describe('DapTranslator', () => {
   it('answers initialize with the capabilities, then announces initialized, and launch starts a debug run on the program', async () => {
     const { session, send, events } = harness();
-    const init = await send('initialize', { adapterID: 'pyokka' });
+    const init = await send('initialize', { adapterID: 'tracelight' });
     expect(init.success).toBe(true);
     expect(init.body).toEqual(CAPABILITIES);
     expect(CAPABILITIES.supportsSetVariable).toBe(true);
@@ -419,7 +419,7 @@ describe('DapTranslator', () => {
 
   it('completes the text before the caret and tells the client which prefix each target replaces', async () => {
     const { session, send } = harness();
-    await send('initialize', { adapterID: 'pyokka', columnsStartAt1: true, linesStartAt1: true });
+    await send('initialize', { adapterID: 'tracelight', columnsStartAt1: true, linesStartAt1: true });
     await send('launch', { program: '/w/rank.py' });
     expect(CAPABILITIES.supportsCompletionsRequest).toBe(true);
     expect(CAPABILITIES.completionTriggerCharacters).toEqual(['.']);
@@ -437,7 +437,7 @@ describe('DapTranslator', () => {
     ]);
     // a multi-line console text completes the line the caret is on; 0-based clients get 0-based positions
     const t0 = harness();
-    await t0.send('initialize', { adapterID: 'pyokka', columnsStartAt1: false, linesStartAt1: false });
+    await t0.send('initialize', { adapterID: 'tracelight', columnsStartAt1: false, linesStartAt1: false });
     await t0.send('launch', { program: '/w/rank.py' });
     const multi = (await t0.send('completions', { text: 'x = 1\npay', line: 1, column: 3 })).body as { targets: { label: string; start: number; length: number }[] };
     expect(t0.session.calls).toContain('complete "pay"');
@@ -466,7 +466,7 @@ describe('DapTranslator', () => {
     expect(CAPABILITIES.supportsRestartRequest).toBe(true);
     await send('launch', { program: '/w/rank.py' });
     session.pause(PAUSE);
-    const restart = await send('restart', { arguments: { type: 'pyokka', request: 'launch', program: '/w/rank.py', stopOnEntry: false } });
+    const restart = await send('restart', { arguments: { type: 'tracelight', request: 'launch', program: '/w/rank.py', stopOnEntry: false } });
     expect(restart.success).toBe(true);
     expect(session.calls.slice(-1)).toEqual(['restart']);
     expect(events('terminated')).toHaveLength(0);

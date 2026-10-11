@@ -6,28 +6,28 @@ vi.mock('vscode', () => ({}));
 
 describe('gitignoreCoversReplay', () => {
   it('accepts the replay directory, its parent and the alternate directory, anchored or not, with or without a slash', () => {
-    for (const line of ['.pyokka', '.pyokka/', '.pyokka/replay', '.pyokka/replay/', '.pyokka-replay', '.pyokka-replay/', '/.pyokka/replay/', '**/.pyokka/', '  .pyokka/replay/  ', '.pyokka/**', '.pyokka/*', '.pyokka/replay/**', '.pyokka-replay/*']) {
+    for (const line of ['.tracelight', '.tracelight/', '.tracelight/replay', '.tracelight/replay/', '.tracelight-replay', '.tracelight-replay/', '/.tracelight/replay/', '**/.tracelight/', '  .tracelight/replay/  ', '.tracelight/**', '.tracelight/*', '.tracelight/replay/**', '.tracelight-replay/*']) {
       expect(gitignoreCoversReplay(`node_modules/\n${line}\ndist/\n`), line).toBe(true);
     }
   });
   it('rejects unrelated, commented or negated lines and an empty file', () => {
-    for (const text of ['', 'node_modules/\ndist/\n', '# .pyokka/replay/\n', '!.pyokka/replay/\n', '.pyokka.json\n', '.pyokka/cache/\n', 'pyokka/replay/\n', '*.jsonl\n']) {
+    for (const text of ['', 'node_modules/\ndist/\n', '# .tracelight/replay/\n', '!.tracelight/replay/\n', '.tracelight.json\n', '.tracelight/cache/\n', 'tracelight/replay/\n', '*.jsonl\n']) {
       expect(gitignoreCoversReplay(text), JSON.stringify(text)).toBe(false);
     }
   });
   it('reads CRLF files', () => {
-    expect(gitignoreCoversReplay('dist/\r\n.pyokka/replay/\r\n')).toBe(true);
+    expect(gitignoreCoversReplay('dist/\r\n.tracelight/replay/\r\n')).toBe(true);
   });
 });
 
 describe('appendGitignoreLine', () => {
   it('starts a missing file with the line', () => {
-    expect(appendGitignoreLine('', '.pyokka/replay/')).toBe('.pyokka/replay/\n');
+    expect(appendGitignoreLine('', '.tracelight/replay/')).toBe('.tracelight/replay/\n');
   });
   it('keeps the text and ends it with exactly one newline before the line', () => {
-    expect(appendGitignoreLine('dist/', '.pyokka/replay/')).toBe('dist/\n.pyokka/replay/\n');
-    expect(appendGitignoreLine('dist/\n', '.pyokka/replay/')).toBe('dist/\n.pyokka/replay/\n');
-    expect(appendGitignoreLine('dist/\n\n\n', '.pyokka/replay/')).toBe('dist/\n.pyokka/replay/\n');
-    expect(appendGitignoreLine('# keep\ndist/\r\n', '.pyokka-replay/')).toBe('# keep\ndist/\n.pyokka-replay/\n');
+    expect(appendGitignoreLine('dist/', '.tracelight/replay/')).toBe('dist/\n.tracelight/replay/\n');
+    expect(appendGitignoreLine('dist/\n', '.tracelight/replay/')).toBe('dist/\n.tracelight/replay/\n');
+    expect(appendGitignoreLine('dist/\n\n\n', '.tracelight/replay/')).toBe('dist/\n.tracelight/replay/\n');
+    expect(appendGitignoreLine('# keep\ndist/\r\n', '.tracelight-replay/')).toBe('# keep\ndist/\n.tracelight-replay/\n');
   });
 });

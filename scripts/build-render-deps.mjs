@@ -5,9 +5,9 @@ import * as esbuild from 'esbuild';
 import { readFileSync } from 'node:fs';
 
 const version = (name) => JSON.parse(readFileSync(`node_modules/${name}/package.json`, 'utf8')).version;
-// skills/pyokka gets Python; skills/tracelight gets JavaScript, TypeScript and TSX as well.
+// skills/tracelight gets Python; skills/tracelight gets JavaScript, TypeScript and TSX as well.
 const bundles = [
-  ['scripts/render-deps.entry.mjs', 'skills/pyokka/scripts/render-deps.cjs'],
+  ['scripts/render-deps.entry.mjs', 'skills/tracelight/scripts/render-deps.cjs'],
   ['scripts/render-deps.tracelight.entry.mjs', 'skills/tracelight/scripts/render-deps.cjs'],
 ];
 for (const [entry, outfile] of bundles) {

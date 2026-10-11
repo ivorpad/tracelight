@@ -1,6 +1,6 @@
 /**
  * After the first HTTP recording in a workspace (`run.finished` with `http.mode === 'record'`),
- * offer once per workspace root to add `.pyokka/replay/` to its `.gitignore`: the recording holds
+ * offer once per workspace root to add `.tracelight/replay/` to its `.gitignore`: the recording holds
  * response bodies and is rewritten by every record run.
  */
 import * as vscode from 'vscode';
@@ -11,13 +11,13 @@ import type { Session } from '../session/session';
 import type { SessionManager } from '../session/sessionManager';
 import { log } from '../util/log';
 
-const ASKED_KEY = 'pyokka.replayGitignoreAsked';
-const REPLAY_DIR = '.pyokka/replay/';
-/** where the runtime records when `<root>/.pyokka` is the Quokka-style config file */
-const REPLAY_DIR_ALT = '.pyokka-replay/';
+const ASKED_KEY = 'tracelight.replayGitignoreAsked';
+const REPLAY_DIR = '.tracelight/replay/';
+/** where the runtime records when `<root>/.tracelight` is the Quokka-style config file */
+const REPLAY_DIR_ALT = '.tracelight-replay/';
 
 /** lines that ignore the replay directory, after trimming and dropping a leading slash or "any directory" glob */
-const COVERING = new Set(['.pyokka', '.pyokka/', '.pyokka/replay', '.pyokka/replay/', '.pyokka-replay', '.pyokka-replay/']);
+const COVERING = new Set(['.tracelight', '.tracelight/', '.tracelight/replay', '.tracelight/replay/', '.tracelight-replay', '.tracelight-replay/']);
 
 /** Does this `.gitignore` text already keep the replay directory (either location) out of git? */
 export function gitignoreCoversReplay(text: string): boolean {
@@ -25,8 +25,8 @@ export function gitignoreCoversReplay(text: string): boolean {
     const trimmed = raw.trim();
     if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('!')) continue;
     const line = trimmed.replace(/^(\/|\*\*\/)/, '');
-    // `.pyokka/**`, `.pyokka/*`, `.pyokka/replay/**`: the contents are ignored, and git tracks nothing else
-    if (COVERING.has(line) || /^\.pyokka(\/replay|-replay)?\/\*\*?$/.test(line)) return true;
+    // `.tracelight/**`, `.tracelight/*`, `.tracelight/replay/**`: the contents are ignored, and git tracks nothing else
+    if (COVERING.has(line) || /^\.tracelight(\/replay|-replay)?\/\*\*?$/.test(line)) return true;
   }
   return false;
 }
@@ -73,7 +73,7 @@ async function offer(root: string, recording: string, context: vscode.ExtensionC
   // remembered before asking: a second session finishing in the same root must not ask again
   await context.workspaceState.update(ASKED_KEY, [...asked, root]);
   const alt = path.basename(path.dirname(recording)) === path.basename(REPLAY_DIR_ALT);
-  const pick = await vscode.window.showInformationMessage(`Pyokka recorded HTTP responses to ${alt ? REPLAY_DIR_ALT : REPLAY_DIR}. Add it to .gitignore?`, 'Add', 'Not now');
+  const pick = await vscode.window.showInformationMessage(`Tracelight recorded HTTP responses to ${alt ? REPLAY_DIR_ALT : REPLAY_DIR}. Add it to .gitignore?`, 'Add', 'Not now');
   if (pick !== 'Add') return;
   let text = readText(gitignore);
   if (gitignoreCoversReplay(text)) return; // edited by hand meanwhile

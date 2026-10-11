@@ -182,7 +182,7 @@ export function mapSourceBreakpoints(list: readonly SourceBreakpointLike[]): Bre
 /**
  * True when the file at `fsPath` carries a breakpoint that can pause the run, by the same rule
  * `mapSourceBreakpoints` applies: enabled, in a file, not a logpoint. Logpoints are markers in
- * Pyokka and never pause, so a file with only logpoints is false here.
+ * Tracelight and never pause, so a file with only logpoints is false here.
  */
 export function fileHasBreakpoints(list: readonly SourceBreakpointLike[], fsPath: string): boolean {
   return mapSourceBreakpoints(list).some((bp) => bp.path === fsPath);
@@ -193,7 +193,7 @@ export function fileHasBreakpoints(list: readonly SourceBreakpointLike[], fsPath
  * no breakpoint can hit in the run's files (the file itself and the files of its last run).
  * Otherwise the run goes to the first breakpoint. A run without a stop would go unattended.
  *
- * `anyFile` is the cold start of an agent (`pyokka debug FILE`, the URI handler): no run has
+ * `anyFile` is the cold start of an agent (`tracelight debug FILE`, the URI handler): no run has
  * instrumented anything yet, so any enabled breakpoint can still hit and the run goes to it;
  * only a start with nothing set pauses at the first statement.
  */

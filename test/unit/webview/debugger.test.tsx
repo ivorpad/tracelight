@@ -31,7 +31,7 @@ describe('CapNote', () => {
     const html = render(<CapNote model={{ ...base, truncated: true, cap }} />);
     expect(html).toContain('Recording stopped at step 39: the program ran 35,597,429 steps and only the first 40 are recorded');
     expect(html).toContain('Most steps: pageindex/flash.py 35,000,000 · run.py 12.');
-    expect(html).toContain('Add &quot;pageindex/flash.py&quot; to pyokka.timeMachine.exclude');
+    expect(html).toContain('Add &quot;pageindex/flash.py&quot; to tracelight.timeMachine.exclude');
   });
   it('still says it stopped when an older runtime sent no details', () => {
     expect(render(<CapNote model={{ ...base, truncated: true }} />)).toContain('Recording stopped at step 39');

@@ -17,9 +17,9 @@ export class DebugStatusBar implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(private readonly manager: DebugSessionManager) {
-    this.item = vscode.window.createStatusBarItem('pyokka.debugStatus', vscode.StatusBarAlignment.Left, 49);
-    this.item.name = 'Pyokka Debugger';
-    this.item.command = 'pyokka.showDebugger';
+    this.item = vscode.window.createStatusBarItem('tracelight.debugStatus', vscode.StatusBarAlignment.Left, 49);
+    this.item.name = 'Tracelight Debugger';
+    this.item.command = 'tracelight.showDebugger';
     manager.on('changed', () => this.render());
     this.disposables.push(vscode.window.onDidChangeActiveTextEditor(() => this.render()));
     this.render();
@@ -51,6 +51,6 @@ function tooltip(ds: DebugSession): string {
   const lines = [`${launchLine(ds.resolvedLaunch)}  ·  ${ds.launch.cwd}`];
   if (ds.modified) lines.push('modified: values were changed from the console');
   // the run timeout is not applied to a debug session: a paused server must outlive any clock
-  lines.push('pyokka.runTimeout does not apply while the Debugger is attached');
+  lines.push('tracelight.runTimeout does not apply while the Debugger is attached');
   return lines.join('\n');
 }

@@ -9,16 +9,16 @@ import { cliFor, languageOf, plainRun } from '../hooks/state'
 import { CONTEXT_64, EXCEPTIONS_CAUGHT } from './fixtures'
 import { BAND, engine, newWorld } from './world'
 
-// The band on a JavaScript / TypeScript session: it speaks `tracelight` instead of `pyokka`,
+// The band on a JavaScript / TypeScript session: it speaks `tracelight` instead of `tracelight`,
 // runs the program with node and says the language in its prompts.
 
 const TS_CONTEXT = JSON.parse(JSON.stringify(CONTEXT_64).replaceAll('/work/invoices.py', '/work/invoices.ts'))
 
-test('a JS/TS file picks tracelight, node and its language; a Python file keeps pyokka', () => {
+test('a JS/TS file picks tracelight, node and its language; a Python file keeps tracelight', () => {
   expect(cliFor('/w/a.ts')).toEqual(['tracelight'])
   expect(cliFor('/w/a.mjs')).toEqual(['tracelight'])
   expect(cliFor('/w/a.tsx')).toEqual(['tracelight'])
-  expect(cliFor('/w/a.py')).toEqual(['pyokka'])
+  expect(cliFor('/w/a.py')).toEqual(['tracelight'])
   expect(plainRun('/w/a.js')).toEqual(['node', '/w/a.js'])
   expect(plainRun('/w/a.py')).toEqual(['python3', '/w/a.py'])
   expect(languageOf('/w/a.cts')).toBe('TypeScript')
@@ -32,7 +32,7 @@ test('a tracelight command makes the band read the session with tracelight', asy
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   expect(w.runs[0]).toEqual(['tracelight', 'context', '--json', '--live'])
-  const ui = await $.ui.mount({ plugin: 'pyokka-band', surface: 'terminal', component: 'AbovePrompt', props: BAND } as const)
+  const ui = await $.ui.mount({ plugin: 'tracelight-band', surface: 'terminal', component: 'AbovePrompt', props: BAND } as const)
   expect(await ui.find({ type: 'Text', text: 'invoices.ts:34' })).toBeDefined()
   // the band's own moves follow the session's CLI
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --over' })
@@ -44,5 +44,5 @@ test('prompts and plans name the TypeScript program', () => {
   const finding = toFindings(EXCEPTIONS_CAUGHT.rows as RawFinding[])[0]!
   expect(narrationPrompt(spot, '')).toContain('a recorded TypeScript run')
   expect(fixPrompt(finding, spot, 'const a = 1')).toContain('A TypeScript program ran to the end')
-  expect(planPath('/work/invoices.ts', finding)).toMatch(/^\/work\/\.pyokka\/findings\/invoices-/)
+  expect(planPath('/work/invoices.ts', finding)).toMatch(/^\/work\/\.tracelight\/findings\/invoices-/)
 })

@@ -58,7 +58,7 @@ export function App() {
     if (state.view === 'output' || state.view === 'settings') dispatch({ type: 'prefs', patch: { view: state.view } });
   }, [state.view]);
 
-  // the host keeps `pyokka.panelView` so the Debugger's title buttons can gate on the view showing
+  // the host keeps `tracelight.panelView` so the Debugger's title buttons can gate on the view showing
   useEffect(() => {
     post({ type: 'viewChanged', view: state.view });
   }, [state.view]);
@@ -312,7 +312,7 @@ export function App() {
           onGoto={(step) => post({ type: 'debugger.goto', step })}
           onOpen={openLocation}
           onMode={(http) => updateSettings(state.session.name ? 'session' : 'global')({ http })}
-          onOpenRecording={() => onCommand('pyokka.openHttpRecording')}
+          onOpenRecording={() => onCommand('tracelight.openHttpRecording')}
           onClose={() => setView('output')}
         />
       );
@@ -330,7 +330,7 @@ export function App() {
           state={dbg}
           session={state.session}
           onAction={(action) => post({ type: 'debugger.action', action })}
-          onStop={() => onCommand('pyokka.stopTraceNavigation')}
+          onStop={() => onCommand('tracelight.stopTraceNavigation')}
           onShowDiagram={() => setView(state.view === 'run-diagram' ? 'debugger' : 'run-diagram')}
           diagramShown={state.view === 'run-diagram'}
         />

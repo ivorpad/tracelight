@@ -5,7 +5,7 @@
  * (`debug breakpoints`), so a breakpoint set on a module before its import is honoured too.
  * Logpoints stay markers (logpoints.ts).
  *
- * The class also keeps `pyokka.activeFileHasBreakpoints`, the key that gives `F5` back to Start
+ * The class also keeps `tracelight.activeFileHasBreakpoints`, the key that gives `F5` back to Start
  * Debugging when the active file has a breakpoint that can pause.
  *
  * Both products share the gutter and nothing else, so a change is pushed to every run-all session
@@ -64,7 +64,7 @@ export class DebugBreakpoints implements vscode.Disposable {
     for (const d of this.disposables) d.dispose();
   }
 
-  /** `pyokka.activeFileHasBreakpoints`: false without an editor, and for anything but a file. */
+  /** `tracelight.activeFileHasBreakpoints`: false without an editor, and for anything but a file. */
   private updateContext(): void {
     const uri = vscode.window.activeTextEditor?.document.uri;
     setContext('activeFileHasBreakpoints', !!uri && uri.scheme === 'file' && fileHasBreakpoints(sourceBreakpointsLike(), uri.fsPath));

@@ -1,6 +1,6 @@
 /**
- * Pure config merging: VS Code settings -> ~/.pyokka/config.json -> package.json "pyokka"
- * -> .pyokka (JSON). Later sources win; nested objects are merged key by key.
+ * Pure config merging: VS Code settings -> ~/.tracelight/config.json -> package.json "tracelight"
+ * -> .tracelight (JSON). Later sources win; nested objects are merged key by key.
  */
 import type { RunConfig } from '../shared/protocol';
 
@@ -119,9 +119,9 @@ export function splitArgs(text: string | undefined): string[] {
   return out;
 }
 
-/** The `"pyokka"` object of a package.json; undefined when absent or not an object. */
-export function readPyokkaKeyFromPackageJson(text: string): ConfigObject | undefined {
+/** The `"tracelight"` object of a package.json; undefined when absent or not an object. */
+export function readTracelightKeyFromPackageJson(text: string): ConfigObject | undefined {
   const pkg = JSON.parse(text) as unknown;
-  const v = pkg && typeof pkg === 'object' ? (pkg as Record<string, unknown>)['pyokka'] : undefined;
+  const v = pkg && typeof pkg === 'object' ? (pkg as Record<string, unknown>)['tracelight'] : undefined;
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as ConfigObject) : undefined;
 }

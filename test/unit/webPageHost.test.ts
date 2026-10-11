@@ -280,7 +280,7 @@ describe('PageHost views', () => {
     expect(host.debug.setBreakpoint(MAIN.path, 2)).toBe(true);
     host.render();
     expect([...(code.last?.breakpoints.keys() ?? [])]).toEqual([2]);
-    host.onPanel({ type: 'command', command: 'pyokka.debugCurrentFile' });
+    host.onPanel({ type: 'command', command: 'tracelight.debugCurrentFile' });
     expect(link.sent).toContainEqual({ type: 'debug.start', breakpoints: [{ path: MAIN.path, line: 2 }], exceptions: 'uncaught', stopOnEntry: true });
     feed({ type: 'debug.begin', runId: 'd-1', content: SOURCE });
     const [, file] = runEvents('d-1');
@@ -344,7 +344,7 @@ describe('PageHost: the views VS Code opens as editors', () => {
 
   it('asks the bridge for a profile and shows its table, rows opening their source', async () => {
     const { host, link, code, feed } = setup();
-    host.onPanel({ type: 'command', command: 'pyokka.profile' });
+    host.onPanel({ type: 'command', command: 'tracelight.profile' });
     expect(link.sent).toContainEqual({ type: 'profile' });
     feed({ type: 'profile', profile: { path: '/tmp/p.cpuprofile', summary: { totalMs: 3, rows: [{ name: 'add', file: MAIN.path, line: 1, selfMs: 2, totalMs: 2.5, calls: 1 }] } } });
     expect(code.shown).toBe(PROFILE_PATH);
@@ -356,14 +356,14 @@ describe('PageHost: the views VS Code opens as editors', () => {
   it('shows the instrumented source, the logs, recent files, and honors the run mode', async () => {
     const { host, link, code, feed } = setup();
     link.replies.push({ type: 'source', id: 1, fileId: 1, instrumentedSource: '__pk.step(1)' });
-    host.onPanel({ type: 'command', command: 'pyokka.showInstrumentedFile' });
+    host.onPanel({ type: 'command', command: 'tracelight.showInstrumentedFile' });
     await tick();
     expect(link.requests).toContainEqual({ type: 'source', runId: 'w-1', fileId: 1 });
     expect(code.shown).toBe('tracelight://instrumented/demo.py');
     expect(code.files.get(code.shown!)!.content).toBe('__pk.step(1)');
-    host.onPanel({ type: 'command', command: 'pyokka.showLogs' });
+    host.onPanel({ type: 'command', command: 'tracelight.showLogs' });
     expect(link.sent).toContainEqual({ type: 'file.read', path: LOG_PATH });
-    host.onPanel({ type: 'command', command: 'pyokka.viewRecentFiles' });
+    host.onPanel({ type: 'command', command: 'tracelight.viewRecentFiles' });
     expect(link.sent).toContainEqual({ type: 'recent' });
     let listed: string[] = [];
     host.onRecent = (files) => (listed = files.map((f) => f.path));

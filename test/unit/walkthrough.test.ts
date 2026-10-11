@@ -2,7 +2,7 @@
  * The host's walkthrough builder over the shared fixture run (`fixtures/walkthrough-run.json`,
  * written by python/tests/test_walkthrough.py): it must produce exactly the moments the Python
  * builder wrote to `fixtures/walkthrough-moments.json`. Regenerate both from the Python side
- * with PYOKKA_WRITE_FIXTURES=1.
+ * with TRACELIGHT_WRITE_FIXTURES=1.
  */
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';

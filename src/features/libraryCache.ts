@@ -1,29 +1,24 @@
 /**
- * "Pyokka: Clear Library Cache": empty the runtime's cache of instrumented library files.
+ * "Tracelight: Clear Library Cache": empty the runtime's cache of instrumented library files.
  *
- * Mirrors `node/src/cache.ts` (`pyokka cache --clear`): the directory is
- * `PYOKKA_CACHE_DIR` when the run child would see it set (empty = the cache is off), else
- * `~/.pyokka/cache`; the entries are the `*.bin` files at its top level, the runtime's `.tmp-*.bin`
- * leftovers included. Nothing else is touched, so a `PYOKKA_CACHE_DIR` that points at a shared
- * folder loses only cache entries, and the directory itself stays. The next run with library code
- * on rewrites what it needs; a session running while the cache is cleared gets one slow run at most.
- *
- * The JS/TS runtime (`node/src/cache.ts`) keeps its own cache: `${ENV}CACHE_DIR`, else
- * `${ENV}HOME/cache`, else `~/.${NAME}/cache`, with `KEY.json` + `KEY.js` entries. The command clears both, so it means the
- * same thing whichever language the library code was stepped from.
+ * Mirrors `node/src/cache.ts` (`tracelight cache --clear`): the directory is
+ * `TRACELIGHT_CACHE_DIR` when the run child would see it set (empty = the cache is off), else
+ * `TRACELIGHT_HOME/cache`, else `~/.tracelight/cache`; the entries are the `KEY.json` + `KEY.js`
+ * files at its top level, the runtime's temp leftovers included. Nothing else is touched, so a
+ * `TRACELIGHT_CACHE_DIR` that points at a shared folder loses only cache entries, and the directory
+ * itself stays. The next run with library code on rewrites what it needs; a session running while
+ * the cache is cleared gets one slow run at most.
  *
  * Plain file operations under the user's home: no interpreter, no shell, no privileges, so it works
  * on a locked-down machine where the runtime cannot be reached or is the thing being suspected.
  */
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { resolveSessionConfig } from '../config/settings';
 import type { SessionManager } from '../session/sessionManager';
 import { formatBytes } from '../session/httpTable';
-import { pyokkaHome } from '../util/paths';
-import { JS_RUNTIME_ENV, JS_RUNTIME_NAME } from '../runtime/jsRuntimeName';
+import { tracelightHome } from '../util/paths';
 import { log } from '../util/log';
 
 export interface ClearResult {
@@ -35,24 +30,16 @@ export interface ClearResult {
 
 /** The directory the runtime caches into under `env`, or undefined when the cache is off. */
 export function libraryCacheDir(env: Record<string, string | undefined>): string | undefined {
-  const set = env['PYOKKA_CACHE_DIR'];
+  const set = env['TRACELIGHT_CACHE_DIR'];
   if (set !== undefined) return set || undefined;
-  return path.join(pyokkaHome(env), 'cache');
+  return path.join(tracelightHome(env), 'cache');
 }
 
-/** The JS/TS runtime's cache directory under `env`, or undefined when its cache is off (`node/src/cache.ts` `cacheDir`). */
-export function jsLibraryCacheDir(env: Record<string, string | undefined>): string | undefined {
-  const set = env[`${JS_RUNTIME_ENV}CACHE_DIR`];
-  if (set !== undefined) return set || undefined;
-  return path.join(env[`${JS_RUNTIME_ENV}HOME`] || path.join(os.homedir(), `.${JS_RUNTIME_NAME}`), 'cache');
-}
-
-/** The entry suffixes each runtime writes at its cache's top level. */
-export const PYTHON_CACHE_EXTS = ['.bin'];
-export const JS_CACHE_EXTS = ['.json', '.js'];
+/** The entry suffixes the runtime writes at its cache's top level. */
+export const CACHE_EXTS = ['.json', '.js'];
 
 /** Remove the entries of `dir`; a missing directory is empty. Throws when the directory cannot be listed. */
-export function clearLibraryCache(dir: string, exts: readonly string[] = PYTHON_CACHE_EXTS): ClearResult {
+export function clearLibraryCache(dir: string, exts: readonly string[] = CACHE_EXTS): ClearResult {
   const out: ClearResult = { removed: 0, bytes: 0, failed: 0 };
   let entries: fs.Dirent[];
   try {
@@ -78,7 +65,7 @@ export function clearLibraryCache(dir: string, exts: readonly string[] = PYTHON_
 
 /** The sentence the command shows for `result` (undefined when the cache is off). */
 export function describeClear(dir: string | undefined, result: ClearResult | undefined): string {
-  if (!dir || !result) return 'the library cache is off (PYOKKA_CACHE_DIR is empty); nothing to clear.';
+  if (!dir || !result) return 'the library cache is off (TRACELIGHT_CACHE_DIR is empty); nothing to clear.';
   const files = (n: number): string => (n === 1 ? '1 cached library file' : `${n} cached library files`);
   if (!result.removed && !result.failed) return `the library cache at ${dir} is already empty.`;
   if (!result.removed) return `none of the ${files(result.failed)} at ${dir} could be removed (in use or read-only).`;
@@ -99,23 +86,14 @@ function runtimeEnv(mgr: SessionManager): Record<string, string | undefined> {
   return { ...process.env, ...resolveSessionConfig(doc?.uri, root || undefined, fileDir).env };
 }
 
-/**
- * Clear both runtimes' caches. A JS cache that is off, or empty and never created, adds nothing to
- * the message, so a Python-only user reads the same sentence as before.
- */
-export function clearBothCaches(env: Record<string, string | undefined>): string {
+/** Clear the cache `env` points at, and say what happened. */
+export function clearCache(env: Record<string, string | undefined>): string {
   const dir = libraryCacheDir(env);
-  const parts = [describeClear(dir, dir ? clearLibraryCache(dir) : undefined)];
-  const jsDir = jsLibraryCacheDir(env);
-  if (jsDir) {
-    const js = clearLibraryCache(jsDir, JS_CACHE_EXTS);
-    if (js.removed || js.failed) parts.push(`JavaScript/TypeScript: ${describeClear(jsDir, js)}`);
-  }
-  return parts.join(' ');
+  return describeClear(dir, dir ? clearLibraryCache(dir) : undefined);
 }
 
 export function clearLibraryCacheCommand(mgr: SessionManager): void {
-  const message = clearBothCaches(runtimeEnv(mgr));
+  const message = clearCache(runtimeEnv(mgr));
   log.info(`clear library cache: ${message}`);
-  void vscode.window.showInformationMessage(`Pyokka: ${message}`);
+  void vscode.window.showInformationMessage(`Tracelight: ${message}`);
 }

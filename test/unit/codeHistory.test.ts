@@ -4,12 +4,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// The renderer of `skills/pyokka`: it turns what `pyokka history` writes into one
+// The renderer of `skills/tracelight`: it turns what `tracelight history` writes into one
 // standalone page, and it refuses data it cannot draw honestly. Both halves are tested here,
 // because a page that renders a broken range is worse than a command that failed and said why.
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const SKILL = path.join(ROOT, 'skills', 'pyokka');
+const SKILL = path.join(ROOT, 'skills', 'tracelight');
 const RENDERER = path.join(SKILL, 'scripts', 'render-code-history.cjs');
 const EXAMPLE = path.join(SKILL, 'templates', 'code-history.example.json');
 
@@ -97,10 +97,10 @@ describe('code-history renderer', () => {
     const data = embedded(html);
     expect(data.steps).toHaveLength(4);
     expect(data.steps.map((s: { id: string }) => s.id)).toEqual(['step-7', 'step-8', 'why-22-answer', 'pause-1']);
-    for (const step of data.steps) expect(step.verify.startsWith('pyokka ')).toBe(true);
+    for (const step of data.steps) expect(step.verify.startsWith('tracelight ')).toBe(true);
     expect(html).toContain('<b>source</b> 0000000000abcd');
     expect(html).toContain('<b>steps</b> 23');
-    // what Pyokka has and a one-frame debugger does not: in/out, hit counts, the arm, the chain
+    // what Tracelight has and a one-frame debugger does not: in/out, hit counts, the arm, the chain
     expect(data.steps[1].call).toEqual({ name: 'scale', in: ['value = 1', 'factor = 3'], out: 'return = 3' });
     expect(data.steps[0].hits).toBe(3);
     expect(data.steps[0].arm).toContain('took False x2, True x1');
@@ -151,7 +151,7 @@ describe('code-history renderer', () => {
     expect(refuse(d => { d.steps[0].end = 9999; })).toContain('invalid source range or focus');
     expect(refuse(d => { d.steps[0].kind = 'a hunch'; })).toContain('unknown evidence kind');
     expect(refuse(d => { d.steps[1].id = 'step-7'; })).toContain('duplicate id');
-    expect(refuse(d => { d.steps[0].verify = 'trust me'; })).toContain('verify must be the pyokka command');
+    expect(refuse(d => { d.steps[0].verify = 'trust me'; })).toContain('verify must be the tracelight command');
     expect(refuse(d => { d.steps[0].bright = [1]; })).toContain('invalid highlighted lines');
     expect(refuse(d => { delete d.meta; })).toContain('Expected meta');
     expect(refuse(d => { d.steps = []; })).toContain('At least one checkpoint');

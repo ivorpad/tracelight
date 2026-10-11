@@ -1,5 +1,5 @@
 {
-  "note": "input -> expected after redaction; implemented identically in src/util/redact.ts and pyokka_runtime/redact.py; the token is «redacted»",
+  "note": "input -> expected after redaction; implemented identically in src/util/redact.ts and node/src/agent/redact.ts; the token is «redacted»",
   "cases": [
     [
       "sk-abcdefghijklmnopqrstuvwxyz012345",

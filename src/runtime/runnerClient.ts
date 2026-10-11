@@ -8,7 +8,7 @@ import { EventEmitter } from 'node:events';
 import type { Completions, DebugRequest, HostRequest, RunEvent, RunnerMessage, RunRequest, StatementBinding, ValueBag, ValueNode } from '../shared/protocol';
 import { NdjsonDecoder, encodeNdjson } from './ndjson';
 import { execResult, type ExecResult } from '../debug/debugExec';
-import { pyokkaHome } from '../util/paths';
+import { tracelightHome } from '../util/paths';
 
 export interface ReadyInfo {
   pythonVersion: string;
@@ -32,13 +32,13 @@ export const EXEC_CAPABILITY = 'exec';
 export const RECORD_FROM_CAPABILITY = 'recordFrom';
 
 /** What to tell the caller when the runtime cannot record from a pause. */
-export const RECORD_FROM_CAPABILITY_ERROR = 'the Pyokka runtime in dist/node is older than the extension: it cannot start recording at a pause. Reinstall the extension, or debug with --record.';
+export const RECORD_FROM_CAPABILITY_ERROR = 'the Tracelight runtime in dist/node is older than the extension: it cannot start recording at a pause. Reinstall the extension, or debug with --record.';
 
 /** What to tell the caller when the runtime cannot run code at the pause. */
-export const EXEC_CAPABILITY_ERROR = 'the Pyokka runtime in dist/node is older than the extension: it cannot run code at a pause. Reinstall the extension.';
+export const EXEC_CAPABILITY_ERROR = 'the Tracelight runtime in dist/node is older than the extension: it cannot run code at a pause. Reinstall the extension.';
 
 /** What to tell the user when the runtime cannot serve a Debugger session. */
-export const RECORD_CAPABILITY_ERROR = 'the Pyokka runtime in dist/node is older than the extension: it cannot run a debug session without recording. Reinstall the extension, or run the Debugger with "record": true.';
+export const RECORD_CAPABILITY_ERROR = 'the Tracelight runtime in dist/node is older than the extension: it cannot run a debug session without recording. Reinstall the extension, or run the Debugger with "record": true.';
 
 export interface RunnerClientOptions {
   /** executable + args: `node`, [`bin/tracelight.mjs`, `serve`] */
@@ -105,7 +105,7 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
       const delay = Math.min(500 * 2 ** this.restartAttempts, 8000);
       this.restartAttempts++;
       if (this.restartAttempts > (this.options.maxRestarts ?? 5)) {
-        throw new Error('Pyokka runner keeps crashing; giving up. Check the Pyokka output channel.');
+        throw new Error('Tracelight runner keeps crashing; giving up. Check the Tracelight output channel.');
       }
       await new Promise((r) => setTimeout(r, delay));
     } else this.restartAttempts = 0;
@@ -114,8 +114,8 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
     this.options.log?.(`spawn ${this.options.command} ${args.join(' ')} (cwd ${this.options.cwd})`);
     const proc = spawn(this.options.command, args, {
       cwd: this.options.cwd,
-      // PYOKKA_HOME resolved here (`~` expanded) so the runtime and any CLI it starts use the window's directory
-      env: { ...process.env, PYOKKA_HOME: pyokkaHome(), ...(this.options.env ?? {}) },
+      // TRACELIGHT_HOME resolved here (`~` expanded) so the runtime and any CLI it starts use the window's directory
+      env: { ...process.env, TRACELIGHT_HOME: tracelightHome(), ...(this.options.env ?? {}) },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -132,7 +132,7 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
     });
     proc.on('error', (err) => {
       this.options.log?.(`runner spawn error: ${err.message}`);
-      this.failPending(new Error(`Pyokka runner failed to start: ${err.message}`));
+      this.failPending(new Error(`Tracelight runner failed to start: ${err.message}`));
     });
     proc.on('exit', (code, signal) => {
       if (this.proc !== proc) return;
@@ -140,7 +140,7 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
       this.ready = undefined;
       const willRestart = !this.disposed;
       this.options.log?.(`runner exited code=${code} signal=${signal}`);
-      this.failPending(new Error(`Pyokka runner exited (code ${code ?? 'null'}${signal ? `, ${signal}` : ''})`));
+      this.failPending(new Error(`Tracelight runner exited (code ${code ?? 'null'}${signal ? `, ${signal}` : ''})`));
       this.emit('exit', code, signal, willRestart);
     });
     const reply = await this.send({ type: 'hello', version: this.options.version ?? '1' }, 20_000);
@@ -177,7 +177,7 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
 
   private send(body: HostBody, timeoutMs?: number): Promise<RunnerMessage> {
     const proc = this.proc;
-    if (!proc?.stdin || !this.alive) return Promise.reject(new Error('Pyokka runner is not running'));
+    if (!proc?.stdin || !this.alive) return Promise.reject(new Error('Tracelight runner is not running'));
     const id = this.nextId++;
     return new Promise<RunnerMessage>((resolve, reject) => {
       const pending: Pending = { resolve, reject };
@@ -185,7 +185,7 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
       if (t && t > 0) {
         pending.timer = setTimeout(() => {
           this.pending.delete(id);
-          reject(new Error(`Pyokka runner did not answer "${body.type}" within ${t}ms`));
+          reject(new Error(`Tracelight runner did not answer "${body.type}" within ${t}ms`));
         }, t);
       }
       this.pending.set(id, pending);
@@ -321,7 +321,7 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
     this.disposed = true;
     const proc = this.proc;
     this.proc = undefined;
-    this.failPending(new Error('Pyokka runner disposed'));
+    this.failPending(new Error('Tracelight runner disposed'));
     if (proc && proc.exitCode === null) {
       try {
         proc.stdin?.write(encodeNdjson({ type: 'shutdown', id: this.nextId++ }));

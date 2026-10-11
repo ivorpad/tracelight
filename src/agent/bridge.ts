@@ -1,6 +1,6 @@
 /**
- * Agent bridge: one Unix socket per session (when `pyokka.agentAccess` is on) that lets a local
- * agent (the pyokka CLI) read the run and drive the Time Machine. Contract: docs/PROTOCOL.md,
+ * Agent bridge: one Unix socket per session (when `tracelight.agentAccess` is on) that lets a local
+ * agent (the tracelight CLI) read the run and drive the Time Machine. Contract: docs/PROTOCOL.md,
  * "Agent access". NDJSON both ways; the first client line carries the token of the sibling
  * descriptor; every reply is redacted.
  */
@@ -90,7 +90,7 @@ export class AgentBridge implements vscode.Disposable {
     manager.on('sessionStopped', this.onStopped);
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration(`pyokka.${AGENT_ACCESS_SETTING}`)) for (const s of manager.all()) this.sync(s);
+        if (e.affectsConfiguration(`tracelight.${AGENT_ACCESS_SETTING}`)) for (const s of manager.all()) this.sync(s);
       }),
     );
     sweepDeadDescriptors();
@@ -277,12 +277,12 @@ export class AgentBridge implements vscode.Disposable {
     const session = entry.session;
     log.info(`agent access: [${session.displayName}] ${type || '?'} #${String(id)}${describe(req)}`);
     try {
-      if (session.isDisposed) throw new BridgeError('session stopped', 'start a Pyokka session on the file again');
+      if (session.isDisposed) throw new BridgeError('session stopped', 'start a Tracelight session on the file again');
       const result = await this.dispatch(entry, client, type, req);
       this.send(client, { id, ok: true, ...result });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      const hint = err instanceof BridgeError ? err.hint : 'see the Pyokka output channel';
+      const hint = err instanceof BridgeError ? err.hint : 'see the Tracelight output channel';
       this.send(client, { id, ok: false, error: redact(error), hint });
     }
   }
@@ -390,7 +390,7 @@ export class AgentBridge implements vscode.Disposable {
         return redactExceptionReport(buildExceptionReport(inputs)) as unknown as Record<string, unknown>;
       }
       case 'recording': {
-        // the whole run as a saved run's {meta, events}: `pyokka tour --live` reads it with the saved-run code
+        // the whole run as a saved run's {meta, events}: `tracelight tour --live` reads it with the saved-run code
         await awaitIdle(session);
         const doc = sessionRecording(session);
         if (!doc) throw new BridgeError('no execution trace yet', session.running ? 'a run is in flight; retry in a moment' : 'run the file first (save, or Re-execute)');

@@ -1,5 +1,5 @@
 /**
- * Host side of the Execution Diagram view: when its graph is built and sent (`pyokka.diagram.build`),
+ * Host side of the Execution Diagram view: when its graph is built and sent (`tracelight.diagram.build`),
  * the phases of the story tree, the call stack at the Time Machine's step, unrolling a package, and
  * the steps a node ran at for the inspector. Kept out of outputPanel.ts so the panel stays a message
  * router; whyPane.ts and httpPane.ts are the same pattern. The provider (`features/executionGraph.ts`)
@@ -17,7 +17,7 @@ import { entryText } from './panelSupport';
 
 export type DiagramBuild = 'onOpen' | 'onRun';
 
-/** `pyokka.diagram.build`: build as every run finishes, or only when the view asks. */
+/** `tracelight.diagram.build`: build as every run finishes, or only when the view asks. */
 export function diagramBuild(): DiagramBuild {
   return setting<string>('diagram.build', 'onOpen') === 'onRun' ? 'onRun' : 'onOpen';
 }

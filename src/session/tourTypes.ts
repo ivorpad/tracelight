@@ -1,6 +1,6 @@
 /**
- * `tour.json` as `pyokka tour --json` prints it (docs/TOUR.md), plus the fields the prose merge
- * (`pyokka tour --prose`, 5.2) adds. Types only: the host never computes a tour itself, it runs
+ * `tour.json` as `tracelight tour --json` prints it (docs/TOUR.md), plus the fields the prose merge
+ * (`tracelight tour --prose`, 5.2) adds. Types only: the host never computes a tour itself, it runs
  * the Python command and reads this back.
  */
 

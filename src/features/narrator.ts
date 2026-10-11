@@ -1,6 +1,6 @@
 /**
  * Narration in the host: the walkthrough of a session's last run, and "Narrate" (one batched
- * model call per run, never automatic). Backend order: `pyokka.explain.command`, else `claude -p`,
+ * model call per run, never automatic). Backend order: `tracelight.explain.command`, else `claude -p`,
  * else `codex exec`, else VS Code's language model API (Copilot). Glosses are cached per run;
  * a failure is reported once and the walkthrough keeps `gloss: null`.
  */
@@ -96,7 +96,7 @@ export class Narrator implements vscode.Disposable {
     const runId = session.state.runId;
     const w = this.walkthrough(session);
     if (!w || !w.moments.length) {
-      void vscode.window.showInformationMessage('Pyokka: nothing to narrate yet; run the file first.');
+      void vscode.window.showInformationMessage('Tracelight: nothing to narrate yet; run the file first.');
       return undefined;
     }
     const cached = this.cache.get(session.key, runId);
@@ -108,7 +108,7 @@ export class Narrator implements vscode.Disposable {
     this.errors.delete(session.key);
     this.changed(session);
     try {
-      const glosses = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `Pyokka: narrating ${session.displayName}…` }, async (_progress, token) => {
+      const glosses = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `Tracelight: narrating ${session.displayName}…` }, async (_progress, token) => {
         const answer = await this.askModel(prompt, token);
         return parseGlosses(answer, ids);
       });
@@ -118,10 +118,10 @@ export class Narrator implements vscode.Disposable {
       return glosses;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const hint = err instanceof NarrationError ? err.hint : 'see the Pyokka output channel';
+      const hint = err instanceof NarrationError ? err.hint : 'see the Tracelight output channel';
       this.errors.set(session.key, { runId, message });
       log.warn(`[${session.displayName}] narration failed: ${message} (${hint})`);
-      void vscode.window.showWarningMessage(`Pyokka: narration failed: ${message}. ${hint}`, 'Show Logs').then((pick) => pick && log.show());
+      void vscode.window.showWarningMessage(`Tracelight: narration failed: ${message}. ${hint}`, 'Show Logs').then((pick) => pick && log.show());
       return undefined;
     } finally {
       this.busy.delete(session.key);
@@ -138,7 +138,7 @@ export class Narrator implements vscode.Disposable {
     }
     const models = await Promise.resolve(vscode.lm.selectChatModels({ vendor: 'copilot' })).catch(() => [] as vscode.LanguageModelChat[]);
     const model = models[0];
-    if (!model) throw new NarrationError('no narration backend', 'install claude or codex, set pyokka.explain.command to a command that reads the prompt on stdin, or sign in to GitHub Copilot');
+    if (!model) throw new NarrationError('no narration backend', 'install claude or codex, set tracelight.explain.command to a command that reads the prompt on stdin, or sign in to GitHub Copilot');
     log.info(`narration backend: vscode.lm ${model.vendor}/${model.family}`);
     const response = await model.sendRequest([vscode.LanguageModelChatMessage.User(prompt)], {}, token);
     let text = '';

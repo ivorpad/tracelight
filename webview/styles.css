@@ -1,4 +1,4 @@
-/* Pyokka panel. Only --vscode-* variables; values use the editor font. */
+/* Tracelight panel. Only --vscode-* variables; values use the editor font. */
 
 :root {
   --pk-font: var(--vscode-font-family, system-ui, sans-serif);

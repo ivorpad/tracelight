@@ -40,8 +40,8 @@ const n = (v: number): string => v.toLocaleString('en-US');
 /** One sentence for the Time Machine: where it stopped, of how many, who spent the steps, what to do. */
 export function capSentence(cap: TraceCap, kept: number): string {
   const total = cap.stepsRun !== undefined ? n(cap.stepsRun) : 'more';
-  let s = `Recording stopped at step ${n(Math.max(0, kept - 1))}: the program ran ${total} steps and only the first ${n(kept)} are recorded (pyokka.maxTraceSteps is ${n(cap.cap)}).`;
+  let s = `Recording stopped at step ${n(Math.max(0, kept - 1))}: the program ran ${total} steps and only the first ${n(kept)} are recorded (tracelight.maxTraceSteps is ${n(cap.cap)}).`;
   if (cap.spentBy.length) s += ` Most steps: ${cap.spentBy.map((e) => `${e.path} ${n(e.steps)}`).join(' · ')}.`;
-  s += cap.exclude ? ` Add "${cap.exclude}" to pyokka.timeMachine.exclude to leave it out, or raise pyokka.maxTraceSteps.` : ' Raise pyokka.maxTraceSteps to record more.';
+  s += cap.exclude ? ` Add "${cap.exclude}" to tracelight.timeMachine.exclude to leave it out, or raise tracelight.maxTraceSteps.` : ' Raise tracelight.maxTraceSteps to record more.';
   return s;
 }

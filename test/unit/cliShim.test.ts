@@ -9,7 +9,7 @@ import { SHIM_MARKER, findLauncher, onPath, profileFor, shimScript, shimState, s
 vi.mock('vscode', () => ({}));
 
 function tmpdir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'pyokka-shim-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'tracelight-shim-'));
 }
 
 describe('shimScript', () => {
@@ -17,24 +17,24 @@ describe('shimScript', () => {
     const dir = tmpdir();
     const entry = path.join(dir, "it's", 'tracelight.mjs');
     fs.mkdirSync(path.dirname(entry), { recursive: true });
-    fs.writeFileSync(entry, 'console.log(JSON.stringify(process.argv.slice(2)), process.env.PYOKKA_CODE)');
+    fs.writeFileSync(entry, 'console.log(JSON.stringify(process.argv.slice(2)), process.env.TRACELIGHT_CODE)');
     const file = path.join(dir, 'tracelight');
     fs.writeFileSync(file, shimScript({ entry, node: process.execPath, launcher: '/opt/ed/bin/code', version: '9.9.9' }), { mode: 0o755 });
-    const env = { ...process.env, TRACELIGHT_CLI_NODE: '', PYOKKA_CODE: '' };
+    const env = { ...process.env, TRACELIGHT_CLI_NODE: '', TRACELIGHT_CODE: '' };
     expect(execFileSync(file, ['why', "a b's"], { env, encoding: 'utf8' }).trim()).toBe(`["why","a b's"] /opt/ed/bin/code`);
     // a launcher the caller already chose is kept
-    expect(execFileSync(file, [], { env: { ...env, PYOKKA_CODE: '/mine' }, encoding: 'utf8' }).trim()).toBe('[] /mine');
+    expect(execFileSync(file, [], { env: { ...env, TRACELIGHT_CODE: '/mine' }, encoding: 'utf8' }).trim()).toBe('[] /mine');
     expect(() => execFileSync(file, [], { env: { ...env, TRACELIGHT_CLI_NODE: path.join(dir, 'no-node') }, stdio: 'pipe' })).toThrow();
   });
-  it('leaves PYOKKA_CODE out when the editor has no launcher', () => {
-    expect(shimScript({ entry: '/r/bin/tracelight.mjs', node: 'node', version: '1' })).not.toContain('PYOKKA_CODE');
+  it('leaves TRACELIGHT_CODE out when the editor has no launcher', () => {
+    expect(shimScript({ entry: '/r/bin/tracelight.mjs', node: 'node', version: '1' })).not.toContain('TRACELIGHT_CODE');
   });
 });
 
 describe('syncShim', () => {
   it('creates only when allowed, then rewrites its own script and nothing else', () => {
     const dir = tmpdir();
-    const file = path.join(dir, 'bin', 'pyokka');
+    const file = path.join(dir, 'bin', 'tracelight');
     const v1 = `#!/bin/sh\n${SHIM_MARKER} 1\n`;
     expect(syncShim(file, v1, false)).toBe('skipped');
     expect(fs.existsSync(file)).toBe(false);
@@ -47,9 +47,9 @@ describe('syncShim', () => {
   it('never touches a symlink or a script it did not write', () => {
     const dir = tmpdir();
     const link = path.join(dir, 'link');
-    fs.symlinkSync('/somewhere/uv/tools/pyokka', link);
+    fs.symlinkSync('/somewhere/uv/tools/tracelight', link);
     expect(syncShim(link, `${SHIM_MARKER}\n`, true)).toBe('foreign');
-    expect(fs.readlinkSync(link)).toBe('/somewhere/uv/tools/pyokka');
+    expect(fs.readlinkSync(link)).toBe('/somewhere/uv/tools/tracelight');
     const own = path.join(dir, 'own');
     fs.writeFileSync(own, '#!/bin/sh\necho mine\n');
     expect(syncShim(own, `${SHIM_MARKER}\n`, true)).toBe('foreign');

@@ -3,7 +3,7 @@
  */
 import * as vscode from 'vscode';
 import { CoverageState } from '../shared/protocol';
-import { pyokkaConfig } from '../config/settings';
+import { tracelightConfig } from '../config/settings';
 
 export type InlineKind = 'log' | 'system' | 'error';
 
@@ -39,7 +39,7 @@ const INLINE_DEFAULTS: Record<'light' | 'dark', Record<InlineKind, vscode.Themab
 };
 
 function attachment(theme: 'light' | 'dark', kind: InlineKind): vscode.ThemableDecorationAttachmentRenderOptions {
-  const override = pyokkaConfig().get<AttachmentOverride>(`${theme}Theme.${kind}.decorationAttachmentRenderOptions`, {});
+  const override = tracelightConfig().get<AttachmentOverride>(`${theme}Theme.${kind}.decorationAttachmentRenderOptions`, {});
   const out: Record<string, string> = { ...(INLINE_DEFAULTS[theme][kind] as Record<string, string>) };
   for (const [k, v] of Object.entries(override ?? {})) if (typeof v === 'string' && v) out[k] = v;
   return out as vscode.ThemableDecorationAttachmentRenderOptions;
@@ -73,7 +73,7 @@ function iconUri(context: vscode.ExtensionContext, name: string, color: string, 
 }
 
 export function createDecorationTypes(context: vscode.ExtensionContext): DecorationTypes {
-  const colors = { ...DEFAULT_COLORS, ...pyokkaConfig().get<Partial<CoverageColors>>('colors', {}) };
+  const colors = { ...DEFAULT_COLORS, ...tracelightConfig().get<Partial<CoverageColors>>('colors', {}) };
   const names: Record<CoverageState, keyof CoverageColors> = {
     [CoverageState.NotRun]: 'notCovered',
     [CoverageState.Covered]: 'covered',

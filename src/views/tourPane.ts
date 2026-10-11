@@ -1,7 +1,7 @@
 /**
  * Host side of the panel's TOUR section. Once the section is open, every finished run of the bound
  * session gets its tour from the Python command (`tourRun.ts`): the recording goes to a temporary
- * `run.json`, `pyokka tour RUN --json` answers. A click on a stop is remembered per file in the
+ * `run.json`, `tracelight tour RUN --json` answers. A click on a stop is remembered per file in the
  * workspace state (the candidate's `key`, so a re-run finds the same statement) and reopens there.
  * Narrate Tour is one model call through Narrate's backend chain, merged by `tour --prose`.
  */
@@ -16,11 +16,11 @@ import { buildTourPanel, resumeFor, resumeStop, type TourResume } from '../sessi
 import { buildTourPrompt, nodeHasTour, parseProseAnswer, runTourCli, TourError, tourArgv, tourTempDir, violationText, type TourArgs } from '../agent/tourRun';
 import { NarrationError } from '../agent/narrate';
 import { sessionRecording } from '../agent/bridgeSupport';
-import { pyokkaHome } from '../util/paths';
+import { tracelightHome } from '../util/paths';
 import { log } from '../util/log';
 import { jsRuntimeEntry } from '../runtime/language';
 
-export const TOUR_RESUME_KEY = 'pyokka.tour.resume';
+export const TOUR_RESUME_KEY = 'tracelight.tour.resume';
 
 interface Entry {
   runId: string;
@@ -37,7 +37,7 @@ interface Entry {
 /** The prompt file: shipped in `dist/prompts` by esbuild, else the checkout's skill reference (a dev host). */
 export function tourPromptPath(extensionPath: string): string {
   const shipped = path.join(extensionPath, 'dist', 'prompts', 'tour-prompt.md');
-  return fs.existsSync(shipped) ? shipped : path.join(extensionPath, 'skills', 'pyokka', 'references', 'tour-prompt.md');
+  return fs.existsSync(shipped) ? shipped : path.join(extensionPath, 'skills', 'tracelight', 'references', 'tour-prompt.md');
 }
 
 export class TourHost implements vscode.Disposable {
@@ -145,7 +145,7 @@ export class TourHost implements vscode.Disposable {
     const exe = session.interpreter.path;
     const entry = jsRuntimeEntry(this.runtimeDir, path.join, path.dirname);
     if (!this.hasNodeTour(exe, entry)) throw new TourError('this runtime has no tour verb', 'update the extension');
-    return { node: { exe, entry }, env: { PYOKKA_HOME: pyokkaHome() } };
+    return { node: { exe, entry }, env: { TRACELIGHT_HOME: tracelightHome() } };
   }
 
   /** The panel model of the session's current run; null before one. */
@@ -194,7 +194,7 @@ export class TourHost implements vscode.Disposable {
     const doc = await this.ensure(session);
     const e = this.entries.get(session.key);
     if (!doc || !e || e.runId !== session.state.runId) {
-      void vscode.window.showInformationMessage('Pyokka: no tour to narrate yet; run the file first.');
+      void vscode.window.showInformationMessage('Tracelight: no tour to narrate yet; run the file first.');
       return undefined;
     }
     if (doc.pick?.length || e.narrating) return doc;
@@ -203,14 +203,14 @@ export class TourHost implements vscode.Disposable {
     try {
       template = await fs.promises.readFile(promptFile, 'utf8');
     } catch {
-      this.fail(session, e, `the tour prompt is missing (${promptFile})`, 'it ships with Pyokka 5.2; rebuild with `node esbuild.mjs`');
+      this.fail(session, e, `the tour prompt is missing (${promptFile})`, 'it ships with Tracelight 5.2; rebuild with `node esbuild.mjs`');
       return undefined;
     }
     e.narrating = true;
     e.narrationError = undefined;
     this.push(session);
     try {
-      const merged = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `Pyokka: narrating the tour of ${session.displayName}…` }, async (_p, token) => {
+      const merged = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `Tracelight: narrating the tour of ${session.displayName}…` }, async (_p, token) => {
         const answer = await this.narrator.askModel(buildTourPrompt(template, doc), token);
         const prose = parseProseAnswer(answer);
         const proseFile = path.join(e.dir, 'prose.json');
@@ -224,7 +224,7 @@ export class TourHost implements vscode.Disposable {
     } catch (err) {
       if (err instanceof TourError) this.fail(session, e, violationText(err), err.hint);
       else if (err instanceof NarrationError) this.fail(session, e, err.message, err.hint);
-      else this.fail(session, e, err instanceof Error ? err.message : String(err), 'see the Pyokka output channel');
+      else this.fail(session, e, err instanceof Error ? err.message : String(err), 'see the Tracelight output channel');
       return undefined;
     } finally {
       e.narrating = false;
@@ -236,7 +236,7 @@ export class TourHost implements vscode.Disposable {
   private fail(session: Session, e: Entry, message: string, hint: string): void {
     e.narrationError = message;
     log.warn(`[${session.displayName}] tour narration failed: ${message}${hint ? ` (${hint})` : ''}`);
-    void vscode.window.showWarningMessage(`Pyokka: Narrate Tour failed: ${message}.${hint ? ` ${hint}` : ''}`, 'Show Logs').then((pick) => pick && log.show());
+    void vscode.window.showWarningMessage(`Tracelight: Narrate Tour failed: ${message}.${hint ? ` ${hint}` : ''}`, 'Show Logs').then((pick) => pick && log.show());
     this.push(session);
   }
 

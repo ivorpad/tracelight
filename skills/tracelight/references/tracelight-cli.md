@@ -1,10 +1,10 @@
 # The `tracelight` CLI over a recording
 
 Every verb takes `RUN` (a `run.json`) or `--live` (an open VS Code session with
-`pyokka.agentAccess` on). Every verb takes `--json` for the raw shape; the text form is the one
+`tracelight.agentAccess` on). Every verb takes `--json` for the raw shape; the text form is the one
 to read. Errors go to stderr as `error: <what>` plus a line saying what to do next, exit 2; with
 `--json` the same thing arrives as `{"ok": false, "error", "hint"}` on stdout. The verbs, flags,
-text and JSON shapes are the same as the `pyokka` CLI's for Python, so a page or a script built on
+text and JSON shapes are the same as the `tracelight` CLI's for Python, so a page or a script built on
 one reads the other.
 
 Contents: [Recording a run](#recording-a-run) · [Mapping](#mapping-a-run-you-do-not-know) ·
@@ -38,7 +38,7 @@ as `process.argv.slice(2)`.
 - `--no-locals` skips recording locals at every step, which is what `var`, `why` and `origin`
   read. Leave it on unless the run is enormous.
 - `--http record` writes every HTTP exchange (`fetch`, `node:http`, `undici`) to
-  `.pyokka/replay/<hash>.jsonl` next to the file; `--http replay` answers later runs from it, so a
+  `.tracelight/replay/<hash>.jsonl` next to the file; `--http replay` answers later runs from it, so a
   program that calls an API runs again with no network and no tokens and returns the same values.
 - `--timeout MS` stops the program after that long (default 30,000).
 
@@ -341,7 +341,7 @@ when both runs ran the statement as often; otherwise they are aligned by value a
 say `only in a` or `only in b`. Five hits per name per statement, then `… N more`.
 
 Assigned values and call arguments come from recorded locals. A VS Code session records them
-only with `pyokka.timeMachine.recordLocals` on (Record Variable Changes in the panel), and
+only with `tracelight.timeMachine.recordLocals` on (Record Variable Changes in the panel), and
 `tracelight run` records them unless `--no-locals`. When one side has none, `diff` compares the
 rest, prints calls as `audit(…)`, and says so on a `note:` line; turn locals on and re-run to
 compare values too.
@@ -548,18 +548,18 @@ the prompt). Never automatic, and the result is a gloss, not an observation.
 
 ## Environment
 
-- `PYOKKA_HOME` is the extension's per-user directory, `~/.pyokka` when unset or empty (a leading
+- `TRACELIGHT_HOME` is the extension's per-user directory, `~/.tracelight` when unset or empty (a leading
   `~` is expanded). It holds `sessions/` (one descriptor and socket per live window session) and
   `last-debug.json` (the launch `break`, `continue` and `restart` start again). The CLI finds a
   window's sessions when both see the same value, so set it in the shell the same way it is set
-  for VS Code. `TRACELIGHT_SESSIONS_DIR` (or the extension's `PYOKKA_SESSIONS_DIR`) moves only
+  for VS Code. `TRACELIGHT_SESSIONS_DIR` (or the extension's `TRACELIGHT_SESSIONS_DIR`) moves only
   `sessions/` (`last-debug.json` then sits beside it).
 - `TRACELIGHT_HOME` is Tracelight's own directory, `~/.tracelight` when unset or empty. It holds
   the library cache (`cache/`; `TRACELIGHT_CACHE_DIR` moves it, an empty value turns it off). The
-  sessions stay under `PYOKKA_HOME` because the VS Code extension writes them there.
+  sessions stay under `TRACELIGHT_HOME` because the VS Code extension writes them there.
 - `TRACELIGHT_CODE` is the `code` binary `tracelight debug` opens the window with, and
   `TRACELIGHT_NO_FOCUS=1` leaves window focus alone.
 - `TRACELIGHT_NODE` is the `node` a debug launch runs the program with (`--node` wins; the
-  window's `pyokka.nodePath` is the default).
+  window's `tracelight.nodePath` is the default).
 - `TRACELIGHT_CACHE_DIR` moves the package cache (empty turns it off), and `TRACELIGHT_KEEP_DIR`
   is where a `--keep` runner puts its socket (the temp directory by default).

@@ -5,7 +5,7 @@
  * open, its statements and decisions stacked under it; clusters in columns by call depth; the call
  * stack at the Time Machine's step in full colour and the rest faded) with the step scrubber under
  * it; right, the inspector: the selected node with its hits or calls, the current moment's gloss,
- * and "now". What the canvas draws follows `pyokka.diagram.detail` and `pyokka.diagram.dataEdges`,
+ * and "now". What the canvas draws follows `tracelight.diagram.detail` and `tracelight.diagram.dataEdges`,
  * overridden for the open panel by the toolbar and the cards' chevrons (`GraphViewState`).
  */
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -30,7 +30,7 @@ export interface ExecutionDiagramProps {
   selected: string | null;
   /** a run is in flight */
   running: boolean;
-  /** `pyokka.diagram.detail` and `pyokka.diagram.dataEdges`; `view` overrides them for the open panel */
+  /** `tracelight.diagram.detail` and `tracelight.diagram.dataEdges`; `view` overrides them for the open panel */
   settings: Pick<PanelSettings, 'diagramDetail' | 'diagramDataEdges'>;
   view: GraphViewState;
   /** the selected node's hits, once the host answered */
@@ -50,7 +50,7 @@ export interface ExecutionDiagramProps {
   onToggleScope: (nodeId: string) => void;
   /** `executionGraph.hits` for the selected node */
   onHits: (nodeId: string) => void;
-  /** no graph yet: `executionGraph.request` (the host builds on request under `pyokka.diagram.build` onOpen) */
+  /** no graph yet: `executionGraph.request` (the host builds on request under `tracelight.diagram.build` onOpen) */
   onRequest: () => void;
 }
 

@@ -1,6 +1,6 @@
 /**
  * The bridge's `recording` reply: a session's run as a saved run's `{meta, events}`, the input of
- * `pyokka tour --live` (python/tests/test_tour.py reads the same shape from a fake bridge).
+ * `tracelight tour --live` (python/tests/test_tour.py reads the same shape from a fake bridge).
  */
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';

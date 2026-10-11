@@ -121,7 +121,7 @@ export class DebugSessionManager extends EventEmitter<DebugSessionManagerEvents>
     return ds ? wrapDebugSession(ds) : undefined;
   }
 
-  /** The Debugger's half of the context keys, plus `pyokka.debugSessionActive`. */
+  /** The Debugger's half of the context keys, plus `tracelight.debugSessionActive`. */
   private report(): void {
     const all = this.all();
     setContext('debugSessionActive', all.length > 0);

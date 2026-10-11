@@ -23,7 +23,7 @@ const flag = (name, fallback) => {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 const PREFIX = flag('prefix', 'preview');
-const OUT = flag('out', path.join(os.tmpdir(), 'pyokka-view-preview'));
+const OUT = flag('out', path.join(os.tmpdir(), 'tracelight-view-preview'));
 const SHOT = !args.includes('--no-shot');
 /* the view is contributed to `panel` only, so its real width is the editor's: 900 is a narrow panel,
    1900 is a wide monitor, and the two-column container query sits between them */

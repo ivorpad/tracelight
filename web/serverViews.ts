@@ -178,7 +178,7 @@ export class ServerViews {
     const runId = t.runId;
     this.sendTour({ ...t, narrating: true, narrationError: undefined });
     try {
-      const promptFile = [path.join(this.opts.distDir, 'prompts', 'tour-prompt.md'), path.join(this.opts.distDir, '..', 'skills', 'pyokka', 'references', 'tour-prompt.md')].find((f) => fs.existsSync(f));
+      const promptFile = [path.join(this.opts.distDir, 'prompts', 'tour-prompt.md'), path.join(this.opts.distDir, '..', 'skills', 'tracelight', 'references', 'tour-prompt.md')].find((f) => fs.existsSync(f));
       if (!promptFile) throw new TourError('the tour prompt is missing', 'rebuild with `node esbuild.mjs`');
       const answer = await this.ask(buildTourPrompt(fs.readFileSync(promptFile, 'utf8'), doc));
       const proseFile = path.join(t.dir, 'prose.json');

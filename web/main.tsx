@@ -2,7 +2,7 @@
  * Tracelight, the panel in a browser: the code pane (Monaco) beside the unchanged panel (webview/App.tsx), both
  * fed by the bridge (web/server.ts) over a WebSocket. `?layout=panel` shows the panel alone, for a
  * VS Code Simple Browser tab next to the real editor; `?layout=code` the code pane alone.
- * The page sets `window.__pyokka` (worker and codicons) before this script; see web/index.html.
+ * The page sets `window.__tracelight` (worker and codicons) before this script; see web/index.html.
  */
 import { render } from 'preact';
 import { App } from '../webview/App';
@@ -28,7 +28,7 @@ if (theme === 'light') document.body.classList.add('light');
 document.body.dataset.layout = layout;
 
 function injectCodicons(): void {
-  const uri = window.__pyokka?.codiconsUri;
+  const uri = window.__tracelight?.codiconsUri;
   if (!uri) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';

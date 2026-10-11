@@ -169,10 +169,10 @@ export class ValuePeekProvider implements vscode.HoverProvider {
     // the links also name the expression, its range and the session: LiveValues.resolveHoverEntry re-evaluates once the id's run is gone
     const target = { logId: logEv.logId, exp, range: range4, sessionKey: s.key };
     const links = [
-      `[$(search) Explore value](command:pyokka.exploreEntity?${args(target)} "Explore value")`,
-      `[$(type-hierarchy) Show as diagram](command:pyokka.showDiagramForEntry?${args(target)} "Show as diagram")`,
-      `[$(copy) Copy](command:pyokka.hoverCopy?${args(target)} "Copy value")`,
-      `[$(question) Why](command:pyokka.whyValue?${args({ logId: logEv.logId })} "Why this value: the statements that produced it")`,
+      `[$(search) Explore value](command:tracelight.exploreEntity?${args(target)} "Explore value")`,
+      `[$(type-hierarchy) Show as diagram](command:tracelight.showDiagramForEntry?${args(target)} "Show as diagram")`,
+      `[$(copy) Copy](command:tracelight.hoverCopy?${args(target)} "Copy value")`,
+      `[$(question) Why](command:tracelight.whyValue?${args({ logId: logEv.logId })} "Why this value: the statements that produced it")`,
     ];
     if (s.nav.active) links.push(watchLink(s, exp, range4));
     md.appendMarkdown(`**${escapeMd(exp)}**&nbsp;&nbsp;${links.join(' &nbsp;|&nbsp; ')}\n\n`);
@@ -194,8 +194,8 @@ export class ValuePeekProvider implements vscode.HoverProvider {
     md.isTrusted = true;
     md.supportHtml = true;
     const links = [
-      `[$(copy) Copy](command:pyokka.hoverCopy?${args({ text: change.text })} "Copy value")`,
-      `[$(question) Why](command:pyokka.whyValue?${args({ step: change.step, name: exp })} "Why this value: the statements that produced it")`,
+      `[$(copy) Copy](command:tracelight.hoverCopy?${args({ text: change.text })} "Copy value")`,
+      `[$(question) Why](command:tracelight.whyValue?${args({ step: change.step, name: exp })} "Why this value: the statements that produced it")`,
     ];
     if (s.nav.active) links.push(watchLink(s, exp, range4));
     md.appendMarkdown(`**${escapeMd(exp)}**&nbsp;&nbsp;${links.join(' &nbsp;|&nbsp; ')}\n\n`);
@@ -212,9 +212,9 @@ export class ValuePeekProvider implements vscode.HoverProvider {
     const mode = s.runMode === 'onSave' ? 'on save' : 'on demand';
     const md = new vscode.MarkdownString(undefined, true);
     md.isTrusted = true;
-    md.appendMarkdown(`**${escapeMd(exp)}** · ${what}. It is recorded on the next run: [$(play) Re-execute](command:pyokka.reexecute "Run the file now") (run mode *${mode}*: hovering never executes the file).`);
+    md.appendMarkdown(`**${escapeMd(exp)}** · ${what}. It is recorded on the next run: [$(play) Re-execute](command:tracelight.reexecute "Run the file now") (run mode *${mode}*: hovering never executes the file).`);
     if (!s.recordLocals) {
-      md.appendMarkdown(` [$(symbol-variable) Record variables and re-run](command:pyokka.recordVariablesAndRerun?${args({ sessionKey: s.key })} "Turn on Record Variable Changes for this session and run once") shows every local at every step from then on.`);
+      md.appendMarkdown(` [$(symbol-variable) Record variables and re-run](command:tracelight.recordVariablesAndRerun?${args({ sessionKey: s.key })} "Turn on Record Variable Changes for this session and run once") shows every local at every step from then on.`);
     }
     return md;
   }
@@ -247,7 +247,7 @@ export function existingValue(s: Session, fileId: number, range4: Range4, text: 
 }
 
 function watchLink(s: Session, exp: string, range4: Range4): string {
-  return `[$(eye) Add watch](command:pyokka.addWatchExpression?${args({ exp, range: range4, sessionKey: s.key })} "Add watch expression")`;
+  return `[$(eye) Add watch](command:tracelight.addWatchExpression?${args({ exp, range: range4, sessionKey: s.key })} "Add watch expression")`;
 }
 
 function args(o: unknown): string {

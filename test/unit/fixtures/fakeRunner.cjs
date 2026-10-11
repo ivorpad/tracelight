@@ -1,4 +1,4 @@
-// Minimal stand-in for `python -m pyokka_runtime serve`, driven by env FAKE_MODE.
+// Minimal stand-in for the runtime's `serve`, driven by env FAKE_MODE.
 const readline = require('node:readline');
 const rl = readline.createInterface({ input: process.stdin });
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\n');

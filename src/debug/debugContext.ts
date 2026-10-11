@@ -1,5 +1,5 @@
 /**
- * `pyokka.debugActive` and `pyokka.debugPaused` are the union of both products, and two writers to
+ * `tracelight.debugActive` and `tracelight.debugPaused` are the union of both products, and two writers to
  * one `setContext` key race: a debug session ending would clear the key while a recording run is
  * paused. So each half reports here (`DebugController` for run-all, `DebugSessionManager` for the
  * Debugger) and this module is the only writer.

@@ -4,7 +4,7 @@ import type { HttpMode, HttpSummary } from '../../src/shared/protocol';
 import { debugSegment, httpSegment, httpTooltip } from '../../src/views/statusText';
 import { freshDebugState } from '../../src/session/debugState';
 
-const fin = (over: Partial<HttpSummary> = {}): HttpSummary => ({ mode: 'off', requests: 3, recorded: 0, served: 0, misses: 0, file: '/w/.pyokka/replay/3f2a.jsonl', exists: true, recordedAt: '2026-09-11T10:12:03Z', entries: 3, ...over });
+const fin = (over: Partial<HttpSummary> = {}): HttpSummary => ({ mode: 'off', requests: 3, recorded: 0, served: 0, misses: 0, file: '/w/.tracelight/replay/3f2a.jsonl', exists: true, recordedAt: '2026-09-11T10:12:03Z', entries: 3, ...over });
 
 describe('httpSegment', () => {
   it('names the mode while it is on, with what the last run did in that mode', () => {
@@ -46,7 +46,7 @@ describe('httpSegment', () => {
 
 describe('httpTooltip', () => {
   it('explains the next run while the mode is on', () => {
-    expect(httpTooltip('record', undefined, undefined)).toBe(' · HTTP Record: the next run writes every HTTP exchange to .pyokka/replay/');
+    expect(httpTooltip('record', undefined, undefined)).toBe(' · HTTP Record: the next run writes every HTTP exchange to .tracelight/replay/');
     expect(httpTooltip('record', fin({ mode: 'record', recorded: 7 }), undefined)).toBe(' · HTTP Record: the next run writes every HTTP exchange to 3f2a.jsonl; the last run recorded 7');
     expect(httpTooltip('record', fin({ mode: 'replay' }), true)).toBe(' · HTTP Record: the next run writes every HTTP exchange to 3f2a.jsonl; the last run replayed from it');
     expect(httpTooltip('replay', fin({ mode: 'replay' }), true)).toBe(' · HTTP Replay: the next run answers every request from 3f2a.jsonl; nothing reaches the network');

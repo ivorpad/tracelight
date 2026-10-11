@@ -240,7 +240,7 @@ export interface ExecView {
   dataEdges: boolean;
 }
 
-/** everything: the shape of `pyokka graph` */
+/** everything: the shape of `tracelight graph` */
 export const FULL_VIEW: ExecView = { open: 'all', dataEdges: true };
 
 /** call-site steps kept on an edge merged from several (the graph's own cap) */

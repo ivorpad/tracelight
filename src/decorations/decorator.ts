@@ -15,11 +15,11 @@ import { fenceLanguage } from '../runtime/language';
 const STATE_PRIORITY: Record<number, number> = { [CoverageState.NotRun]: 0, [CoverageState.Covered]: 1, [CoverageState.Partial]: 2, [CoverageState.ErrorPath]: 3, [CoverageState.ErrorSource]: 4 };
 const ALL_STATES = [CoverageState.NotRun, CoverageState.Covered, CoverageState.Partial, CoverageState.ErrorSource, CoverageState.ErrorPath];
 
-/** `pyokka.timeMachine.inlineValues` */
+/** `tracelight.timeMachine.inlineValues` */
 type NavInlineMode = 'dimOthers' | 'currentStep' | 'all';
 
 function navInlineMode(): NavInlineMode {
-  const v = vscode.workspace.getConfiguration('pyokka').get<string>('timeMachine.inlineValues', 'dimOthers');
+  const v = vscode.workspace.getConfiguration('tracelight').get<string>('timeMachine.inlineValues', 'dimOthers');
   return v === 'currentStep' || v === 'all' ? v : 'dimOthers';
 }
 
@@ -90,7 +90,7 @@ export class Decorator {
   }
 
   refreshEditor(editor: vscode.TextEditor): void {
-    if (editor.document.uri.scheme === 'pyokka-code-timeline' || editor.document.uri.scheme === 'pyokka-recent') return;
+    if (editor.document.uri.scheme === 'tracelight-code-timeline' || editor.document.uri.scheme === 'tracelight-recent') return;
     const session = this.manager.sessionForDocument(editor.document);
     if (!session || session.isDisposed) {
       this.clear(editor);
@@ -170,7 +170,7 @@ export class Decorator {
         const hover = new vscode.MarkdownString(undefined, true);
         hover.isTrusted = true;
         const args = encodeURIComponent(JSON.stringify({ logId: ev.logId }));
-        hover.appendMarkdown(`**≈ ${ev.context ?? ''}** · from the last run, not re-executed &nbsp; [$(search) Explore value](command:pyokka.exploreEntity?${args}) &nbsp;|&nbsp; [$(copy) Copy](command:pyokka.hoverCopy?${args})\n\n`);
+        hover.appendMarkdown(`**≈ ${ev.context ?? ''}** · from the last run, not re-executed &nbsp; [$(search) Explore value](command:tracelight.exploreEntity?${args}) &nbsp;|&nbsp; [$(copy) Copy](command:tracelight.hoverCopy?${args})\n\n`);
         hover.appendCodeblock(truncateOneLine(ev.text, 400), fenceLanguage(session.document));
         items.push({ line, col: 0, text: `≈ ${truncateOneLine(ev.text)}`, kind: 'log', hover });
       }
@@ -224,7 +224,7 @@ export class Decorator {
 
   /** The inline values `editor` shows, 1-based lines, sorted by line then column; `dim` marks a value from an earlier Time Machine step. Empty without a session. */
   inlineValues(editor: vscode.TextEditor): InlineValue[] {
-    if (editor.document.uri.scheme === 'pyokka-code-timeline' || editor.document.uri.scheme === 'pyokka-recent') return [];
+    if (editor.document.uri.scheme === 'tracelight-code-timeline' || editor.document.uri.scheme === 'tracelight-recent') return [];
     const session = this.manager.sessionForDocument(editor.document);
     if (!session || session.isDisposed) return [];
     const { items, dimmed } = this.computeInline(editor, session, session.fileIdForDocument(editor.document));

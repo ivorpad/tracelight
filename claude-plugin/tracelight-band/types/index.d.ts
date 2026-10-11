@@ -44,7 +44,7 @@ export type Snapshot =
 /** The narration of one step: pending while the model writes it. */
 export type Prose = { step: number; text: string | null; failed?: string } | null
 
-/** One link of `pyokka origin`'s chain: a step that carried the bad value. */
+/** One link of `tracelight origin`'s chain: a step that carried the bad value. */
 export type OriginLink = {
   step: number
   /** `invoices.py:18` */
@@ -78,7 +78,7 @@ export type ValueOrigin = {
   error?: string
 } | null
 
-/** One suspicious step, from `pyokka suspects` (or `pyokka exceptions` until it exists). */
+/** One suspicious step, from `tracelight suspects` (or `tracelight exceptions` until it exists). */
 export type Finding = {
   id: string
   kind: string
@@ -104,20 +104,20 @@ export type Fix = {
   patched: string
   original: string
   verify?: { before: string; after: string; exceptionsBefore: number; exceptionsAfter: number }
-  /** Where the plan for this fix was written, under .pyokka/findings. */
+  /** Where the plan for this fix was written, under .tracelight/findings. */
   plan?: string
   error?: string
 } | null
 
 declare module 'claude-code' {
   interface McpToolInputs {
-    'mcp__pyokka-band__band': { action?: string; step?: number; session?: string }
+    'mcp__tracelight-band__band': { action?: string; step?: number; session?: string }
   }
   interface PluginState {
-    'pyokka-band': {
+    'tracelight-band': {
       snapshot: Snapshot
       isHidden: boolean
-      lastPyokkaAt: number
+      lastTracelightAt: number
       prose: Prose
       isNarrating: boolean
       mode: Mode

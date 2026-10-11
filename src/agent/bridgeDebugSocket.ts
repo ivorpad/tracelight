@@ -1,8 +1,8 @@
 /**
  * The `kind: "debug"` bridge socket (docs/design/debugger-product.md, 4.1 to 4.6): one Unix socket
- * per `record: false` debug session, so the pyokka CLI can drive the same pause a human drives from
+ * per `record: false` debug session, so the tracelight CLI can drive the same pause a human drives from
  * the toolbar. Same setting, same default and same descriptor directory as the run-all socket
- * (`pyokka.agentAccess`, off): a socket that serves code execution in the user's process is opt-in,
+ * (`tracelight.agentAccess`, off): a socket that serves code execution in the user's process is opt-in,
  * and the debugger is not a reason to loosen that.
  *
  * What it answers: the verbs that need no recording (`state`, `context`, `continue`, `pause`,
@@ -40,7 +40,7 @@ const OUTPUT_THROTTLE_MS = 100;
 
 /** Verbs that read a recording, and the hint that says how to get one. */
 const RECORDING_VERBS = ['var', 'why', 'walkthrough', 'graph', 'exceptions', 'http', 'values', 'story', 'find', 'steps', 'recording'] as const;
-const RECORDING_HINT = 'start the debug session with recording (`pyokka debug FILE --record`, or "Pyokka: Debug Current File (Recording)"), or read a run-all session of the file';
+const RECORDING_HINT = 'start the debug session with recording (`tracelight debug FILE --record`, or "Tracelight: Debug Current File (Recording)"), or read a run-all session of the file';
 const BACKWARD_REFUSAL = 'this debug session records nothing, so there is nothing behind the pause to replay';
 const BACKWARD_HINT = 'into, over and out execute; `--record` gives you the backward moves';
 
@@ -88,7 +88,7 @@ export class DebugSocketServer implements vscode.Disposable {
         manager.off('sessionEnded', ended);
       } },
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration(`pyokka.${AGENT_ACCESS_SETTING}`)) for (const ds of manager.all()) this.sync(ds);
+        if (e.affectsConfiguration(`tracelight.${AGENT_ACCESS_SETTING}`)) for (const ds of manager.all()) this.sync(ds);
       }),
     );
     for (const ds of manager.all()) this.sync(ds);
@@ -128,7 +128,7 @@ export class DebugSocketServer implements vscode.Disposable {
     const stopOnEntry = entryPause({ stopOnEntry: launch.stopOnEntry || req.stopOnEntry === true }, mergeBreakpoints(currentSourceBreakpoints(), currentFunctionBreakpoints()), [], { anyFile: true });
     await startDebugSession(launch, { stopOnEntry });
     const ds = this.manager.byKey(launch);
-    if (!ds) throw new BridgeError('the debug session did not start', 'see the Pyokka output channel');
+    if (!ds) throw new BridgeError('the debug session did not start', 'see the Tracelight output channel');
     const result = ds.debug.paused ?? (await waitForStop(ds));
     return result === 'finished' ? finishedSlice(ds.lastFinished) : stopReply(ds, result, sliceOptions(req));
   }
@@ -295,12 +295,12 @@ export class DebugSocketServer implements vscode.Disposable {
     const type = String(req.type ?? req.request ?? req.cmd ?? '');
     log.info(`agent access: [debug ${entry.ds.displayName}] ${type || '?'} #${String(id)}`);
     try {
-      if (entry.ds.isDisposed) throw new BridgeError('no live session', 'the debug session ended when the program exited; `pyokka debug FILE` starts another');
+      if (entry.ds.isDisposed) throw new BridgeError('no live session', 'the debug session ended when the program exited; `tracelight debug FILE` starts another');
       const result = await this.dispatch(entry, client, type, req);
       this.send(client, { id, ok: true, ...result });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      const hint = err instanceof BridgeError ? err.hint : 'see the Pyokka output channel';
+      const hint = err instanceof BridgeError ? err.hint : 'see the Tracelight output channel';
       this.send(client, { id, ok: false, error: redact(error), hint });
     }
   }
@@ -320,7 +320,7 @@ export class DebugSocketServer implements vscode.Disposable {
   /**
    * Serve one request against `ds`. Reachable from the run socket too: a `debug` that arrived
    * there started this session, and the pause verbs that follow on the same connection address it
-   * (`serveFor`), so `pyokka shell --live` can start and drive a debug session over one socket.
+   * (`serveFor`), so `tracelight shell --live` can start and drive a debug session over one socket.
    */
   async serve(ds: DebugSession, type: string, req: Request): Promise<Record<string, unknown>> {
     if ((RECORDING_VERBS as readonly string[]).includes(type)) throw new BridgeError(`${type} needs a recording`, RECORDING_HINT);
@@ -336,7 +336,7 @@ export class DebugSocketServer implements vscode.Disposable {
         const paused = ds.debug.paused;
         if (paused) return stopReply(ds, paused, sliceOptions(req));
         // a session that has not paused yet is a start in flight: wait for its first stop, which is
-        // what a cold `pyokka debug FILE` reads. One that has already paused and run on is refused:
+        // what a cold `tracelight debug FILE` reads. One that has already paused and run on is refused:
         // killing a running server on a repeated `debug` is the worse failure.
         if (!ds.pausedOnce && ds.status !== 'ended') return this.stop(ds, req, () => Promise.resolve());
         throw new BridgeError(`the debug session of ${ds.displayName} is running`, '`pause --live` stops it at its next statement; `restart --live` starts it again from the top');
@@ -413,7 +413,7 @@ export class DebugSocketServer implements vscode.Disposable {
       }
       case 'record':
         // a debug session has no run-all session to hold a trace; a `recordFrom` launch has one
-        throw new BridgeError(`the debug session of ${ds.displayName} records nothing, so it cannot start recording here`, 'start it with `pyokka debug FILE --record-from NAME` (or FILE:LINE): it pauses there and records from that pause on; `record --live` at an earlier pause of that run starts it sooner');
+        throw new BridgeError(`the debug session of ${ds.displayName} records nothing, so it cannot start recording here`, 'start it with `tracelight debug FILE --record-from NAME` (or FILE:LINE): it pauses there and records from that pause on; `record --live` at an earlier pause of that run starts it sooner');
       default:
         throw new BridgeError(`unknown request ${JSON.stringify(type)}`, 'a debug session serves state, context, step, continue, pause, stop, restart, debug, break, watches, locals, eval, exec, expand, select, watch, unwatch');
     }
@@ -453,7 +453,7 @@ export class DebugSocketServer implements vscode.Disposable {
       await action();
     } catch (err) {
       next.catch(() => undefined);
-      throw err instanceof BridgeError ? err : new BridgeError(err instanceof Error ? err.message : String(err), 'see the Pyokka output channel');
+      throw err instanceof BridgeError ? err : new BridgeError(err instanceof Error ? err.message : String(err), 'see the Tracelight output channel');
     }
     const result = await next;
     return result === 'finished' ? finishedSlice(ds.lastFinished) : stopReply(ds, result, sliceOptions(req));

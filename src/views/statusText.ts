@@ -42,7 +42,7 @@ export function httpSegment(mode: HttpMode, finished: Finished, replayed: boolea
 /** What the segment means, appended to the tooltip. */
 export function httpTooltip(mode: HttpMode, finished: Finished, replayed: boolean | undefined): string {
   const last = lastMode(finished, replayed);
-  const file = finished?.file ? basename(finished.file) : mode === 'record' || last === 'record' ? '.pyokka/replay/' : 'the recording';
+  const file = finished?.file ? basename(finished.file) : mode === 'record' || last === 'record' ? '.tracelight/replay/' : 'the recording';
   const misses = finished?.misses ?? 0;
   const recorded = finished?.recorded ?? 0;
   const missing = misses > 0 ? `; ${misses} ${misses === 1 ? 'request' : 'requests'} had no recorded response (run once with HTTP Record)` : '';

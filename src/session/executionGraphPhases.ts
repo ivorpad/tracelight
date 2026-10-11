@@ -4,7 +4,7 @@
  * when a blank line or a comment line sits between the previous member's line and its own; members
  * indented deeper (a loop body, an if arm) stay in the phase of the header above them. A phase is
  * labelled by the comment block directly above its first line, else by the names its statements
- * assign, else by its first member's label. Panel-only (`ExecutionGraphPanel.phases`): `pyokka
+ * assign, else by its first member's label. Panel-only (`ExecutionGraphPanel.phases`): `tracelight
  * graph` and the bridge do not carry it and the Python builder is not involved. Pure.
  */
 import { isDecisionNode, isStatementNode, type DecisionNode, type ExecutionGraph, type StatementNode } from './executionGraphTypes';

@@ -23,7 +23,7 @@ describe('resolveBackend', () => {
 });
 
 describe('runBackend', () => {
-  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'pyokka-narrate-test-'));
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'tracelight-narrate-test-'));
   const fake = (name: string, script: string): string => {
     const p = path.join(bin, name);
     fs.writeFileSync(p, `#!/bin/sh\n${script}\n`, { mode: 0o755 });

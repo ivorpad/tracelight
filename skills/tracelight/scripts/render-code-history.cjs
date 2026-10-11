@@ -16,7 +16,7 @@ const KINDS = ['recorded step', 'live pause', 'static source', 'gloss'];
 const DEFAULT_THEME = 'github-dark-dimmed';
 // The grammar comes from the file's extension. A file with none known falls back to the page's
 // `codeLang` (or `meta.language`, which a saved run carries), so a page over `<eval>` or a
-// renamed file still gets colours. Python stays, for a page made by `pyokka history`.
+// renamed file still gets colours. Python stays, for a page made by `tracelight history`.
 const LANGUAGES = {
   '.js': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript', '.jsx': 'javascript',
   '.ts': 'typescript', '.mts': 'typescript', '.cts': 'typescript', '.tsx': 'tsx',
@@ -24,7 +24,7 @@ const LANGUAGES = {
 };
 const ALIASES = { js: 'javascript', javascript: 'javascript', jsx: 'javascript', ts: 'typescript', typescript: 'typescript', tsx: 'tsx', py: 'python', python: 'python' };
 // Pages from either CLI render here: the verify line names the command that reproduces the card.
-const CLIS = ['tracelight ', 'pyokka-js ', 'pyokka '];
+const CLIS = ['tracelight ', 'tracelight-js ', 'tracelight '];
 const USAGE = 'Usage: node render-code-history.cjs history.json page.html [--theme NAME] [--handlebars-module /absolute/path/to/handlebars]';
 const VIA = ['root', 'reads', 'calls'];
 const META_STRINGS = ['mode', 'run', 'file', 'sourceSha256', 'runSha256', 'python', 'runtimeVersion', 'recordedAt'];

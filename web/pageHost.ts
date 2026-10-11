@@ -462,52 +462,52 @@ export class PageHost {
 
   private command(command: string): void {
     switch (command) {
-      case 'pyokka.reexecute':
+      case 'tracelight.reexecute':
         this.rerun();
         return;
-      case 'pyokka.debug':
-      case 'pyokka.startOnCurrentFile':
+      case 'tracelight.debug':
+      case 'tracelight.startOnCurrentFile':
         this.start({ line: this.code.cursorLine() });
         return;
-      case 'pyokka.stopTraceNavigation':
+      case 'tracelight.stopTraceNavigation':
         this.stop();
         return;
-      case 'pyokka.showOutput':
+      case 'tracelight.showOutput':
         return;
-      case 'pyokka.debugCurrentFile':
+      case 'tracelight.debugCurrentFile':
         this.debug.start(this.code.dirtyContent?.());
         return;
-      case 'pyokka.explain':
+      case 'tracelight.explain':
         this.panes.narrate();
         return;
-      case 'pyokka.viewCodeStory':
+      case 'tracelight.viewCodeStory':
         void this.openStory();
         return;
-      case 'pyokka.profile':
+      case 'tracelight.profile':
         this.profile();
         return;
-      case 'pyokka.showInstrumentedFile':
+      case 'tracelight.showInstrumentedFile':
         void this.showInstrumented();
         return;
-      case 'pyokka.showLogs':
+      case 'tracelight.showLogs':
         // always the bridge's latest lines
         this.sources.delete(LOG_PATH);
         this.revealPath(LOG_PATH, 1);
         return;
-      case 'pyokka.editSessionSettings':
+      case 'tracelight.editSessionSettings':
         this.post({ type: 'showView', view: 'settings' });
         return;
-      case 'pyokka.viewRecentFiles':
+      case 'tracelight.viewRecentFiles':
         this.link.send({ type: 'recent' });
         return;
-      case 'pyokka.openHttpRecording': {
+      case 'tracelight.openHttpRecording': {
         const file = this.run?.finished?.http?.file;
         if (!file) this.notice('no HTTP recording yet: run once with HTTP Record', 'info');
         else this.revealPath(file, 1);
         return;
       }
       default:
-        this.notice(`${command.replace(/^pyokka\./, '')} is not available in the browser yet`, 'info');
+        this.notice(`${command.replace(/^tracelight\./, '')} is not available in the browser yet`, 'info');
     }
   }
 

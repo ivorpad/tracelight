@@ -1,6 +1,6 @@
 {
-  "scopeName": "source.pyokka-story-js",
-  "comment": "The Code Story of a JavaScript/TypeScript session: every row is TypeScript (a superset of JavaScript) except a row holding nothing but the fold marker. Each block is its own region, as in pyokka-story, so an unclosed template literal or block comment in one block never bleeds into the next.",
+  "scopeName": "source.tracelight-story-js",
+  "comment": "The Code Story of a JavaScript/TypeScript session: every row is TypeScript (a superset of JavaScript) except a row holding nothing but the fold marker. Each block is its own region, as in tracelight-story, so an unclosed template literal or block comment in one block never bleeds into the next.",
   "patterns": [
     {
       "include": "#first"
@@ -23,7 +23,7 @@
       "begin": "^\\s*…\\s*$",
       "beginCaptures": {
         "0": {
-          "name": "comment.line.fold.pyokka-story"
+          "name": "comment.line.fold.tracelight-story"
         }
       },
       "while": "^(?!\\s*…\\s*$)",

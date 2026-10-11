@@ -3,7 +3,7 @@ import { enclosingStart, namesOnLines } from '../../src/debug/debugInlineValues'
 
 // the module registers a provider with vscode; the helpers under test never touch it
 vi.mock('vscode', () => ({}));
-vi.mock('../../src/debug/dapAdapter', () => ({ DEBUG_TYPE: 'pyokka' }));
+vi.mock('../../src/debug/dapAdapter', () => ({ DEBUG_TYPE: 'tracelight' }));
 
 const SRC = [
   'import os',                                  // 0

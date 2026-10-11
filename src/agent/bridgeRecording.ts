@@ -1,6 +1,6 @@
 /**
  * The bridge's `recording` reply: the open session's run as a saved run's `{meta, events}`
- * (PROTOCOL "Saved run"), so a verb that needs the whole trace (`pyokka tour --live`) runs the
+ * (PROTOCOL "Saved run"), so a verb that needs the whole trace (`tracelight tour --live`) runs the
  * same Python code over the session as over a `run.json`. Text values go through `redact`, as
  * every bridge reply does; the trace goes as the runtime sent it (base64 of the step quads).
  */

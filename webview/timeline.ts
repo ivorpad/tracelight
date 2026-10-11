@@ -48,7 +48,7 @@ export function stepLabel(model: TimelineModel, i: number): string {
   return `${model.lines[i] ?? '?'}:${(model.cols[i] ?? 0) + 1}`;
 }
 
-/** Native tooltip of a Steps strip block: the step number (as the `pyokka` CLI prints it), the location, the function. */
+/** Native tooltip of a Steps strip block: the step number (as the `tracelight` CLI prints it), the location, the function. */
 export function stepTitle(step: number, label: string, scopeName: string): string {
   return scopeName ? `#${step}  ${label}  ${scopeName}` : `#${step}  ${label}`;
 }

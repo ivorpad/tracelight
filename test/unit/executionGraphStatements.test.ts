@@ -2,7 +2,7 @@
  * The host's execution graph over the statement-node fixture program (`fixtures/graph/main.py`,
  * run into `fixtures/graph-run.json` by python/tests/test_graph.py): the statement nodes, their
  * targets and reads, the call edges from statements, the data edges between them, and byte
- * equality with `fixtures/execution-graph-statements.json` (PYOKKA_WRITE_FIXTURES=1). The run
+ * equality with `fixtures/execution-graph-statements.json` (TRACELIGHT_WRITE_FIXTURES=1). The run
  * loader is the one of executionGraph.test.ts.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -19,7 +19,7 @@ const FIXTURE_ROOT = '/fixture';
 const GRAPH_RUN = path.join(FIXTURES, 'graph-run.json');
 const GRAPH_PROGRAM = path.join(FIXTURES, 'graph');
 const STATEMENTS_FIXTURE = path.join(FIXTURES, 'execution-graph-statements.json');
-const MISSING = 'is missing: run python/tests/test_graph.py with PYOKKA_WRITE_FIXTURES=1';
+const MISSING = 'is missing: run python/tests/test_graph.py with TRACELIGHT_WRITE_FIXTURES=1';
 
 interface SavedRun {
   meta: { file: string; workspaceRoot: string; durationMs: number; exitCode: number };

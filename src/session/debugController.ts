@@ -282,7 +282,7 @@ export class DebugController {
   }
 
   private requirePaused(what: string): void {
-    if (!this.state.paused) throw new Error(`cannot ${what}: the debug run is not paused${this.state.active ? '' : ' (debug mode is off: use "Pyokka: Debug Current File")'}`);
+    if (!this.state.paused) throw new Error(`cannot ${what}: the debug run is not paused${this.state.active ? '' : ' (debug mode is off: use "Tracelight: Debug Current File")'}`);
   }
 
   private send(body: { action: 'continue' | 'step' | 'pause' | 'breakpoints' | 'watches' | 'locals' | 'exceptions' | 'record'; kind?: StepKind; set?: BreakpointSpec[] | BreakWatchSpec[]; mode?: ExceptionMode; frameId?: number }): Promise<Record<string, unknown>> {

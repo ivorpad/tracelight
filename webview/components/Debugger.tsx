@@ -74,7 +74,7 @@ export function DebuggerView(props: DebuggerProps) {
           <header class="pk-pane-header">
             <span class="pk-pane-title">LOGS</span>
             <span class="pk-toolbar">
-              <IconButton icon="map" title="View Code Story" onClick={() => props.onCommand('pyokka.viewCodeStory')} />
+              <IconButton icon="map" title="View Code Story" onClick={() => props.onCommand('tracelight.viewCodeStory')} />
             </span>
           </header>
           <div class="pk-logs-body">
@@ -105,7 +105,7 @@ export function CapNote({ model }: { model: TimelineModel }) {
   if (!model.truncated) return null;
   const text = model.cap
     ? capSentence(model.cap, model.stepCount)
-    : `Recording stopped at step ${Math.max(0, model.stepCount - 1).toLocaleString('en-US')}: the run reached the step cap (pyokka.maxTraceSteps), and what ran after it is not recorded.`;
+    : `Recording stopped at step ${Math.max(0, model.stepCount - 1).toLocaleString('en-US')}: the run reached the step cap (tracelight.maxTraceSteps), and what ran after it is not recorded.`;
   return (
     <div class="pk-tl-capnote" role="status">
       {text}
@@ -225,7 +225,7 @@ function Strips(props: DebuggerProps & { model: TimelineModel }) {
             <Icon name="lock" />
           </div>
         )}
-        {model.truncated && <div class="pk-tl-truncated" title={model.cap ? capSentence(model.cap, model.stepCount) : 'Recording stopped at the step cap (pyokka.maxTraceSteps)'} />}
+        {model.truncated && <div class="pk-tl-truncated" title={model.cap ? capSentence(model.cap, model.stepCount) : 'Recording stopped at the step cap (tracelight.maxTraceSteps)'} />}
         {columns.map((c) => (
           <div key={c.x} class={`pk-tl-notch${c.error ? ' error' : ''}`} style={{ left: `${c.x}px` }} />
         ))}

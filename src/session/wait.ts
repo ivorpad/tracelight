@@ -1,5 +1,5 @@
 /**
- * Promises over a session's status (the `PyokkaApi` of the e2e suite): settle once the current run
+ * Promises over a session's status (the `TracelightApi` of the e2e suite): settle once the current run
  * has finished, or once the next run has started and finished.
  */
 import type { Session } from './session';

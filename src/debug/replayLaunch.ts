@@ -11,7 +11,7 @@ import type { SessionManager } from '../session/sessionManager';
 import { DEBUG_TYPE } from './dapShared';
 import { log } from '../util/log';
 
-/** the VS Code debug session replaying each Pyokka session's recording, while the Time Machine is open on a finished run */
+/** the VS Code debug session replaying each Tracelight session's recording, while the Time Machine is open on a finished run */
 export const replaying = new Map<Session, vscode.DebugSession>();
 /** a replay launch was asked for and its adapter does not exist yet */
 export const replayStarting = new Set<Session>();
@@ -55,7 +55,7 @@ async function startReplay(session: Session): Promise<void> {
   const config: vscode.DebugConfiguration = {
     type: DEBUG_TYPE,
     request: 'launch',
-    name: `Pyokka Time Machine: ${session.displayName}`,
+    name: `Tracelight Time Machine: ${session.displayName}`,
     program: uri.scheme === 'file' ? uri.fsPath : session.displayName,
     replay: session.key,
     internalConsoleOptions: 'neverOpen',

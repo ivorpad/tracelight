@@ -12,7 +12,7 @@ let booted = false;
 export function bootMonaco(): void {
   if (booted) return;
   booted = true;
-  const workerUri = window.__pyokka?.workerUri;
+  const workerUri = window.__tracelight?.workerUri;
   (self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
     getWorker: () => {
       if (!workerUri) {
@@ -32,19 +32,19 @@ export function bootMonaco(): void {
     'minimap.background': transparent,
     'editorStickyScroll.background': '#00000000',
   };
-  monaco.editor.defineTheme('pyokka-dark', {
+  monaco.editor.defineTheme('tracelight-dark', {
     base: 'vs-dark',
     inherit: true,
     rules: [],
     colors: { ...shared, 'editorStickyScroll.background': '#1f1f1f', 'editorStickyScroll.shadow': '#000000' },
   });
-  monaco.editor.defineTheme('pyokka-light', {
+  monaco.editor.defineTheme('tracelight-light', {
     base: 'vs',
     inherit: true,
     rules: [],
     colors: { ...shared, 'editorStickyScroll.background': '#f8f8f8' },
   });
-  monaco.editor.defineTheme('pyokka-hc', {
+  monaco.editor.defineTheme('tracelight-hc', {
     base: 'hc-black',
     inherit: true,
     rules: [],
@@ -53,7 +53,7 @@ export function bootMonaco(): void {
 }
 
 export function monacoTheme(theme: Theme): string {
-  return theme === 'light' ? 'pyokka-light' : theme === 'hc' ? 'pyokka-hc' : 'pyokka-dark';
+  return theme === 'light' ? 'tracelight-light' : theme === 'hc' ? 'tracelight-hc' : 'tracelight-dark';
 }
 
 export function applyTheme(theme: Theme): void {

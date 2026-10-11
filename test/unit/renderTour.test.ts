@@ -4,12 +4,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// skills/pyokka/scripts/render-tour.cjs: a merged tour (`pyokka tour RUN --prose P --out F`)
+// skills/tracelight/scripts/render-tour.cjs: a merged tour (`tracelight tour RUN --prose P --out F`)
 // becomes one page with no scripts. The example is the RRF fixture merged with
 // python/tests/fixtures/tour/rrf.prose.json.
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const SKILL = path.join(ROOT, 'skills', 'pyokka');
+const SKILL = path.join(ROOT, 'skills', 'tracelight');
 const RENDERER = path.join(SKILL, 'scripts', 'render-tour.cjs');
 const EXAMPLE = path.join(SKILL, 'templates', 'tour.example.json');
 
@@ -45,7 +45,7 @@ describe('render-tour.cjs', () => {
     expect(html).toContain('prefers-color-scheme:dark');
   });
 
-  it('shows the quoted slice Pyokka cut and says when the recording had cut the value', () => {
+  it('shows the quoted slice Tracelight cut and says when the recording had cut the value', () => {
     const { html } = run(example());
     expect(html).toContain('<blockquote>&#39;C&#39;: 0.03252247488101534</blockquote>');
     expect(html).toContain('characters 54 to 78 of 119');

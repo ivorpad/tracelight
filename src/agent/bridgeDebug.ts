@@ -69,7 +69,7 @@ export interface BridgeDebugDeps {
   /**
    * The `record: false` debug session of this session's file, when one exists. A `debug` that
    * arrived on this socket started it, and the pause verbs that follow on the same connection
-   * address it: that is what makes `pyokka shell --live` able to start and drive a debug session
+   * address it: that is what makes `tracelight shell --live` able to start and drive a debug session
    * over one socket (bridgeDebugSocket.ts).
    */
   debugSessionFor: (session: Session) => { serve: (type: string, req: Request) => Promise<Record<string, unknown>> } | undefined;
@@ -151,7 +151,7 @@ export class BridgeDebug {
       next?.catch(() => undefined); // the restart failed on the way: nobody reads the waiter
       throw err;
     }
-    if (!next) throw new BridgeError('the debug run did not restart', 'see the Pyokka output channel');
+    if (!next) throw new BridgeError('the debug run did not restart', 'see the Tracelight output channel');
     return this.reply(session, await next, req);
   }
 
@@ -268,7 +268,7 @@ export class BridgeDebug {
   async pauseContext(session: Session, req: Request): Promise<Record<string, unknown>> {
     const served = session.nav.active || session.debug.paused ? undefined : this.served(session, 'context', req);
     if (served) return served;
-    throw new BridgeError('context needs step or file/line while the Time Machine is not active', 'send {step: N}, {file, line}, or step first; a plain `pyokka debug FILE` pause of this file answers here too');
+    throw new BridgeError('context needs step or file/line while the Time Machine is not active', 'send {step: N}, {file, line}, or step first; a plain `tracelight debug FILE` pause of this file answers here too');
   }
 
   /** `paused`, `locals` and `output` for a `context` reply that is the frontier's, else nothing. */
@@ -403,7 +403,7 @@ export class BridgeDebug {
       await action();
     } catch (err) {
       if (err instanceof BridgeError) throw err;
-      throw new BridgeError(err instanceof Error ? err.message : String(err), 'see the Pyokka output channel');
+      throw new BridgeError(err instanceof Error ? err.message : String(err), 'see the Tracelight output channel');
     }
   }
 
@@ -413,7 +413,7 @@ export class BridgeDebug {
 
   private waitForStop(session: Session): Promise<PausedInfo | 'finished'> {
     return new Promise((resolve, reject) => {
-      const onDisposed = (): void => reject(new BridgeError('session stopped', 'start a Pyokka session on the file again'));
+      const onDisposed = (): void => reject(new BridgeError('session stopped', 'start a Tracelight session on the file again'));
       session.once('disposed', onDisposed);
       session.waitForPause(STOP_TIMEOUT_MS).then(
         (r) => {

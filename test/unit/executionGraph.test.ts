@@ -1,7 +1,7 @@
 /**
  * The host's execution graph over the shared fixture run (`fixtures/walkthrough-run.json`): the
  * expectations of docs/PROTOCOL.md, and byte equality with the graphs the Python builder wrote to
- * `fixtures/execution-graph.json` (python/tests/test_graph.py, PYOKKA_WRITE_FIXTURES=1). The
+ * `fixtures/execution-graph.json` (python/tests/test_graph.py, TRACELIGHT_WRITE_FIXTURES=1). The
  * statement-node fixture program has its own file, executionGraphStatements.test.ts.
  */
 import { describe, expect, it } from 'vitest';
@@ -395,7 +395,7 @@ describe('execution graph fixtures', () => {
   };
 
   it('equals the graphs the Python builder wrote for the walkthrough run', () => {
-    expect(fs.existsSync(GRAPH_FIXTURE), `${GRAPH_FIXTURE} is missing: run python/tests/test_graph.py with PYOKKA_WRITE_FIXTURES=1`).toBe(true);
+    expect(fs.existsSync(GRAPH_FIXTURE), `${GRAPH_FIXTURE} is missing: run python/tests/test_graph.py with TRACELIGHT_WRITE_FIXTURES=1`).toBe(true);
     const expected = JSON.parse(fs.readFileSync(GRAPH_FIXTURE, 'utf8')) as Record<string, unknown>;
     expect(Object.keys(expected).sort()).toEqual(['all', 'cap', 'default', 'scope']);
     const cases: Record<string, ExecutionGraphOptions> = { default: {}, all: { all: true }, scope: { scope: 'fail' }, cap: { cap: 6 } };

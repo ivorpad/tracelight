@@ -23,7 +23,7 @@ that stop, and the paused function's lines show their values in the editor, read
 
 There is no module launch for Node: `--module` is refused with a hint. Give the entry file, the
 one `package.json`'s `main`, `bin` or `start` script points at. `--node PATH` (or
-`$TRACELIGHT_NODE`, else the window's `pyokka.nodePath`) picks the Node that runs the program.
+`$TRACELIGHT_NODE`, else the window's `tracelight.nodePath`) picks the Node that runs the program.
 
 **Start with `tracelight debug`.** `state --live`, `break --live` and `continue --live` drive a
 session that exists. `debug ... --at` creates the session and the breakpoint in one command. Once
@@ -86,17 +86,17 @@ Keep a list of the breakpoints you added; those are the ones you remove at the e
 `break --live --remove F:L` for a line and `--remove NAME` for the function breakpoint `--at NAME`
 made. Remove them before `stop --live`: with no session the CLI cannot reach the window.
 
-**The window answers only with `pyokka.agentAccess` on.** With it off, VS Code asks the user to
+**The window answers only with `tracelight.agentAccess` on.** With it off, VS Code asks the user to
 allow agent access, and **Allow** starts the launch; tell them to look for the question. The first
 URI also needs a click.
 `tracelight debug` tries an existing debug session, then a recording session on the file, then
-`vscode://ivor.pyokka/debug`. That last one makes VS Code ask the user to allow it, and the CLI
+`vscode://ivor.tracelight/debug`. That last one makes VS Code ask the user to allow it, and the CLI
 can time out after 20 s while the question is still on screen. That is not a failure: the next
 command is `tracelight state --live`, not a second `tracelight debug`.
 
 The URI goes to the **focused** window, and a window with a different project open accepts it and
 instruments nothing: the program runs, no breakpoint resolves, `stop --live` says `0 steps`.
-Check `workspace` in `$PYOKKA_HOME/sessions/*.json` before blaming anything else.
+Check `workspace` in `$TRACELIGHT_HOME/sessions/*.json` before blaming anything else.
 
 ## When it did not pause
 
@@ -149,7 +149,7 @@ plans answer in one line that they need a recording, and `/pk r` records from th
 stops the plain run and starts `tracelight debug FILE --record-from FILE:LINE`, which runs the
 program again from the top and pauses the first time it reaches that line. Tell the person the
 program runs again before they press it. On a step with a finding, `{"action": "fix"}` leaves a
-fix plan in `.pyokka/findings/` next to the program, a local file outside commits. Give the
+fix plan in `.tracelight/findings/` next to the program, a local file outside commits. Give the
 person its path, and point them to `/pk a` to apply the edit and `/pk u` to undo it; the choice
 to apply is theirs.
 

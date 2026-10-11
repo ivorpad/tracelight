@@ -2,24 +2,24 @@ import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { RunConfig } from '../shared/protocol';
-import { pyokkaHome, readJsonFile } from '../util/paths';
-import { mergeConfigSources, readPyokkaKeyFromPackageJson, toRunConfig, parseEnvParams, splitArgs, type ConfigObject } from './merge';
+import { tracelightHome, readJsonFile } from '../util/paths';
+import { mergeConfigSources, readTracelightKeyFromPackageJson, toRunConfig, parseEnvParams, splitArgs, type ConfigObject } from './merge';
 import { readEnvFile } from './dotenv';
 import { looksLikeProject } from './project';
 
 export type RunModeSetting = 'auto' | 'onSave' | 'onDemand';
 
-export function pyokkaConfig(resource?: vscode.Uri): vscode.WorkspaceConfiguration {
-  return vscode.workspace.getConfiguration('pyokka', resource);
+export function tracelightConfig(resource?: vscode.Uri): vscode.WorkspaceConfiguration {
+  return vscode.workspace.getConfiguration('tracelight', resource);
 }
 
 export function setting<T>(key: string, fallback: T, resource?: vscode.Uri): T {
-  return pyokkaConfig(resource).get<T>(key, fallback);
+  return tracelightConfig(resource).get<T>(key, fallback);
 }
 
 /** The runner-facing subset of the VS Code settings (before config files are merged in). */
 function settingsAsConfig(resource?: vscode.Uri): ConfigObject {
-  const c = pyokkaConfig(resource);
+  const c = tracelightConfig(resource);
   const pick = (keys: string[]): ConfigObject => {
     const out: ConfigObject = {};
     for (const k of keys) {
@@ -30,7 +30,7 @@ function settingsAsConfig(resource?: vscode.Uri): ConfigObject {
     }
     return out;
   };
-  // `httpObserve` is a flat key on purpose: VS Code stores settings as a tree, so `pyokka.http.observe` could not coexist with the string `pyokka.http`
+  // `httpObserve` is a flat key on purpose: VS Code stores settings as a tree, so `tracelight.http.observe` could not coexist with the string `tracelight.http`
   const flat = pick(['logLimit', 'maxConsoleMessages', 'resolveGetters', 'autoLog', 'maxTraceSteps', 'maxValueChars', 'runTimeout', 'http', 'httpObserve', 'installPackageCommand', 'plugins', 'runMode', 'delay', 'showValueOnSelection', 'showSingleInlineValue', 'smartStart']);
   const tm: ConfigObject = {};
   for (const k of ['recordLocals', 'libraryCode', 'libraryPackages', 'exclude']) {
@@ -68,11 +68,11 @@ export interface ResolvedSessionConfig {
 }
 
 /**
- * Settings -> ~/.pyokka/config.json -> package.json "pyokka" -> .pyokka, later wins.
+ * Settings -> ~/.tracelight/config.json -> package.json "tracelight" -> .tracelight, later wins.
  * `workspaceRoot` is searched for the two files (also the file's own directory).
  */
 export function resolveSessionConfig(resource: vscode.Uri | undefined, workspaceRoot: string | undefined, fileDir?: string): ResolvedSessionConfig {
-  const home = readJsonFile<ConfigObject>(path.join(pyokkaHome(), 'config.json'), {});
+  const home = readJsonFile<ConfigObject>(path.join(tracelightHome(), 'config.json'), {});
   const dirs = [workspaceRoot, fileDir].filter((d): d is string => !!d);
   let pkg: ConfigObject | undefined;
   let dotfile: ConfigObject | undefined;
@@ -80,12 +80,12 @@ export function resolveSessionConfig(resource: vscode.Uri | undefined, workspace
     const pj = path.join(dir, 'package.json');
     if (!pkg && fs.existsSync(pj)) {
       try {
-        pkg = readPyokkaKeyFromPackageJson(fs.readFileSync(pj, 'utf8'));
+        pkg = readTracelightKeyFromPackageJson(fs.readFileSync(pj, 'utf8'));
       } catch {
         pkg = undefined;
       }
     }
-    const df = path.join(dir, '.pyokka');
+    const df = path.join(dir, '.tracelight');
     if (!dotfile && fs.existsSync(df)) dotfile = readJsonFile<ConfigObject>(df, {});
   }
   const merged = mergeConfigSources(settingsAsConfig(resource), home, pkg, dotfile);

@@ -1,5 +1,5 @@
 /**
- * Messages between the extension host and the Pyokka panel webview.
+ * Messages between the extension host and the Tracelight panel webview.
  * Host -> webview: `HostToWebview`; webview -> host: `WebviewToHost`.
  * The webview is a pure view: all state it renders is pushed by the host.
  */
@@ -55,9 +55,9 @@ export interface PanelSettings {
   recordLocals: boolean;
   /** record the next run's HTTP exchanges, or answer them from the recording (session value; applies to the next run, never starts one) */
   http: HttpMode;
-  /** the Execution Diagram's first level of detail: the cards only, or every statement (`pyokka.diagram.detail`) */
+  /** the Execution Diagram's first level of detail: the cards only, or every statement (`tracelight.diagram.detail`) */
   diagramDetail: 'scopes' | 'statements';
-  /** draw the Execution Diagram's data edges (`pyokka.diagram.dataEdges`) */
+  /** draw the Execution Diagram's data edges (`tracelight.diagram.dataEdges`) */
   diagramDataEdges: boolean;
 }
 
@@ -297,7 +297,7 @@ export interface PanelTourStop {
   short: string | null;
   /** every value of the stop, folded under the row */
   values: { role: string; name: string; text: string; cut: boolean }[];
-  /** the slice of a long value the prose quotes, cut by Pyokka from the recording */
+  /** the slice of a long value the prose quotes, cut by Tracelight from the recording */
   quote: { name: string; text: string } | null;
   /** picked by the narration (always false before one) */
   picked: boolean;
@@ -318,7 +318,7 @@ export interface PanelTourChapter {
   picked: number;
 }
 
-/** The TOUR section: chapters and stops of the bound session's last run (`pyokka tour`, docs/TOUR.md). */
+/** The TOUR section: chapters and stops of the bound session's last run (`tracelight tour`, docs/TOUR.md). */
 export interface TourPanel {
   runId: string;
   /** `computing` while the Python command runs; `error` with `error` when it failed */
@@ -357,7 +357,7 @@ export interface ExecutionGraphPanel extends ExecutionGraph {
   /** node ids on the call stack at `currentStep`, innermost first; [] while the Time Machine is inactive */
   stack: string[];
   currentStep: number | null;
-  /** the story tree's grouping of each scope's statements (`pyokka.diagram.phases`); [] when off */
+  /** the story tree's grouping of each scope's statements (`tracelight.diagram.phases`); [] when off */
   phases: GraphPhase[];
 }
 
@@ -417,7 +417,7 @@ export type HostToWebview =
 
 export type WebviewToHost =
   | { type: 'ready' }
-  /** the panel's active view changed: the host keeps `pyokka.panelView` so the title buttons can gate on it */
+  /** the panel's active view changed: the host keeps `tracelight.panelView` so the title buttons can gate on it */
   | { type: 'viewChanged'; view: ViewId }
   /** `file` (a display path) names the file instead of `fileId`: the Debugger view has no run table */
   | { type: 'openLocation'; fileId: number; line: number; col: number; sideView?: boolean; file?: string }
@@ -478,7 +478,7 @@ export type WebviewToHost =
   | { type: 'why.close' }
   /** unroll a package node of the Execution Diagram into its functions (`collapse` folds it back) */
   | { type: 'executionGraph.expand'; nodeId: string; collapse?: boolean }
-  /** the Execution Diagram opened (or a run finished while it was open) without a graph: build and send it (`pyokka.diagram.build`) */
+  /** the Execution Diagram opened (or a run finished while it was open) without a graph: build and send it (`tracelight.diagram.build`) */
   | { type: 'executionGraph.request' }
   /** the inspector asks for the steps a statement, decision or function ran at; the host answers with `executionGraph.hits` */
   | { type: 'executionGraph.hits'; nodeId: string }

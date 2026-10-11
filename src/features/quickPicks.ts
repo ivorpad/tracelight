@@ -1,6 +1,6 @@
 /**
- * The two quick picks: `pyokka.selectAction` (the status bar's menu of what to do next) and
- * `pyokka.editSessionSettings` (run mode, value toggles and session actions of the active session).
+ * The two quick picks: `tracelight.selectAction` (the status bar's menu of what to do next) and
+ * `tracelight.editSessionSettings` (run mode, value toggles and session actions of the active session).
  */
 import * as vscode from 'vscode';
 import type { Session } from '../session/session';
@@ -36,15 +36,15 @@ export async function selectAction({ mgr, panel, startView, liveValues, recent, 
   const ds = debugSessions.active();
   if (ds) {
     items.push(
-      { label: `$(debug-alt) Show the Debugger on ${ds.displayName}`, description: ds.debug.paused ? 'paused' : 'running', run: () => vscode.commands.executeCommand('pyokka.showDebugger') },
+      { label: `$(debug-alt) Show the Debugger on ${ds.displayName}`, description: ds.debug.paused ? 'paused' : 'running', run: () => vscode.commands.executeCommand('tracelight.showDebugger') },
       { label: `$(debug-stop) Stop the Debugger on ${ds.displayName}`, description: 'end the program; nothing is left to read', run: () => ds.stopDebug() },
     );
   }
   if (s) {
     items.push(
       s.debug.active
-        ? { label: '$(debug-stop) Stop debugging', description: 'end the debug run, keep the session and its recording', run: () => vscode.commands.executeCommand('pyokka.debugStop') }
-        : { label: `$(debug-alt) Debug ${s.displayName}`, description: 'pause at the first breakpoint, or before the first statement', run: () => vscode.commands.executeCommand('pyokka.debugCurrentFile') },
+        ? { label: '$(debug-stop) Stop debugging', description: 'end the debug run, keep the session and its recording', run: () => vscode.commands.executeCommand('tracelight.debugStop') }
+        : { label: `$(debug-alt) Debug ${s.displayName}`, description: 'pause at the first breakpoint, or before the first statement', run: () => vscode.commands.executeCommand('tracelight.debugCurrentFile') },
       { label: `$(debug-stop) Stop ${s.displayName}`, run: () => mgr.stopSession(s, true) },
       { label: `$(list-flat) ${s.autoLog ? 'Disable' : 'Enable'} Auto Log`, description: 'show a value for every line', run: () => liveValues.setAutoLog(!s.autoLog) },
       { label: `$(eye) ${s.showValueOnSelection ? 'Disable' : 'Enable'} Show Value On Selection`, run: () => liveValues.setShowValueOnSelection(!s.showValueOnSelection) },
@@ -52,10 +52,10 @@ export async function selectAction({ mgr, panel, startView, liveValues, recent, 
     );
   }
   items.push({ label: '$(history) View Recent Files', run: () => recent.show() });
-  if (s) items.push({ label: '$(settings-gear) Edit session settings', run: () => vscode.commands.executeCommand('pyokka.editSessionSettings') });
-  items.push({ label: '$(server-process) Select Node.js', run: () => vscode.commands.executeCommand('pyokka.selectNode') });
+  if (s) items.push({ label: '$(settings-gear) Edit session settings', run: () => vscode.commands.executeCommand('tracelight.editSessionSettings') });
+  items.push({ label: '$(server-process) Select Node.js', run: () => vscode.commands.executeCommand('tracelight.selectNode') });
   items.push({ label: '$(list-ordered) Show logs', run: () => log.show() });
-  const pick = await vscode.window.showQuickPick(items, { title: s ? `Pyokka · ${s.displayName} (${s.status}, ${s.runMode})` : 'Pyokka', placeHolder: 'Pyokka actions' });
+  const pick = await vscode.window.showQuickPick(items, { title: s ? `Tracelight · ${s.displayName} (${s.status}, ${s.runMode})` : 'Tracelight', placeHolder: 'Tracelight actions' });
   if (pick) await pick.run();
 }
 
@@ -76,8 +76,8 @@ export async function editSessionSettings({ mgr, liveValues, requireSession }: Q
     { label: 'Session', kind: vscode.QuickPickItemKind.Separator, run: () => undefined },
     { label: '$(refresh) Re-execute', run: () => s.runNow('manual') },
     { label: '$(debug-stop) Stop session', run: () => mgr.stopSession(s, true) },
-    { label: '$(settings) Open Pyokka settings', run: () => vscode.commands.executeCommand('workbench.action.openSettings', 'pyokka') },
+    { label: '$(settings) Open Tracelight settings', run: () => vscode.commands.executeCommand('workbench.action.openSettings', 'tracelight') },
   ];
-  const pick = await vscode.window.showQuickPick(items, { title: `Pyokka session settings · ${s.displayName}`, placeHolder: `Interpreter: ${s.interpreter.path} (${s.interpreter.language === 'javascript' ? 'Node' : 'Python'} ${s.interpreter.version.join('.')})` });
+  const pick = await vscode.window.showQuickPick(items, { title: `Tracelight session settings · ${s.displayName}`, placeHolder: `Node: ${s.interpreter.path} (${s.interpreter.version.join('.')})` });
   if (pick) await pick.run();
 }

@@ -23,19 +23,19 @@ const proposal: NonNullable<Fix> = {
   verify: { before: '4 invoices, revenue 209.44', after: '4 invoices, revenue 1398.79', exceptionsBefore: 1, exceptionsAfter: 0 },
 }
 
-// What `pyokka origin` said at #64: newest first, root at #29 (parse_price returned the text).
+// What `tracelight origin` said at #64: newest first, root at #29 (parse_price returned the text).
 const ORIGIN = toOrigin(ORIGIN_64, finding.id)
-// `pyokka origin 64 items`: the list was filled in place, so the chain has no root.
+// `tracelight origin 64 items`: the list was filled in place, so the chain has no root.
 const UNKNOWN = toOrigin(ORIGIN_UNKNOWN, finding.id)
 
 test('a plan is written next to the program, named by file, finding and place', async () => {
-  expect(planPath('/work/invoices.py', finding)).toBe('/work/.pyokka/findings/invoices-swallowed-exception-invoices-py-34.md')
+  expect(planPath('/work/invoices.py', finding)).toBe('/work/.tracelight/findings/invoices-swallowed-exception-invoices-py-34.md')
 })
 
 test('a plan holds front matter, the reproduce commands, the diff and the check', async () => {
   const text = planText(finding, spot, proposal, 'open', '2026-10-02 12:00')
   expect(text).toStartWith('---\nstatus: open\nprogram: invoices.py\nfinding: swallowed exception\nwhere: invoices.py:34\nstep: 64\nrecorded: 81 steps\nupdated: 2026-10-02 12:00\n---\n')
-  expect(text).toContain('pyokka step --live --to 64\npyokka why --live 64')
+  expect(text).toContain('tracelight step --live --to 64\npyokka why --live 64')
   expect(text).toContain(`-  16      text = raw.strip('"')\n+  16      text = raw.strip('"').replace(",", "")`)
   expect(text).toContain('- swallowed exceptions: 1 -> 0')
   expect(text).toContain('- output after: `4 invoices, revenue 1398.79`')
@@ -52,7 +52,7 @@ test('a fresh run without the finding rewrites the plan as fixed', async () => {
 
 test('with an origin chain, the plan lists it and the prompt asks for the root', async () => {
   const plan = planText(finding, spot, proposal, 'open', '2026-10-02 12:00', ORIGIN.links)
-  expect(plan).toContain(`## Where from\n\nNewest first, from \`pyokka origin\`:\n\n- #64 invoices.py:34 subtotal: items[0]["unit_price"] = '1,299.00' (read)`)
+  expect(plan).toContain(`## Where from\n\nNewest first, from \`tracelight origin\`:\n\n- #64 invoices.py:34 subtotal: items[0]["unit_price"] = '1,299.00' (read)`)
   expect(plan).toContain("- #26 invoices.py:28 parse_orders: parse_price(price) = '1,299.00' (element, inferred)")
   expect(plan).toMatch(/- #29 invoices\.py:18 parse_price: return float\(text\) .* = '1,299\.00' \(return\)  root: the value goes wrong here/)
   expect(plan).not.toContain('Root: not known')
@@ -75,7 +75,7 @@ test('the tool answer for origin lists the chain and the root, or says it is not
   expect(told).toContain('Root: #29 invoices.py:18: parse_price returned a str here; its other 5 calls returned a float')
   expect(originAnswer(finding, UNKNOWN)).toContain('Root: not known. the chain stops before a statement that made the value')
   expect(originAnswer(finding, { findingId: 'x0', step: 64, links: [], error: "invalid choice: 'origin'" }))
-    .toBe("pyokka origin gave no chain: invalid choice: 'origin'")
+    .toBe("tracelight origin gave no chain: invalid choice: 'origin'")
 })
 
 test('the fix prompt numbers the file and asks for JSON edits in STE', async () => {

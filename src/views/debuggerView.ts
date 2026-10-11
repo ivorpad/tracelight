@@ -222,7 +222,7 @@ export class DebuggerViewHost {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log.error(`Debugger view ${msg.type} failed (${ds.displayName})`, err);
-      void vscode.window.showErrorMessage(`Pyokka: ${message}`);
+      void vscode.window.showErrorMessage(`Tracelight: ${message}`);
     }
   }
 

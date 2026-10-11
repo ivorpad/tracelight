@@ -22,7 +22,7 @@ import type { TourHost } from './views/tourPane';
 import type { GraphProvider } from './features/executionGraph';
 
 /** API returned from activate(); used by the e2e tests. */
-export interface PyokkaApi {
+export interface TracelightApi {
   manager: SessionManager;
   timeMachine: TimeMachine;
   panel: OutputPanel;
@@ -56,7 +56,7 @@ export interface PyokkaApi {
   onPanelMessage(fn: (msg: HostToWebview) => void): vscode.Disposable;
   /** start a debug session from a raw launch, through `vscode.debug.startDebugging` (the one door) */
   startDebugSession(launch: Record<string, unknown>): Promise<void>;
-  /** feed a `vscode://ivor.pyokka/debug` URI to this window (the e2e suite must never run the real `code`) */
+  /** feed a `vscode://ivor.tracelight/debug` URI to this window (the e2e suite must never run the real `code`) */
   handleDebugUri(uri: vscode.Uri): Promise<void>;
   /* the recording debugger (docs/HANDOFF-debugger.md): the session's `debug*` methods, for the e2e suite */
   debug(session: Session): DebugState;

@@ -169,7 +169,7 @@ export class DebugSession extends EventEmitter<DebugSessionEvents> {
   /**
    * The launch with `node` filled in. `start` resolves the Node binary, so the descriptor, the
    * `state` reply and the view can name what the program actually runs instead of a default that
-   * may be wrong (an nvm Node, `pyokka.nodePath`).
+   * may be wrong (an nvm Node, `tracelight.nodePath`).
    */
   get resolvedLaunch(): LaunchConfig {
     if (!this.interpreterPath) return this.launch;

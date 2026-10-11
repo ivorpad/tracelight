@@ -1,5 +1,5 @@
 /**
- * Pyokka snippets (~/.pyokka/pyokka.code-snippets), New File picker, New JavaScript / TypeScript
+ * Tracelight snippets (~/.tracelight/tracelight.code-snippets), New File picker, New JavaScript / TypeScript
  * File. A snippet opens in the language its `scope` names (or its code reads as).
  */
 import * as vscode from 'vscode';
@@ -7,10 +7,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SessionManager } from '../session/sessionManager';
 import type { RecentFilesView } from './recentFiles';
-import { ensureDir, pyokkaHome, readJsonFile, writeJsonFile } from '../util/paths';
+import { ensureDir, tracelightHome, readJsonFile, writeJsonFile } from '../util/paths';
 import { isRunnable, languageIdFor } from '../runtime/language';
 
-export interface PyokkaSnippet {
+export interface TracelightSnippet {
   name: string;
   prefix: string[];
   body: string[];
@@ -19,11 +19,11 @@ export interface PyokkaSnippet {
   scope?: string;
 }
 
-const STARTER = `// Pyokka snippets: pick one with "Pyokka: New File" (Cmd/Ctrl+K L).
+const STARTER = `// Tracelight snippets: pick one with "Tracelight: New File" (Cmd/Ctrl+K L).
 // Same format as VS Code snippets; $TM_SELECTED_TEXT and $0 are supported.
 {
   "Scratch with a class": {
-    "prefix": "pyokka-class",
+    "prefix": "tracelight-class",
     "scope": "javascript,typescript",
     "body": [
       "class Point {",
@@ -40,15 +40,15 @@ const STARTER = `// Pyokka snippets: pick one with "Pyokka: New File" (Cmd/Ctrl+
     "description": "Class playground"
   },
   "Snap": {
-    "prefix": "pyokka-snap",
+    "prefix": "tracelight-snap",
     "scope": "javascript,typescript",
     "body": ["/*{{", "$0", "}}*/"],
-    "description": "A Pyokka snap fence"
+    "description": "A Tracelight snap fence"
   }
 }
 `;
 
-export const NEW_FILE_STARTER = `// Pyokka is running this file. Values appear next to your code as you type.
+export const NEW_FILE_STARTER = `// Tracelight is running this file. Values appear next to your code as you type.
 // Try:  const x = 42;  then type  x  on its own line, or add  // ?  after any expression.
 
 `;
@@ -59,10 +59,10 @@ export function starterFor(_language: 'javascript' | 'typescript'): string {
 }
 
 export function snippetsFile(): string {
-  return path.join(pyokkaHome(), 'pyokka.code-snippets');
+  return path.join(tracelightHome(), 'tracelight.code-snippets');
 }
 
-export function loadSnippets(): PyokkaSnippet[] {
+export function loadSnippets(): TracelightSnippet[] {
   const raw = readJsonFile<Record<string, { prefix?: string | string[]; body?: string | string[]; description?: string; scope?: string }>>(snippetsFile(), {});
   return Object.entries(raw).map(([name, s]) => ({
     name,
@@ -104,7 +104,7 @@ export class SnippetsFeature {
   async createSnippetFromSelection(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.selection.isEmpty) {
-      void vscode.window.showInformationMessage('Pyokka: select the code to turn into a snippet first.');
+      void vscode.window.showInformationMessage('Tracelight: select the code to turn into a snippet first.');
       return;
     }
     const name = await vscode.window.showInputBox({ prompt: 'Snippet name', ignoreFocusOut: true });
@@ -117,7 +117,7 @@ export class SnippetsFeature {
     const lang = editor.document.languageId;
     raw[name] = { prefix: prefix || name, body, description: `Created from ${path.basename(editor.document.fileName)}`, scope: lang };
     writeJsonFile(file, raw);
-    const pick = await vscode.window.showInformationMessage(`Pyokka snippet "${name}" saved.`, 'Open snippets file');
+    const pick = await vscode.window.showInformationMessage(`Tracelight snippet "${name}" saved.`, 'Open snippets file');
     if (pick) await this.editSnippets();
   }
 
@@ -134,15 +134,15 @@ export class SnippetsFeature {
     await this.manager.start(doc);
   }
 
-  /** Cmd+K L: Pyokka snippets + recent files + an empty file. Snippets enable auto log. */
+  /** Cmd+K L: Tracelight snippets + recent files + an empty file. Snippets enable auto log. */
   async createFile(): Promise<void> {
     type Item = vscode.QuickPickItem & { action: () => Promise<void> };
     const items: Item[] = [];
-    items.push({ label: '$(new-file) Empty JavaScript file', description: 'Untitled, Pyokka started', action: () => this.newFile('javascript') });
-    items.push({ label: '$(new-file) Empty TypeScript file', description: 'Untitled, Pyokka started', action: () => this.newFile('typescript') });
+    items.push({ label: '$(new-file) Empty JavaScript file', description: 'Untitled, Tracelight started', action: () => this.newFile('javascript') });
+    items.push({ label: '$(new-file) Empty TypeScript file', description: 'Untitled, Tracelight started', action: () => this.newFile('typescript') });
     // only the JavaScript and TypeScript snippets
     const snippets = loadSnippets().filter((s) => isRunnable({ languageId: languageIdFor({ scope: s.scope, content: snippetBodyToText(s.body) }), fileName: '' }));
-    if (snippets.length) items.push({ label: 'Pyokka snippets', kind: vscode.QuickPickItemKind.Separator, action: async () => undefined });
+    if (snippets.length) items.push({ label: 'Tracelight snippets', kind: vscode.QuickPickItemKind.Separator, action: async () => undefined });
     for (const s of snippets) {
       items.push({
         label: `$(symbol-snippet) ${s.name}`,
@@ -167,9 +167,9 @@ export class SnippetsFeature {
       });
     }
     items.push({ label: '', kind: vscode.QuickPickItemKind.Separator, action: async () => undefined });
-    items.push({ label: '$(edit) Edit Pyokka snippets…', action: () => this.editSnippets() });
+    items.push({ label: '$(edit) Edit Tracelight snippets…', action: () => this.editSnippets() });
     items.push({ label: '$(list-unordered) View all recent files…', action: () => this.recent.show() });
-    const pick = await vscode.window.showQuickPick(items, { title: 'Pyokka: New File', placeHolder: 'Pick a snippet or a recent file', matchOnDescription: true, matchOnDetail: true });
+    const pick = await vscode.window.showQuickPick(items, { title: 'Tracelight: New File', placeHolder: 'Pick a snippet or a recent file', matchOnDescription: true, matchOnDetail: true });
     if (pick) await pick.action();
   }
 }

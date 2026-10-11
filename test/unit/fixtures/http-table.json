@@ -16,7 +16,7 @@
   "recorded": 3,
   "served": 0,
   "misses": 0,
-  "file": "/fixture/.pyokka/replay/3f2a9c1e5b7d0246.jsonl",
+  "file": "/fixture/.tracelight/replay/3f2a9c1e5b7d0246.jsonl",
   "exists": true,
   "recordedAt": "2026-09-11T10:12:03Z",
   "entries": 3

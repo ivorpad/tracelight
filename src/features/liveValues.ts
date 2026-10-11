@@ -93,7 +93,7 @@ export class LiveValues implements vscode.Disposable {
     if (!editor || !s) return;
     const exp = expressionAtCursor(editor);
     if (!exp) {
-      void vscode.window.showInformationMessage('Pyokka: place the cursor on an expression or select one.');
+      void vscode.window.showInformationMessage('Tracelight: place the cursor on an expression or select one.');
       return;
     }
     s.addValueMarker(exp.range, 'showValue', { context: exp.text });
@@ -138,13 +138,13 @@ export class LiveValues implements vscode.Disposable {
     if (!editor || !s) return;
     const exp = expressionAtCursor(editor);
     if (!exp) return;
-    const logEv = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Pyokka: evaluating…' }, () => s.evaluateTransient(exp.range, { context: exp.text }));
+    const logEv = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Tracelight: evaluating…' }, () => s.evaluateTransient(exp.range, { context: exp.text }));
     if (!logEv) {
-      void vscode.window.showWarningMessage(`Pyokka: no value was produced for "${exp.text}" (did the line execute?).`);
+      void vscode.window.showWarningMessage(`Tracelight: no value was produced for "${exp.text}" (did the line execute?).`);
       return;
     }
     await vscode.env.clipboard.writeText(entryText(logEv));
-    vscode.window.setStatusBarMessage(`Pyokka: copied value of ${exp.text}`, 2500);
+    vscode.window.setStatusBarMessage(`Tracelight: copied value of ${exp.text}`, 2500);
   }
 
   clearValue(): void {
@@ -210,7 +210,7 @@ export class LiveValues implements vscode.Disposable {
     const text = found ? entryText(found.entry) : typeof arg === 'string' ? arg : pickString(arg, ['text']);
     if (text) {
       await vscode.env.clipboard.writeText(text);
-      vscode.window.setStatusBarMessage('Pyokka: value copied', 2000);
+      vscode.window.setStatusBarMessage('Tracelight: value copied', 2000);
     }
   }
 
@@ -258,7 +258,7 @@ export class LiveValues implements vscode.Disposable {
     // a link names its session; one that does not (the ≈ shadow hover) means the active one
     const session = ref.sessionKey ? this.manager.getByKey(ref.sessionKey) : this.manager.active();
     if (!session || session.isDisposed) {
-      vscode.window.setStatusBarMessage('Pyokka: that value belongs to a session that has stopped', 5000);
+      vscode.window.setStatusBarMessage('Tracelight: that value belongs to a session that has stopped', 5000);
       return undefined;
     }
     // while a run is in flight the table is still the old run's (until run.started) and runNow has emptied the pins
@@ -266,7 +266,7 @@ export class LiveValues implements vscode.Disposable {
     if (direct) return { session, entry: direct };
     const entry = ref.exp && !session.running ? await this.reevaluate(session, ref.exp, ref.range) : undefined;
     if (entry) return { session, entry };
-    vscode.window.setStatusBarMessage('Pyokka: that value belongs to an earlier run; hover again to refresh it', 5000);
+    vscode.window.setStatusBarMessage('Tracelight: that value belongs to an earlier run; hover again to refresh it', 5000);
     return undefined;
   }
 

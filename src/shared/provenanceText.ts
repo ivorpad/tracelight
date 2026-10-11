@@ -1,5 +1,5 @@
 /**
- * The text form of a provenance tree (docs/PROTOCOL.md, "Provenance"): the lines `pyokka why`
+ * The text form of a provenance tree (docs/PROTOCOL.md, "Provenance"): the lines `tracelight why`
  * prints and the Details pane shows. Pure and vscode-free, so the host and the webview share
  * it. The runtime's twin is in `node/src/agent/render.ts`; keep the
  * rules identical.

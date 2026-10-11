@@ -9,7 +9,7 @@ const noop = () => undefined;
 const tips = (html: string): string[] => [...html.matchAll(/data-tip="([^"]+)"/g)].map((m) => m[1]!);
 
 const row = (over: Partial<HttpTableRow> = {}): HttpTableRow => ({ n: 1, client: 'httpx', method: 'POST', url: 'https://api.openai.com/v1/responses?key&v=1', name: 'responses', status: 200, reason: 'OK', bytes: 6812, ms: 1834, recordedMs: null, source: 'recorded', step: 88, location: { file: 'agent.py', line: 16, col: 0, fileId: 1 }, ...over });
-const summary = (over: Partial<HttpSummary> = {}): HttpSummary => ({ mode: 'record', requests: 3, recorded: 3, served: 0, misses: 0, file: '/w/.pyokka/replay/3f2a.jsonl', exists: true, recordedAt: '2026-09-11T10:12:03Z', entries: 3, ...over });
+const summary = (over: Partial<HttpSummary> = {}): HttpSummary => ({ mode: 'record', requests: 3, recorded: 3, served: 0, misses: 0, file: '/w/.tracelight/replay/3f2a.jsonl', exists: true, recordedAt: '2026-09-11T10:12:03Z', entries: 3, ...over });
 const zero = { requests: 0, bytes: 0, ms: 0, misses: 0, missAttempts: 0 };
 const panel = (over: Partial<HttpPanel> = {}): HttpPanel => ({
   runId: 'r-1',
@@ -69,7 +69,7 @@ describe('HttpPane', () => {
     expect(running).toContain('>responses<');
     expect(running).toContain('pk-http-row static"');
     expect(pane(panel({ requests: [], count: 0, totals: zero }))).toContain('No HTTP requests in this run');
-    expect(pane(panel({ requests: [], count: 0, totals: zero, finished: null }))).toContain('HTTP clients untouched (pyokka.httpObserve is off)');
+    expect(pane(panel({ requests: [], count: 0, totals: zero, finished: null }))).toContain('HTTP clients untouched (tracelight.httpObserve is off)');
     expect(pane(panel({ requests: [], count: 0, totals: zero, finished: null }))).not.toContain('pk-http-footer');
   });
   it('disables Open recording without a file, and rows without a step or statement are static with a dim mark', () => {

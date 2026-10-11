@@ -40,68 +40,68 @@ describe('package.json contributions', () => {
   it('keeps Start on Current File in the command palette without an editor gate', () => {
     // `activeEditor` is unset with focus in the panel or an empty editor area; the command
     // opens a new Python file when there is no editor, so it needs no gate
-    const entries = palette.filter((e) => e.command === 'pyokka.startOnCurrentFile');
+    const entries = palette.filter((e) => e.command === 'tracelight.startOnCurrentFile');
     expect(entries.length).toBeGreaterThan(0);
     for (const e of entries) expect(e.when ?? '').toBe('');
   });
   it('lists the interpreter picker, the start view, the logs and the cache clear unconditionally', () => {
-    for (const cmd of ['pyokka.selectInterpreter', 'pyokka.openStartView', 'pyokka.showLogs', 'pyokka.clearLibraryCache']) {
+    for (const cmd of ['tracelight.selectInterpreter', 'tracelight.openStartView', 'tracelight.showLogs', 'tracelight.clearLibraryCache']) {
       const e = palette.find((x) => x.command === cmd);
       expect(e, cmd).toBeDefined();
       expect(e?.when ?? '', cmd).not.toBe('false');
     }
   });
-  it('offers pyokka.http as an off / record / replay choice that defaults to off', () => {
-    const http = settings['pyokka.http'];
+  it('offers tracelight.http as an off / record / replay choice that defaults to off', () => {
+    const http = settings['tracelight.http'];
     expect(http).toBeDefined();
     expect(http?.type).toBe('string');
     expect(http?.default).toBe('off');
     expect(http?.enum).toEqual(['off', 'record', 'replay']);
     expect(http?.enumDescriptions?.length).toBe(3);
-    expect(http?.markdownDescription).toContain('.pyokka/replay/');
+    expect(http?.markdownDescription).toContain('.tracelight/replay/');
   });
-  it('offers pyokka.httpObserve as a boolean that defaults to on', () => {
-    const observe = settings['pyokka.httpObserve'];
+  it('offers tracelight.httpObserve as a boolean that defaults to on', () => {
+    const observe = settings['tracelight.httpObserve'];
     expect(observe).toBeDefined();
     expect(observe?.type).toBe('boolean');
     expect(observe?.default).toBe(true);
     expect(observe?.markdownDescription ?? observe?.description).toContain('HTTP view');
   });
   it('offers the Execution Diagram settings with the folded defaults', () => {
-    expect(settings['pyokka.diagram.build']).toMatchObject({ type: 'string', default: 'onOpen', enum: ['onOpen', 'onRun'] });
-    expect(settings['pyokka.diagram.build']?.enumDescriptions?.length).toBe(2);
-    expect(settings['pyokka.diagram.detail']).toMatchObject({ type: 'string', default: 'scopes', enum: ['scopes', 'statements'] });
-    expect(settings['pyokka.diagram.dataEdges']).toMatchObject({ type: 'boolean', default: false });
-    expect(settings['pyokka.diagram.phases']).toMatchObject({ type: 'boolean', default: true });
-    expect(settings['pyokka.story.walkthrough']?.default).toBe(false);
-    expect(settings['pyokka.story.values']).toMatchObject({ type: 'string', default: 'all', enum: ['all', 'asOf', 'step'] });
+    expect(settings['tracelight.diagram.build']).toMatchObject({ type: 'string', default: 'onOpen', enum: ['onOpen', 'onRun'] });
+    expect(settings['tracelight.diagram.build']?.enumDescriptions?.length).toBe(2);
+    expect(settings['tracelight.diagram.detail']).toMatchObject({ type: 'string', default: 'scopes', enum: ['scopes', 'statements'] });
+    expect(settings['tracelight.diagram.dataEdges']).toMatchObject({ type: 'boolean', default: false });
+    expect(settings['tracelight.diagram.phases']).toMatchObject({ type: 'boolean', default: true });
+    expect(settings['tracelight.story.walkthrough']?.default).toBe(false);
+    expect(settings['tracelight.story.values']).toMatchObject({ type: 'string', default: 'all', enum: ['all', 'asOf', 'step'] });
   });
   it('mirrors the editor-title Time Machine buttons for the Code Story scheme', () => {
     // Quokka declares them twice, both halves gated on its previous-generation UI flag, which
-    // Pyokka maps to false; only the story half is kept, without the gate (design doc T4)
+    // Tracelight maps to false; only the story half is kept, without the gate (design doc T4)
     const title = manifest.contributes.menus['editor/title'] ?? [];
     expect(title.map((e) => e.command)).toEqual([
-      'pyokka.playTraceBackwardToSelection',
-      'pyokka.playTracePrevStepOut',
-      'pyokka.playTracePrevStep',
-      'pyokka.playTracePrevStepOver',
-      'pyokka.stopTraceNavigation',
-      'pyokka.playTraceNextStepOver',
-      'pyokka.playTraceNextStep',
-      'pyokka.playTraceNextStepOut',
-      'pyokka.playTraceForwardToSelection',
-      'pyokka.playTraceBackwardToBreakpoint',
-      'pyokka.playTraceForwardToBreakpoint',
+      'tracelight.playTraceBackwardToSelection',
+      'tracelight.playTracePrevStepOut',
+      'tracelight.playTracePrevStep',
+      'tracelight.playTracePrevStepOver',
+      'tracelight.stopTraceNavigation',
+      'tracelight.playTraceNextStepOver',
+      'tracelight.playTraceNextStep',
+      'tracelight.playTraceNextStepOut',
+      'tracelight.playTraceForwardToSelection',
+      'tracelight.playTraceBackwardToBreakpoint',
+      'tracelight.playTraceForwardToBreakpoint',
     ]);
     for (const e of title) {
-      expect(e.when ?? '', e.command).toContain('resourceScheme == pyokka-code-timeline');
-      expect(e.when ?? '', e.command).toContain('pyokka.traceBeingNavigated');
+      expect(e.when ?? '', e.command).toContain('resourceScheme == tracelight-code-timeline');
+      expect(e.when ?? '', e.command).toContain('tracelight.traceBeingNavigated');
       expect(e.when ?? '', e.command).not.toContain('false');
       expect(commands.find((c) => c.command === e.command)?.icon, e.command).toMatch(/^\$\(/);
     }
   });
   it('gives the story document the editor defaults a generated document needs', () => {
-    const story = manifest.contributes.configurationDefaults['[pyokka-story]'] ?? {};
+    const story = manifest.contributes.configurationDefaults['[tracelight-story]'] ?? {};
     // every row carries its source line number in the text, so the editor's own gutter is off
     expect(story['editor.lineNumbers']).toBe('off');
     expect(story['editor.glyphMargin']).toBe(false);
@@ -112,23 +112,23 @@ describe('package.json contributions', () => {
     expect(story['editor.unicodeHighlight.invisibleCharacters']).toBe(false);
   });
   it('lets F5 fall through to Start Debugging when the active file has a breakpoint', () => {
-    // both Pyokka bindings on F5 shadow VS Code's Start Debugging while a session exists on the
+    // both Tracelight bindings on F5 shadow VS Code's Start Debugging while a session exists on the
     // file; the guard hands the key back so the run can pause at the breakpoint
     const f5 = keybindings.filter((k) => k.key === 'f5');
-    expect([...f5.map((k) => k.command)].sort()).toEqual(['pyokka.playTraceForwardToSelection', 'pyokka.reexecute']);
-    for (const k of f5) expect(k.when ?? '', k.command).toContain('!pyokka.activeFileHasBreakpoints');
+    expect([...f5.map((k) => k.command)].sort()).toEqual(['tracelight.playTraceForwardToSelection', 'tracelight.reexecute']);
+    for (const k of f5) expect(k.when ?? '', k.command).toContain('!tracelight.activeFileHasBreakpoints');
   });
   it('puts only the two debug starts in the panel title: once a session exists the VS Code debug toolbar steps it', () => {
-    const title = (manifest.contributes.menus['view/title'] ?? []).filter((e) => e.when?.includes('pyokka.output'));
-    expect(title.map((e) => e.command)).toEqual(['pyokka.debugCurrentFile', 'pyokka.debugCurrentFileRecording']);
-    const debug = title.find((e) => e.command === 'pyokka.debugCurrentFile');
-    expect(debug?.when).toContain('!pyokka.debugActive');
+    const title = (manifest.contributes.menus['view/title'] ?? []).filter((e) => e.when?.includes('tracelight.output'));
+    expect(title.map((e) => e.command)).toEqual(['tracelight.debugCurrentFile', 'tracelight.debugCurrentFileRecording']);
+    const debug = title.find((e) => e.command === 'tracelight.debugCurrentFile');
+    expect(debug?.when).toContain('!tracelight.debugActive');
     expect(debug?.group).toBe('navigation@0');
-    expect(commands.find((c) => c.command === 'pyokka.debugCurrentFile')?.icon).toBe('$(debug-alt)');
+    expect(commands.find((c) => c.command === 'tracelight.debugCurrentFile')?.icon).toBe('$(debug-alt)');
   });
-  it('declares every launch attribute of the Pyokka debugger, with no required one', () => {
+  it('declares every launch attribute of the Tracelight debugger, with no required one', () => {
     const dbg = manifest.contributes.debuggers[0]!;
-    expect(dbg.type).toBe('pyokka');
+    expect(dbg.type).toBe('tracelight');
     const launch = dbg.configurationAttributes.launch;
     // a launch may name `module` instead of `program`, so nothing is required here
     expect(launch.required).toEqual([]);
@@ -151,11 +151,11 @@ describe('package.json contributions', () => {
 
   it('shows the three launch shapes in launch.json and in the snippets', () => {
     const dbg = manifest.contributes.debuggers[0]!;
-    expect(dbg.initialConfigurations.map((c) => c.name)).toEqual(['Pyokka: Debug Current File', 'Pyokka: Debug Current File (Recording)', 'Pyokka: Debug Module']);
+    expect(dbg.initialConfigurations.map((c) => c.name)).toEqual(['Tracelight: Debug Current File', 'Tracelight: Debug Current File (Recording)', 'Tracelight: Debug Module']);
     expect(dbg.initialConfigurations[1]).toMatchObject({ program: '${file}', record: true });
     expect(dbg.initialConfigurations[2]).toMatchObject({ module: 'app.server', args: [], cwd: '${workspaceFolder}' });
-    expect(dbg.configurationSnippets.map((s) => s.label)).toEqual(['Pyokka: Debug Current File', 'Pyokka: Debug Current File (Recording)', 'Pyokka: Debug Module']);
-    for (const s of dbg.configurationSnippets) expect(s.body.type).toBe('pyokka');
+    expect(dbg.configurationSnippets.map((s) => s.label)).toEqual(['Tracelight: Debug Current File', 'Tracelight: Debug Current File (Recording)', 'Tracelight: Debug Module']);
+    for (const s of dbg.configurationSnippets) expect(s.body.type).toBe('tracelight');
   });
 
   it('activates on a URI', () => {
@@ -164,8 +164,8 @@ describe('package.json contributions', () => {
   });
 
   it('shows the panel and Show / Focus Output with no session, where the panel offers Start and Debug', () => {
-    expect(manifest.contributes.views['pyokka-output']?.[0]?.when).toBeUndefined();
-    for (const cmd of ['pyokka.showOutput', 'pyokka.focusOutput']) {
+    expect(manifest.contributes.views['tracelight-output']?.[0]?.when).toBeUndefined();
+    for (const cmd of ['tracelight.showOutput', 'tracelight.focusOutput']) {
       const entry = palette.find((e) => e.command === cmd);
       expect(entry, cmd).toBeTruthy();
       expect(entry?.when, cmd).toBeUndefined();
@@ -174,62 +174,62 @@ describe('package.json contributions', () => {
 
   it("offers Why This Value on a row of VS Code's Variables view while the Time Machine replays", () => {
     const menu = (manifest.contributes.menus as Record<string, { command: string; when?: string }[]>)['debug/variables/context'] ?? [];
-    expect(menu.map((e) => e.command)).toEqual(['pyokka.whyVariable']);
-    expect(menu[0]?.when).toBe('debugType == pyokka && pyokka.traceBeingNavigated');
-    expect(commands.find((c) => c.command === 'pyokka.whyVariable')?.title).toBe('Why This Value');
+    expect(menu.map((e) => e.command)).toEqual(['tracelight.whyVariable']);
+    expect(menu[0]?.when).toBe('debugType == tracelight && tracelight.traceBeingNavigated');
+    expect(commands.find((c) => c.command === 'tracelight.whyVariable')?.title).toBe('Why This Value');
   });
 
   it('keeps the backward keys in the replay debug session, and gives F10, F11 and Shift+F11 to VS Code there', () => {
     const when = (command: string) => keybindings.find((k) => k.command === command)?.when ?? '';
-    for (const c of ['pyokka.playTracePrevStep', 'pyokka.playTracePrevStepOver', 'pyokka.playTracePrevStepOut', 'pyokka.playTraceBackwardToSelection', 'pyokka.playTraceBackwardToBreakpoint', 'pyokka.playTraceForwardToBreakpoint']) {
-      expect(when(c), c).toContain('(!inDebugMode || debugType == pyokka)');
+    for (const c of ['tracelight.playTracePrevStep', 'tracelight.playTracePrevStepOver', 'tracelight.playTracePrevStepOut', 'tracelight.playTraceBackwardToSelection', 'tracelight.playTraceBackwardToBreakpoint', 'tracelight.playTraceForwardToBreakpoint']) {
+      expect(when(c), c).toContain('(!inDebugMode || debugType == tracelight)');
     }
-    for (const c of ['pyokka.playTraceNextStep', 'pyokka.playTraceNextStepOver', 'pyokka.playTraceNextStepOut']) {
+    for (const c of ['tracelight.playTraceNextStep', 'tracelight.playTraceNextStepOver', 'tracelight.playTraceNextStepOut']) {
       expect(when(c), c).toContain('!inDebugMode');
-      expect(when(c), c).not.toContain('debugType == pyokka');
+      expect(when(c), c).not.toContain('debugType == tracelight');
     }
   });
 
   it('keeps the debugger commands in the palette for a keyboard or an agent', () => {
-    for (const command of ['pyokka.debugStepOver', 'pyokka.debugStepInto', 'pyokka.debugStepOut', 'pyokka.debugRestart']) {
-      expect(palette.find((e) => e.command === command)?.when, command).toBe('pyokka.debugActive');
+    for (const command of ['tracelight.debugStepOver', 'tracelight.debugStepInto', 'tracelight.debugStepOut', 'tracelight.debugRestart']) {
+      expect(palette.find((e) => e.command === command)?.when, command).toBe('tracelight.debugActive');
     }
   });
 
   it('offers the recording start next to Debug in the panel and in the palette with no gate', () => {
-    const title = (manifest.contributes.menus['view/title'] ?? []).filter((e) => e.when?.includes('pyokka.output'));
-    const entry = title.find((e) => e.command === 'pyokka.debugCurrentFileRecording');
+    const title = (manifest.contributes.menus['view/title'] ?? []).filter((e) => e.when?.includes('tracelight.output'));
+    const entry = title.find((e) => e.command === 'tracelight.debugCurrentFileRecording');
     // right next to Debug; both are gated on !debugActive, so it never shows at the same time as Stop
     expect(entry?.group).toBe('navigation@1');
-    expect(entry?.when).toBe('view =~ /pyokka.output/ && !pyokka.debugActive');
-    expect(commands.find((c) => c.command === 'pyokka.debugCurrentFileRecording')?.title).toBe('Debug Current File (Recording)');
-    expect(commands.find((c) => c.command === 'pyokka.debugCurrentFileRecording')?.icon).toBe('$(debug-alt-small)');
+    expect(entry?.when).toBe('view =~ /tracelight.output/ && !tracelight.debugActive');
+    expect(commands.find((c) => c.command === 'tracelight.debugCurrentFileRecording')?.title).toBe('Debug Current File (Recording)');
+    expect(commands.find((c) => c.command === 'tracelight.debugCurrentFileRecording')?.icon).toBe('$(debug-alt-small)');
     // like Debug Current File: always offered, because it starts a session of its own
-    const inPalette = palette.find((e) => e.command === 'pyokka.debugCurrentFileRecording');
+    const inPalette = palette.find((e) => e.command === 'tracelight.debugCurrentFileRecording');
     expect(inPalette).toBeTruthy();
     expect(inPalette?.when).toBeUndefined();
   });
 
   it('lists Show HTTP Requests and Open HTTP Recording, in the palette while a session is active', () => {
-    for (const [cmd, title] of [['pyokka.showHttp', 'Show HTTP Requests'], ['pyokka.openHttpRecording', 'Open HTTP Recording']] as const) {
+    for (const [cmd, title] of [['tracelight.showHttp', 'Show HTTP Requests'], ['tracelight.openHttpRecording', 'Open HTTP Recording']] as const) {
       expect(commands.find((c) => c.command === cmd)?.title, cmd).toBe(title);
-      expect(palette.find((e) => e.command === cmd)?.when, cmd).toBe('pyokka.hasActiveSession');
+      expect(palette.find((e) => e.command === cmd)?.when, cmd).toBe('tracelight.hasActiveSession');
     }
   });
 });
 
-describe('Pyokka is Python only', () => {
+describe('Tracelight is Python only', () => {
   const JS = ['javascript', 'typescript', 'javascriptreact', 'typescriptreact'];
   it('contributes nothing for JavaScript / TypeScript: that is the Tracelight extension', () => {
     const text = JSON.stringify(manifest.contributes);
     for (const lang of JS) expect(text).not.toContain(`editorLangId == ${lang}`);
-    expect(text).not.toContain('pyokka-story-js');
-    expect(text).not.toContain('pyokka.nodePath');
-    for (const cmd of ['pyokka.newJavaScriptFile', 'pyokka.newTypeScriptFile', 'pyokka.selectNode']) expect(commands.find((c) => c.command === cmd), cmd).toBeUndefined();
+    expect(text).not.toContain('tracelight-story-js');
+    expect(text).not.toContain('tracelight.nodePath');
+    for (const cmd of ['tracelight.newJavaScriptFile', 'tracelight.newTypeScriptFile', 'tracelight.selectNode']) expect(commands.find((c) => c.command === cmd), cmd).toBeUndefined();
   });
   it('keeps its keys off JavaScript / TypeScript editors, where Tracelight binds the same ones', () => {
     for (const k of keybindings) {
-      if (k.when?.includes('isActiveEditorRunningPyokka') || k.when?.includes('pyokka.traceBeingNavigated')) continue;
+      if (k.when?.includes('isActiveEditorRunningTracelight') || k.when?.includes('tracelight.traceBeingNavigated')) continue;
       for (const lang of JS) expect(k.when, `${k.key} ${k.command}`).toContain(`editorLangId != ${lang}`);
     }
   });
@@ -238,16 +238,16 @@ describe('Pyokka is Python only', () => {
 describe('Tracelight manifest (tracelight/package.json)', async () => {
   const JS = ['javascript', 'typescript', 'javascriptreact', 'typescriptreact'];
   const { tracelightManifest } = await import('../../scripts/tracelight-manifest.mjs');
-  const pyokka = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
-  const tl = tracelightManifest(pyokka) as unknown as Manifest & { name: string; displayName: string; contributes: Manifest['contributes'] & { snippets: { language: string; path: string }[]; breakpoints: { language: string }[]; debuggers: { languages: string[] }[] } };
+  const tracelight = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
+  const tl = tracelightManifest(tracelight) as unknown as Manifest & { name: string; displayName: string; contributes: Manifest['contributes'] & { snippets: { language: string; path: string }[]; breakpoints: { language: string }[]; debuggers: { languages: string[] }[] } };
   const c = tl.contributes;
   it('is what scripts/tracelight-manifest.mjs writes now', () => {
     expect(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'tracelight', 'package.json'), 'utf8'))).toEqual(tl);
   });
-  it('is its own extension: every id is tracelight, none is pyokka', () => {
+  it('is its own extension: every id is tracelight, none is tracelight', () => {
     expect(tl.name).toBe('tracelight');
     expect(tl.displayName).toBe('Tracelight');
-    expect(JSON.stringify(tl)).not.toMatch(/pyokka/i);
+    expect(JSON.stringify(tl)).not.toMatch(/tracelight/i);
     for (const x of c.commands) expect(x.command).toMatch(/^tracelight\./);
     for (const k of Object.keys(c.configuration.properties)) expect(k).toMatch(/^tracelight\./);
     expect(c.debuggers[0]!.type).toBe('tracelight');
@@ -263,7 +263,7 @@ describe('Tracelight manifest (tracelight/package.json)', async () => {
     const story = (c.menus.commandPalette ?? []).find((e) => e.command === 'tracelight.viewCodeStory');
     expect(story?.when).toContain('editorLangId == tracelight-story-js');
   });
-  it('binds its keys in JS/TS editors only, so they never clash with Pyokka\'s', () => {
+  it('binds its keys in JS/TS editors only, so they never clash with Tracelight\'s', () => {
     for (const k of c.keybindings) {
       if (k.when?.includes('isActiveEditorRunningTracelight') || k.when?.includes('tracelight.traceBeingNavigated')) continue;
       for (const lang of JS) expect(k.when, `${k.key} ${k.command}`).toContain(`editorLangId == ${lang}`);
@@ -275,14 +275,14 @@ describe('Tracelight manifest (tracelight/package.json)', async () => {
     expect(c.breakpoints.map((b) => b.language)).toEqual(JS);
     for (const lang of JS) expect(c.snippets.find((s) => s.language === lang)?.path).toBe('./snippets/tracelight.code-snippets');
     expect(c.grammars.find((g) => g.injectTo?.includes('source.ts'))?.path).toBe('./syntaxes/tracelight-snap-js.tmLanguage.json');
-    // each grammar is built from a file of syntaxes/ under Pyokka's name (esbuild.mjs --tracelight)
-    for (const g of c.grammars) expect(fs.existsSync(path.join(__dirname, '..', '..', g.path.replace('tracelight', 'pyokka'))), g.path).toBe(true);
+    // each grammar is built from a file of syntaxes/ under Tracelight's name (esbuild.mjs --tracelight)
+    for (const g of c.grammars) expect(fs.existsSync(path.join(__dirname, '..', '..', g.path.replace('tracelight', 'tracelight'))), g.path).toBe(true);
   });
   it('colours the story as TypeScript, with the story editor defaults', () => {
     const grammar = c.grammars.find((g) => g.language === 'tracelight-story-js');
     expect(grammar?.path).toBe('./syntaxes/tracelight-story-js.tmLanguage.json');
-    expect(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'syntaxes', 'pyokka-story-js.tmLanguage.json'), 'utf8')).repository.block.patterns).toEqual([{ include: 'source.tsx' }]);
-    expect(c.configurationDefaults['[tracelight-story-js]']).toEqual(manifest.contributes.configurationDefaults['[pyokka-story]']);
+    expect(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'syntaxes', 'tracelight-story-js.tmLanguage.json'), 'utf8')).repository.block.patterns).toEqual([{ include: 'source.tsx' }]);
+    expect(c.configurationDefaults['[tracelight-story-js]']).toEqual(manifest.contributes.configurationDefaults['[tracelight-story]']);
   });
   it('has New JavaScript/TypeScript File and the Node picker, and no Python commands', () => {
     for (const cmd of ['tracelight.newJavaScriptFile', 'tracelight.newTypeScriptFile', 'tracelight.selectNode']) expect(c.commands.find((x) => x.command === cmd), cmd).toBeDefined();

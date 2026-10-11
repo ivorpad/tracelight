@@ -42,7 +42,7 @@ export function Walkthrough({ model, currentStep, open, onToggle, onGoto, onNarr
   const moments = model?.moments ?? [];
   const active = activeMomentIndex(moments, currentStep);
   const narrated = moments.some((m) => m.gloss);
-  const narrateTitle = !model ? 'Narrate: run the file first' : model.narrating ? 'Narrating… (one model call)' : !model.canNarrate ? 'Narrate: install claude or codex, set pyokka.explain.command, or sign in to Copilot' : narrated ? 'Narrated (one model call per run)' : 'Narrate: one model call adds a sentence per moment';
+  const narrateTitle = !model ? 'Narrate: run the file first' : model.narrating ? 'Narrating… (one model call)' : !model.canNarrate ? 'Narrate: install claude or codex, set tracelight.explain.command, or sign in to Copilot' : narrated ? 'Narrated (one model call per run)' : 'Narrate: one model call adds a sentence per moment';
   return (
     <section class={`pk-pane pk-walkthrough${open ? '' : ' collapsed'}`} aria-label="Walkthrough">
       <header class="pk-pane-header" onClick={onToggle}>
@@ -112,7 +112,7 @@ export function Walkthrough({ model, currentStep, open, onToggle, onGoto, onNarr
                   </div>
                 </div>
               ))}
-              {model.truncated && <div class="pk-moment-more pk-walkthrough-truncated">… {model.total - model.shown} more moments; `pyokka walkthrough --from N --to M` lists a window</div>}
+              {model.truncated && <div class="pk-moment-more pk-walkthrough-truncated">… {model.total - model.shown} more moments; `tracelight walkthrough --from N --to M` lists a window</div>}
             </div>
           )}
         </div>

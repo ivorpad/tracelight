@@ -52,7 +52,7 @@ export interface StoryBlockInput {
   note?: string;
 }
 
-/** Which values the story paints (`pyokka.story.values`). */
+/** Which values the story paints (`tracelight.story.values`). */
 export type StoryValuesMode = 'all' | 'asOf' | 'step';
 
 /** One painted value, as the test API reports it: the document row, the block and source line it sits on. */

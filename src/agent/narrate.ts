@@ -62,7 +62,7 @@ export function resolveBackend(command: string | undefined, which: (name: string
   if (command && command.trim()) return { name: 'custom', argv: splitCommand(command.trim()) };
   if (which('claude')) return { name: 'claude', argv: ['claude', ...CLAUDE_ARGS] };
   if (which('codex')) {
-    const outputFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pyokka-narrate-')), 'last-message.md');
+    const outputFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tracelight-narrate-')), 'last-message.md');
     return { name: 'codex', argv: ['codex', ...CODEX_ARGS, outputFile, '-'], outputFile };
   }
   return undefined;
@@ -70,15 +70,15 @@ export function resolveBackend(command: string | undefined, which: (name: string
 
 /** Run the backend with the prompt on stdin; resolves with the model's answer text. */
 export function runBackend(backend: Backend, prompt: string, opts: { timeoutMs?: number; cwd?: string } = {}): Promise<string> {
-  const cwd = opts.cwd ?? (backend.name === 'custom' ? undefined : fs.mkdtempSync(path.join(os.tmpdir(), 'pyokka-narrate-')));
+  const cwd = opts.cwd ?? (backend.name === 'custom' ? undefined : fs.mkdtempSync(path.join(os.tmpdir(), 'tracelight-narrate-')));
   return new Promise((resolve, reject) => {
     const [cmd, ...args] = backend.argv;
-    if (!cmd) return reject(new NarrationError('empty narration command', 'set pyokka.explain.command to a command that reads the prompt on stdin'));
+    if (!cmd) return reject(new NarrationError('empty narration command', 'set tracelight.explain.command to a command that reads the prompt on stdin'));
     let child;
     try {
       child = spawn(cmd, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (err) {
-      return reject(new NarrationError(`${cmd} could not start: ${err instanceof Error ? err.message : String(err)}`, 'check pyokka.explain.command'));
+      return reject(new NarrationError(`${cmd} could not start: ${err instanceof Error ? err.message : String(err)}`, 'check tracelight.explain.command'));
     }
     let stdout = '';
     let stderr = '';
@@ -91,13 +91,13 @@ export function runBackend(backend: Backend, prompt: string, opts: { timeoutMs?:
     };
     const timer = setTimeout(() => {
       child.kill();
-      finish(() => reject(new NarrationError(`${cmd} took longer than ${Math.round((opts.timeoutMs ?? NARRATE_TIMEOUT_MS) / 1000)} s`, 'try again, or a faster model in pyokka.explain.command')));
+      finish(() => reject(new NarrationError(`${cmd} took longer than ${Math.round((opts.timeoutMs ?? NARRATE_TIMEOUT_MS) / 1000)} s`, 'try again, or a faster model in tracelight.explain.command')));
     }, opts.timeoutMs ?? NARRATE_TIMEOUT_MS);
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (c: string) => (stdout += c));
     child.stderr.on('data', (c: string) => (stderr += c));
-    child.on('error', (err: NodeJS.ErrnoException) => finish(() => reject(err.code === 'ENOENT' ? new NarrationError(`${cmd} is not on the PATH`, 'install it, or set pyokka.explain.command to a command that reads the prompt on stdin') : new NarrationError(`${cmd} failed: ${err.message}`, 'run the command by hand to see why'))));
+    child.on('error', (err: NodeJS.ErrnoException) => finish(() => reject(err.code === 'ENOENT' ? new NarrationError(`${cmd} is not on the PATH`, 'install it, or set tracelight.explain.command to a command that reads the prompt on stdin') : new NarrationError(`${cmd} failed: ${err.message}`, 'run the command by hand to see why'))));
     child.on('close', (code) => {
       finish(() => {
         if (code !== 0) return reject(new NarrationError(`${cmd} exited with ${code}: ${redact((stderr || stdout).trim().slice(-400))}`, 'run the command by hand to see why'));

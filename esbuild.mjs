@@ -5,11 +5,11 @@ import { tracelightSources, toTracelight } from './scripts/brand.mjs';
 const watch = process.argv.includes('--watch');
 const production = process.argv.includes('--production');
 // `--tracelight` builds the Tracelight extension (JavaScript / TypeScript) into tracelight/ from the
-// same sources, renamed (src/brand.ts, scripts/brand.mjs); without it, Pyokka (Python) into dist/
+// same sources, renamed (src/brand.ts, scripts/brand.mjs); without it, Tracelight (Python) into dist/
 const tracelight = process.argv.includes('--tracelight');
 const ROOT = new URL('.', import.meta.url).pathname.replace(/\/$/, '');
 const OUT = tracelight ? 'tracelight/dist' : 'dist';
-const brand = tracelight ? { plugins: [tracelightSources(ROOT)], define: { __BRAND__: '"tracelight"' } } : { plugins: [], define: { __BRAND__: '"pyokka"' } };
+const brand = tracelight ? { plugins: [tracelightSources(ROOT)], define: { __BRAND__: '"tracelight"' } } : { plugins: [], define: { __BRAND__: '"tracelight"' } };
 const stamp = JSON.stringify(new Date().toISOString().replace('T', ' ').slice(0, 19) + (production ? '' : ' dev'));
 
 const common = { bundle: true, sourcemap: !production, minify: production, logLevel: 'info' };
@@ -24,7 +24,7 @@ const extension = {
   external: ['vscode'],
   plugins: brand.plugins,
   // stamped into the activation log and the status bar tooltip so a stale extension host is obvious
-  define: { ...brand.define, __PYOKKA_BUILD__: stamp, __TRACELIGHT_BUILD__: stamp },
+  define: { ...brand.define, __TRACELIGHT_BUILD__: stamp, __TRACELIGHT_BUILD__: stamp },
 };
 
 const webview = {
@@ -44,7 +44,7 @@ const webview = {
   define: { ...brand.define, 'process.env.NODE_ENV': production ? '"production"' : '"development"' },
 };
 
-// Pyokka in a browser (docs/WEB.md): the bridge server and the page around the same panel
+// Tracelight in a browser (docs/WEB.md): the bridge server and the page around the same panel
 const webServer = {
   ...common,
   entryPoints: ['web/server.ts'],
@@ -97,13 +97,13 @@ if (tracelight) {
   copyCodicons('tracelight/dist');
   mkdirSync('tracelight/syntaxes', { recursive: true });
   for (const f of readdirSync('syntaxes')) {
-    if (/pyokka-(story|snap)\.tmLanguage/.test(f)) continue; // the Python ones
+    if (/tracelight-(story|snap)\.tmLanguage/.test(f)) continue; // the Python ones
     writeFileSync(`tracelight/syntaxes/${toTracelight(f)}`, toTracelight(readFileSync(`syntaxes/${f}`, 'utf8')));
   }
   mkdirSync('tracelight/snippets', { recursive: true });
   cpSync('snippets/tracelight.code-snippets', 'tracelight/snippets/tracelight.code-snippets');
   cpSync('media', 'tracelight/media', { recursive: true, filter: (p) => !/\.(mp4|gif|mov)$/.test(p) });
-  // Tracelight's own icons under the names the manifest shares with Pyokka's
+  // Tracelight's own icons under the names the manifest shares with Tracelight's
   cpSync('media/tracelight-logo.png', 'tracelight/media/logo.png');
   cpSync('media/tracelight-logo-outline.svg', 'tracelight/media/logo-outline.svg');
   cpSync('media/tracelight-logo.svg', 'tracelight/media/logo.svg');
@@ -117,7 +117,7 @@ if (tracelight) {
   cpSync('python/pyokka_runtime', 'dist/python/pyokka_runtime', { recursive: true, filter: (p) => !p.includes('__pycache__') });
   // JavaScript / TypeScript is the Tracelight extension's now (`--tracelight`); drop a runtime an older build left
   rmSync('dist/node', { recursive: true, force: true });
-  copyTourPrompt('pyokka', 'dist');
+  copyTourPrompt('tracelight', 'dist');
   copyCodicons('dist');
   mkdirSync('dist/web', { recursive: true });
   cpSync('web/index.html', 'dist/web/index.html');

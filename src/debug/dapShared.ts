@@ -6,8 +6,8 @@ import type { CompletionKind, ValueNode } from '../shared/protocol';
 import { exceptionText, type ExceptionMode, type PausedInfo } from '../session/debugState';
 import type { DapCapabilities, DapStoppedBody } from './dapTypes';
 
-/** the debugger type of every Pyokka debug session: the debugger, a recording run and the Time Machine's replay */
-export const DEBUG_TYPE = 'pyokka';
+/** the debugger type of every Tracelight debug session: the debugger, a recording run and the Time Machine's replay */
+export const DEBUG_TYPE = 'tracelight';
 
 export const THREAD_ID = 1;
 
