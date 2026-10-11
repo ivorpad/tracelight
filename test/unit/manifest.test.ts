@@ -12,8 +12,12 @@ interface LaunchAttribute {
 }
 
 interface Manifest {
+  name: string;
+  displayName: string;
   activationEvents: string[];
   contributes: {
+    snippets: { language: string; path: string }[];
+    breakpoints: { language: string }[];
     commands: { command: string; title: string; icon?: string }[];
     menus: Record<string, { command: string; when?: string; group?: string }[]>;
     keybindings: { command: string; key: string; mac?: string; when?: string }[];
@@ -23,6 +27,7 @@ interface Manifest {
     configuration: { properties: Record<string, { type?: string; default?: unknown; enum?: string[]; enumDescriptions?: string[]; description?: string; markdownDescription?: string }> };
     debuggers: {
       type: string;
+      languages: string[];
       configurationAttributes: { launch: { required: string[]; properties: Record<string, LaunchAttribute> } };
       initialConfigurations: Record<string, unknown>[];
       configurationSnippets: { label: string; description?: string; body: Record<string, unknown> }[];
@@ -35,17 +40,18 @@ const palette = manifest.contributes.menus.commandPalette ?? [];
 const settings = manifest.contributes.configuration.properties;
 const commands = manifest.contributes.commands;
 const keybindings = manifest.contributes.keybindings;
+const JS = ['javascript', 'typescript', 'javascriptreact', 'typescriptreact'];
 
 describe('package.json contributions', () => {
   it('keeps Start on Current File in the command palette without an editor gate', () => {
     // `activeEditor` is unset with focus in the panel or an empty editor area; the command
-    // opens a new Python file when there is no editor, so it needs no gate
+    // opens a new JavaScript file when there is no editor, so it needs no gate
     const entries = palette.filter((e) => e.command === 'tracelight.startOnCurrentFile');
     expect(entries.length).toBeGreaterThan(0);
     for (const e of entries) expect(e.when ?? '').toBe('');
   });
-  it('lists the interpreter picker, the start view, the logs and the cache clear unconditionally', () => {
-    for (const cmd of ['tracelight.selectInterpreter', 'tracelight.openStartView', 'tracelight.showLogs', 'tracelight.clearLibraryCache']) {
+  it('lists the Node picker, the start view, the logs and the cache clear unconditionally', () => {
+    for (const cmd of ['tracelight.selectNode', 'tracelight.openStartView', 'tracelight.showLogs', 'tracelight.clearLibraryCache']) {
       const e = palette.find((x) => x.command === cmd);
       expect(e, cmd).toBeDefined();
       expect(e?.when ?? '', cmd).not.toBe('false');
@@ -101,7 +107,7 @@ describe('package.json contributions', () => {
     }
   });
   it('gives the story document the editor defaults a generated document needs', () => {
-    const story = manifest.contributes.configurationDefaults['[tracelight-story]'] ?? {};
+    const story = manifest.contributes.configurationDefaults['[tracelight-story-js]'] ?? {};
     // every row carries its source line number in the text, so the editor's own gutter is off
     expect(story['editor.lineNumbers']).toBe('off');
     expect(story['editor.glyphMargin']).toBe(false);
@@ -130,18 +136,17 @@ describe('package.json contributions', () => {
     const dbg = manifest.contributes.debuggers[0]!;
     expect(dbg.type).toBe('tracelight');
     const launch = dbg.configurationAttributes.launch;
-    // a launch may name `module` instead of `program`, so nothing is required here
+    // a launch without `program` debugs the active file, so nothing is required here
     expect(launch.required).toEqual([]);
     const p = launch.properties;
-    expect(Object.keys(p).sort()).toEqual(['args', 'breakOnException', 'cwd', 'env', 'libraryCode', 'module', 'program', 'python', 'record', 'stopOnEntry']);
+    expect(Object.keys(p).sort()).toEqual(['args', 'breakOnException', 'cwd', 'env', 'libraryCode', 'node', 'program', 'record', 'stopOnEntry']);
     expect(p['program']).toMatchObject({ type: 'string', default: '${file}' });
-    expect(p['module']).toMatchObject({ type: 'string' });
     expect(p['args']).toMatchObject({ type: 'array', default: [] });
     expect(p['args']!.items).toEqual({ type: 'string' });
     expect(p['cwd']).toMatchObject({ type: 'string', default: '${workspaceFolder}' });
     expect(p['env']).toMatchObject({ type: 'object', default: {} });
     expect(p['env']!.additionalProperties).toEqual({ type: 'string' });
-    expect(p['python']).toMatchObject({ type: 'string' });
+    expect(p['node']).toMatchObject({ type: 'string' });
     expect(p['stopOnEntry']).toMatchObject({ type: 'boolean', default: false });
     expect(p['breakOnException']).toMatchObject({ type: 'string', default: 'uncaught', enum: ['off', 'uncaught', 'raised'] });
     expect(p['libraryCode']).toMatchObject({ type: 'boolean', default: false });
@@ -149,18 +154,17 @@ describe('package.json contributions', () => {
     for (const [name, spec] of Object.entries(p)) expect(spec.description, name).toBeTruthy();
   });
 
-  it('shows the three launch shapes in launch.json and in the snippets', () => {
+  it('shows the two launch shapes in launch.json and in the snippets', () => {
     const dbg = manifest.contributes.debuggers[0]!;
-    expect(dbg.initialConfigurations.map((c) => c.name)).toEqual(['Tracelight: Debug Current File', 'Tracelight: Debug Current File (Recording)', 'Tracelight: Debug Module']);
+    expect(dbg.initialConfigurations.map((c) => c.name)).toEqual(['Tracelight: Debug Current File', 'Tracelight: Debug Current File (Recording)']);
     expect(dbg.initialConfigurations[1]).toMatchObject({ program: '${file}', record: true });
-    expect(dbg.initialConfigurations[2]).toMatchObject({ module: 'app.server', args: [], cwd: '${workspaceFolder}' });
-    expect(dbg.configurationSnippets.map((s) => s.label)).toEqual(['Tracelight: Debug Current File', 'Tracelight: Debug Current File (Recording)', 'Tracelight: Debug Module']);
+    expect(dbg.configurationSnippets.map((s) => s.label)).toEqual(['Tracelight: Debug Current File', 'Tracelight: Debug Current File (Recording)']);
     for (const s of dbg.configurationSnippets) expect(s.body.type).toBe('tracelight');
   });
 
   it('activates on a URI', () => {
     // assigned, not defaulted: without `onUri` the URI handler would never be registered
-    expect(manifest.activationEvents).toEqual(['onLanguage:python', 'onStartupFinished', 'onUri']);
+    expect(manifest.activationEvents).toEqual([...JS.map((l) => `onLanguage:${l}`), 'onStartupFinished', 'onUri']);
   });
 
   it('shows the panel and Show / Focus Output with no session, where the panel offers Start and Debug', () => {
@@ -218,52 +222,31 @@ describe('package.json contributions', () => {
   });
 });
 
-describe('Tracelight is Python only', () => {
-  const JS = ['javascript', 'typescript', 'javascriptreact', 'typescriptreact'];
-  it('contributes nothing for JavaScript / TypeScript: that is the Tracelight extension', () => {
-    const text = JSON.stringify(manifest.contributes);
-    for (const lang of JS) expect(text).not.toContain(`editorLangId == ${lang}`);
-    expect(text).not.toContain('tracelight-story-js');
-    expect(text).not.toContain('tracelight.nodePath');
-    for (const cmd of ['tracelight.newJavaScriptFile', 'tracelight.newTypeScriptFile', 'tracelight.selectNode']) expect(commands.find((c) => c.command === cmd), cmd).toBeUndefined();
-  });
-  it('keeps its keys off JavaScript / TypeScript editors, where Tracelight binds the same ones', () => {
-    for (const k of keybindings) {
-      if (k.when?.includes('isActiveEditorRunningTracelight') || k.when?.includes('tracelight.traceBeingNavigated')) continue;
-      for (const lang of JS) expect(k.when, `${k.key} ${k.command}`).toContain(`editorLangId != ${lang}`);
-    }
-  });
-});
-
-describe('Tracelight manifest (tracelight/package.json)', async () => {
-  const JS = ['javascript', 'typescript', 'javascriptreact', 'typescriptreact'];
-  const { tracelightManifest } = await import('../../scripts/tracelight-manifest.mjs');
-  const tracelight = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
-  const tl = tracelightManifest(tracelight) as unknown as Manifest & { name: string; displayName: string; contributes: Manifest['contributes'] & { snippets: { language: string; path: string }[]; breakpoints: { language: string }[]; debuggers: { languages: string[] }[] } };
-  const c = tl.contributes;
-  it('is what scripts/tracelight-manifest.mjs writes now', () => {
-    expect(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'tracelight', 'package.json'), 'utf8'))).toEqual(tl);
-  });
-  it('is its own extension: every id is tracelight, none is tracelight', () => {
-    expect(tl.name).toBe('tracelight');
-    expect(tl.displayName).toBe('Tracelight');
-    expect(JSON.stringify(tl)).not.toMatch(/tracelight/i);
+describe('Tracelight runs JavaScript and TypeScript', () => {
+  const c = manifest.contributes;
+  it('is its own extension: every id is tracelight', () => {
+    expect(manifest.name).toBe('tracelight');
+    expect(manifest.displayName).toBe('Tracelight');
+    expect(JSON.stringify(manifest)).not.toMatch(/pyokka/i);
     for (const x of c.commands) expect(x.command).toMatch(/^tracelight\./);
     for (const k of Object.keys(c.configuration.properties)) expect(k).toMatch(/^tracelight\./);
     expect(c.debuggers[0]!.type).toBe('tracelight');
     expect(Object.keys(c.views)).toEqual(['tracelight-output']);
   });
-  it('activates on JS/TS files and on a URI, never on Python', () => {
-    expect(tl.activationEvents).toEqual([...JS.map((l) => `onLanguage:${l}`), 'onStartupFinished', 'onUri']);
+  it('contributes nothing for Python', () => {
+    const text = JSON.stringify(c);
+    expect(text).not.toContain('editorLangId == python');
+    expect(text).not.toContain('source.python');
+    expect(c.configuration.properties['tracelight.python.interpreter']).toBeUndefined();
+    for (const cmd of ['tracelight.newPythonFile', 'tracelight.selectInterpreter']) expect(c.commands.find((x) => x.command === cmd), cmd).toBeUndefined();
   });
-  it('shows the Start button and the Time Machine commands in JS/TS editors only', () => {
+  it('shows the Start button and the Code Story command in JS/TS editors only', () => {
     const start = c.menus['editor/title/run']!.find((e) => e.command === 'tracelight.startOnCurrentFile');
     for (const lang of JS) expect(start?.when).toContain(`editorLangId == ${lang}`);
-    expect(JSON.stringify(c.menus)).not.toContain('editorLangId == python');
     const story = (c.menus.commandPalette ?? []).find((e) => e.command === 'tracelight.viewCodeStory');
     expect(story?.when).toContain('editorLangId == tracelight-story-js');
   });
-  it('binds its keys in JS/TS editors only, so they never clash with Tracelight\'s', () => {
+  it('binds its keys in JS/TS editors only', () => {
     for (const k of c.keybindings) {
       if (k.when?.includes('isActiveEditorRunningTracelight') || k.when?.includes('tracelight.traceBeingNavigated')) continue;
       for (const lang of JS) expect(k.when, `${k.key} ${k.command}`).toContain(`editorLangId == ${lang}`);
@@ -271,24 +254,19 @@ describe('Tracelight manifest (tracelight/package.json)', async () => {
   });
   it('offers the debugger, breakpoints, snippets and the snap-output grammar for JS/TS', () => {
     expect(c.debuggers[0]!.languages).toEqual(JS);
-    expect(Object.keys(c.debuggers[0]!.configurationAttributes.launch.properties).sort()).toEqual(['args', 'breakOnException', 'cwd', 'env', 'libraryCode', 'node', 'program', 'record', 'stopOnEntry']);
     expect(c.breakpoints.map((b) => b.language)).toEqual(JS);
     for (const lang of JS) expect(c.snippets.find((s) => s.language === lang)?.path).toBe('./snippets/tracelight.code-snippets');
     expect(c.grammars.find((g) => g.injectTo?.includes('source.ts'))?.path).toBe('./syntaxes/tracelight-snap-js.tmLanguage.json');
-    // each grammar is built from a file of syntaxes/ under Tracelight's name (esbuild.mjs --tracelight)
-    for (const g of c.grammars) expect(fs.existsSync(path.join(__dirname, '..', '..', g.path.replace('tracelight', 'tracelight'))), g.path).toBe(true);
+    for (const g of c.grammars) expect(fs.existsSync(path.join(__dirname, '..', '..', g.path)), g.path).toBe(true);
   });
-  it('colours the story as TypeScript, with the story editor defaults', () => {
+  it('colours the story as TypeScript', () => {
     const grammar = c.grammars.find((g) => g.language === 'tracelight-story-js');
     expect(grammar?.path).toBe('./syntaxes/tracelight-story-js.tmLanguage.json');
     expect(JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'syntaxes', 'tracelight-story-js.tmLanguage.json'), 'utf8')).repository.block.patterns).toEqual([{ include: 'source.tsx' }]);
-    expect(c.configurationDefaults['[tracelight-story-js]']).toEqual(manifest.contributes.configurationDefaults['[tracelight-story]']);
   });
-  it('has New JavaScript/TypeScript File and the Node picker, and no Python commands', () => {
+  it('has New JavaScript/TypeScript File and the Node picker', () => {
     for (const cmd of ['tracelight.newJavaScriptFile', 'tracelight.newTypeScriptFile', 'tracelight.selectNode']) expect(c.commands.find((x) => x.command === cmd), cmd).toBeDefined();
-    for (const cmd of ['tracelight.newPythonFile', 'tracelight.selectInterpreter']) expect(c.commands.find((x) => x.command === cmd), cmd).toBeUndefined();
     expect(c.menus['file/newFile']!.map((e) => e.command)).toEqual(['tracelight.newJavaScriptFile', 'tracelight.newTypeScriptFile', 'tracelight.newRecentOrSnippet']);
     expect(c.configuration.properties['tracelight.nodePath']).toBeDefined();
-    expect(c.configuration.properties['tracelight.python.interpreter']).toBeUndefined();
   });
 });

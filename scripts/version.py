@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The version Tracelight ships under, and the rule that moves it.
 
-Four files carry the number. `package.json` is the one that decides it: the manifest
-generator keeps whatever is already there (`setdefault`), so regenerating never resets
-it. The other three are written to match.
+Two files carry the number: the extension's `package.json`, which decides it, and the
+runtime's `node/package.json`, written to match (the CLI, the runner and `tracelight mcp`
+report it).
 
 The next version is computed from the last release tag, not from the current number:
 
@@ -36,11 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # or a dependency pin. Group 2 is the number; groups 1 and 3 are put back unchanged.
 FILES = [
     ('package.json', re.compile(r'^(  "version": ")(\d+\.\d+\.\d+)(")', re.M)),
-    ('python/pyproject.toml', re.compile(r'^(version = ")(\d+\.\d+\.\d+)(")', re.M)),
-    ('python/pyokka_runtime/__init__.py', re.compile(r'^(__version__ = ")(\d+\.\d+\.\d+)(")', re.M)),
-    # the fallback the manifest generator falls back on when package.json is missing.
-    # Left stale, a regenerated manifest would quietly ship 0.0.1 again.
-    ('scripts/gen-manifest.py', re.compile(r"^(    'version': ')(\d+\.\d+\.\d+)(')", re.M)),
+    ('node/package.json', re.compile(r'^(  "version": ")(\d+\.\d+\.\d+)(")', re.M)),
 ]
 
 LEVELS = {'major': 0, 'minor': 1, 'patch': 2}

@@ -52,9 +52,6 @@ vi.mock('../../src/util/context', () => ({ setContext: () => undefined }));
 vi.mock('../../src/debug/debugContext', () => ({ updateDebugContext: () => undefined }));
 vi.mock('../../src/debug/dapAdapter', () => ({ startDebugSession: async () => undefined }));
 vi.mock('../../src/runtime/interpreter', () => ({
-  resolveInterpreter: async () => {
-    throw new Error('a JS launch must not look for Python');
-  },
   resolveNode: async () => ({ path: process.execPath, version: process.versions.node.split('.').map(Number), source: 'PATH', isVenv: false, language: 'javascript' }),
 }));
 vi.mock('../../src/features/debugBreakpoints', () => ({ currentSourceBreakpoints: () => gutter, currentFunctionBreakpoints: () => [] }));
@@ -103,7 +100,7 @@ describe.skipIf(!haveRuntime || process.platform === 'win32')('the debug socket 
   beforeAll(async () => {
     fs.writeFileSync(FILE, SOURCE);
     gutter.push({ path: FILE, line: 2 });
-    manager = new DebugSessionManager(path.join(ROOT, 'python'));
+    manager = new DebugSessionManager(path.join(ROOT, 'node'));
     server = new DebugSocketServer(manager, { runDescriptors: () => [] });
     ds = await manager.start(parseLaunch({ program: FILE, cwd: DIR }));
     const paused = ds.debug.paused ?? (await ds.waitForPause(30_000));

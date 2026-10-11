@@ -2,8 +2,16 @@
  * Wire constants and event builders shared by the runner and the run child.
  * The contract is docs/PROTOCOL.md.
  */
+import { readFileSync } from 'node:fs';
 
-export const RUNTIME_VERSION = '0.1.0';
+/** The runtime's version: its package.json's, which moves with the extension's (scripts/version.py). */
+export const RUNTIME_VERSION: string = (() => {
+  try {
+    return String(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
+  } catch {
+    return '0.0.0';
+  }
+})();
 export const PROTOCOL_VERSION = '1';
 
 /** What `ready.capabilities` advertises. `capabilities[0]` is how run children are made. */

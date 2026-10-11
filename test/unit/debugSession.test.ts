@@ -14,7 +14,6 @@ vi.mock('vscode', () => ({
 vi.mock('../../src/util/context', () => ({ setContext: (key: string, value: boolean) => void contextKeys.set(key, value) }));
 vi.mock('../../src/debug/debugContext', () => ({ updateDebugContext: () => undefined }));
 vi.mock('../../src/runtime/interpreter', () => ({
-  resolveInterpreter: async () => ({ path: '/v/bin/python', version: [3, 12, 9], source: 'setting', isVenv: true }),
   resolveNode: async () => ({ path: '/usr/bin/node', version: [24, 1, 0], source: 'PATH', isVenv: false, language: 'javascript' }),
 }));
 vi.mock('../../src/features/debugBreakpoints', () => ({ currentSourceBreakpoints: () => gutter, currentFunctionBreakpoints: () => functionGutter }));
@@ -251,7 +250,7 @@ describe('DebugSession', () => {
       return this.ready;
     };
     try {
-      await expect(ds.start()).rejects.toThrow(/older than the extension/);
+      await expect(ds.start()).rejects.toBeInstanceOf(NoRecordCapabilityError);
     } finally {
       FakeRunner.prototype.start = original;
     }
@@ -314,7 +313,7 @@ describe('DebugSessionManager', () => {
       return this.ready;
     };
     try {
-      await expect(mgr.start(parseLaunch({ program: APP, cwd: '/ws' }))).rejects.toThrow(/older than the extension/);
+      await expect(mgr.start(parseLaunch({ program: APP, cwd: '/ws' }))).rejects.toBeInstanceOf(NoRecordCapabilityError);
     } finally {
       FakeRunner.prototype.start = original;
     }
@@ -370,12 +369,5 @@ describe('a JS/TS program in the Debugger', () => {
     } finally {
       FakeRunner.prototype.start = original;
     }
-  });
-
-  it('leaves a Python program on Python', async () => {
-    const ds = make();
-    await ds.start();
-    expect(runners[0]!.options?.command).toBe('/v/bin/python');
-    expect(runners[0]!.options?.args).toBeUndefined();
   });
 });

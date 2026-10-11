@@ -5,8 +5,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // skills/tracelight/scripts/render-tour.cjs: a merged tour (`tracelight tour RUN --prose P --out F`)
-// becomes one page with no scripts. The example is the RRF fixture merged with
-// python/tests/fixtures/tour/rrf.prose.json.
+// becomes one page with no scripts. The example is a merged tour of the RRF demo
+// (examples/js/rrf).
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const SKILL = path.join(ROOT, 'skills', 'tracelight');
@@ -40,13 +40,17 @@ describe('render-tour.cjs', () => {
     expect(html.match(/<details class=ch /g)?.length).toBe(new Set(data.pick.map((id: string) => data.candidates.find((c: any) => c.id === id).chapter)).size);
     expect(html.match(/<div class=stop /g)?.length).toBe(data.pick.length);
     expect(html).toContain('<ol class=map>');
-    expect(html).toContain('steps 53 to 103');
+    const shown = data.chapters.find((ch: any) => data.pick.some((id: string) => data.candidates.find((c: any) => c.id === id).chapter === ch.id));
+    expect(html).toContain(`steps ${shown.steps[0]} to ${shown.steps[1]}`);
     expect(html).toContain('<details class=vals>');
     expect(html).toContain('prefers-color-scheme:dark');
   });
 
   it('shows the quoted slice Tracelight cut and says when the recording had cut the value', () => {
-    const { html } = run(example());
+    const data = example();
+    const first = data.candidates.find((c: any) => c.id === data.pick[0]);
+    first.prose = { ...first.prose, quote: { text: "'C': 0.03252247488101534", name: 'scores', from: 54, to: 78, length: 119, recordingCut: true } };
+    const { html } = run(data);
     expect(html).toContain('<blockquote>&#39;C&#39;: 0.03252247488101534</blockquote>');
     expect(html).toContain('characters 54 to 78 of 119');
     expect(html).toContain('The recording kept only the first 119 characters');
@@ -63,10 +67,11 @@ describe('render-tour.cjs', () => {
   it('writes a repeated value as "same as" the first one', () => {
     const data = example();
     const c = data.candidates.find((x: any) => x.id === data.pick[1]);
-    const target = data.candidates.find((x: any) => x.id === data.pick[0]).values[0];
+    const owner = data.candidates.find((x: any) => x.id === data.pick[0]);
+    const target = owner.values[0];
     c.values.push({ id: `${c.id}.v9`, role: 'set', name: 'again', length: target.length, sameAs: target.id });
     const { html } = run(data);
-    expect(html).toContain(`same as <code>${target.name}</code> at #3`);
+    expect(html).toContain(`same as <code>${target.name}</code> at #${owner.step}`);
   });
 
   it('refuses a tour without prose and a pick that is not a candidate', () => {

@@ -1,10 +1,10 @@
 #!/bin/sh
-# Full local check: typecheck, unit tests, python tests, build, the Claude Code band.
+# Full local check: typecheck, unit tests, the runtime's tests, build, the Claude Code band.
 set -e
 cd "$(dirname "$0")/.."
 npm run typecheck
 npx vitest run
-(cd python && uv run --group dev pytest -q)
+npm test --prefix node
 node esbuild.mjs
 # The band (claude-plugin/tracelight-band) is checked by Claude Code itself. Without `claude` on
 # PATH (CI, a machine without Claude Code) these two steps are skipped, and say so.

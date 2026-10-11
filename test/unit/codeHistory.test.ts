@@ -66,15 +66,15 @@ describe('code-history renderer', () => {
     const { html } = render(fs.readFileSync(EXAMPLE, 'utf8'));
     const { highlight, files } = embedded(html);
     expect(highlight.theme).toBe('github-dark-dimmed');
-    const rows: [number, string][][] = highlight.files['main.py'];
+    const rows: [number, string][][] = highlight.files['main.js'];
     // One row per source line, and each row joins back to the exact line it came from. Colours
     // that slipped by a line would be describing a different statement, which is the one thing
     // this page may never do.
-    expect(rows).toHaveLength(files['main.py'].length);
-    rows.forEach((row, index) => expect(row.map(token => token[1]).join('')).toBe(files['main.py'][index]));
-    const colour = new Map(rows[0]!.map(([at, text]) => [text, highlight.palette[at]]));
-    expect(colour.get('def')).toBeTruthy();
-    expect(colour.get('def')).not.toBe(colour.get(' '));
+    expect(rows).toHaveLength(files['main.js'].length);
+    rows.forEach((row, index) => expect(row.map(token => token[1]).join('')).toBe(files['main.js'][index]));
+    const colour = new Map(rows[5]!.map(([at, text]) => [text, highlight.palette[at]]));
+    expect(colour.get('function')).toBeTruthy();
+    expect(colour.get('function')).not.toBe(colour.get(' '));
     expect(html).not.toContain('https://');  // the theme is resolved here, not fetched there
   });
 
@@ -86,25 +86,25 @@ describe('code-history renderer', () => {
 
   it('generates the colours itself rather than trusting what it was handed', () => {
     const data = example();
-    data.highlight = { theme: 'mine', fg: '#fff', palette: ['#fff'], files: { 'main.py': [[[0, 'not the source']]] } };
+    data.highlight = { theme: 'mine', fg: '#fff', palette: ['#fff'], files: { 'main.js': [[[0, 'not the source']]] } };
     const { highlight } = embedded(render(data).html);
     expect(highlight.theme).toBe('github-dark-dimmed');
-    expect(highlight.files['main.py'][0].map((token: [number, string]) => token[1]).join('')).toBe('def scale(value, factor=3):');
+    expect(highlight.files['main.js'][5].map((token: [number, string]) => token[1]).join('')).toBe('function totalOf(rows) {');
   });
 
   it('carries the run identity and every checkpoint with its reproducing command', () => {
     const { html } = render(fs.readFileSync(EXAMPLE, 'utf8'));
     const data = embedded(html);
     expect(data.steps).toHaveLength(4);
-    expect(data.steps.map((s: { id: string }) => s.id)).toEqual(['step-7', 'step-8', 'why-22-answer', 'pause-1']);
+    expect(data.steps.map((s: { id: string }) => s.id)).toEqual(['step-6', 'step-7', 'why-20-total', 'pause-1']);
     for (const step of data.steps) expect(step.verify.startsWith('tracelight ')).toBe(true);
-    expect(html).toContain('<b>source</b> 0000000000abcd');
-    expect(html).toContain('<b>steps</b> 23');
+    expect(html).toContain('<b>source</b> e23470fd3ef776');
+    expect(html).toContain('<b>steps</b> 21');
     // what Tracelight has and a one-frame debugger does not: in/out, hit counts, the arm, the chain
     expect(data.steps[1].call).toEqual({ name: 'scale', in: ['value = 1', 'factor = 3'], out: 'return = 3' });
     expect(data.steps[0].hits).toBe(3);
-    expect(data.steps[0].arm).toContain('took False x2, True x1');
-    expect(data.steps[2].chain.map((n: { depth: number }) => n.depth)).toEqual([0, 1, 1]);
+    expect(data.steps[0].arm).toContain('took false x2, true x1');
+    expect(data.steps[2].chain.map((n: { depth: number }) => n.depth)).toEqual([0, 1, 2, 2, 2, 3, 2, 1, 1, 2, 1]);
   });
 
   it('fills the English navigation labels and leaves lang free', () => {
@@ -150,12 +150,12 @@ describe('code-history renderer', () => {
   it('refuses data it cannot draw honestly', () => {
     expect(refuse(d => { d.steps[0].end = 9999; })).toContain('invalid source range or focus');
     expect(refuse(d => { d.steps[0].kind = 'a hunch'; })).toContain('unknown evidence kind');
-    expect(refuse(d => { d.steps[1].id = 'step-7'; })).toContain('duplicate id');
+    expect(refuse(d => { d.steps[1].id = 'step-6'; })).toContain('duplicate id');
     expect(refuse(d => { d.steps[0].verify = 'trust me'; })).toContain('verify must be the tracelight command');
     expect(refuse(d => { d.steps[0].bright = [1]; })).toContain('invalid highlighted lines');
     expect(refuse(d => { delete d.meta; })).toContain('Expected meta');
     expect(refuse(d => { d.steps = []; })).toContain('At least one checkpoint');
-    expect(refuse(d => { d.steps[0].file = 'ghost.py'; })).toContain('source must be an array of lines');
+    expect(refuse(d => { d.steps[0].file = 'ghost.js'; })).toContain('source must be an array of lines');
   });
 
   it('keeps the four evidence kinds apart', () => {
@@ -167,6 +167,6 @@ describe('code-history renderer', () => {
   });
 
   it('names the checkpoint in every refusal, so the author knows which card to fix', () => {
-    expect(refuse(d => { d.steps[2].focus = 1; })).toContain('Checkpoint 3 (why-22-answer)');
+    expect(refuse(d => { d.steps[2].focus = 1; })).toContain('Checkpoint 3 (why-20-total)');
   });
 });
