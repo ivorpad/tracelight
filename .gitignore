@@ -3,10 +3,6 @@ dist/
 out/
 *.vsix
 .vscode-test/
-__pycache__/
-*.pyc
-.pytest_cache/
-.venv/
 .DS_Store
 .claude/worktrees/
 handoffs/
@@ -14,14 +10,4 @@ handoffs/
 .tracelight-replay/
 .tracelight/findings/
 .tracelight/band-tmp/
-
-# Copied from Quokka.js (Wallaby.js) for research; kept locally, not published
-docs/reference/quokka/
-
-# Tracelight's build output (node esbuild.mjs --tracelight); its manifest, README and .vscodeignore are committed
-tracelight/dist/
-tracelight/syntaxes/
-tracelight/snippets/
-tracelight/media/
-tracelight/LICENSE
-tracelight/examples/
+.tracelight/runs/
