@@ -1,6 +1,5 @@
 /**
- * HTTP observe, record and replay for a run, as Pyokka's http_record plugin, on
- * @mswjs/interceptors: one place that sees `http` / `https` requests (ClientRequest, which axios,
+ * HTTP observe, record and replay for a run, on @mswjs/interceptors: one place that sees `http` / `https` requests (ClientRequest, which axios,
  * got, node-fetch and most SDKs use), `fetch` (undici) and XMLHttpRequest.
  *
  * `off` observes: one `http.exchange` row per request, the program's response untouched. `record`

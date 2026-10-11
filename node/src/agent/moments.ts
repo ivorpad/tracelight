@@ -1,6 +1,5 @@
 /**
- * The moment builder behind `walkthrough.ts`: one pass per kind over a `SavedRun`, as Pyokka's
- * `agent/moments.py`.
+ * The moment builder behind `walkthrough.ts`: one pass per kind over a `SavedRun`.
  *
  * Calls (with library scopes merged per user-code call site), decisions and loops (from the
  * `decisions.ts` file map), logged values, prints and errors, then the start and end. The

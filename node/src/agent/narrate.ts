@@ -2,8 +2,8 @@
  * Narration: one batched model call adds a sentence of gloss per walkthrough moment (never
  * automatic).
  *
- * The prompt is `narrate_prompt.md` (beside this file: Pyokka's template, worded for a
- * JavaScript / TypeScript program) filled with the walkthrough JSON (values redacted) and the
+ * The prompt is `narrate_prompt.md` (beside this file, worded for a JavaScript / TypeScript
+ * program) filled with the walkthrough JSON (values redacted) and the
  * source of the user functions the moments touch. The backend is a command that reads the prompt
  * on stdin: `--command` when set, else `claude -p --output-format json` when `claude` is on the
  * PATH, else `codex exec` with its last message written to a file. The answer must be a JSON

@@ -1,6 +1,6 @@
 /**
- * What the failing statement needed from the value, read from the exception's type and message, as
- * Pyokka's `origin/need.py` does for Python's. JavaScript's errors are V8's: `Cannot read
+ * What the failing statement needed from the value, read from the exception's type and message.
+ * The errors are V8's: `Cannot read
  * properties of undefined (reading 'price')`, `x.toFixed is not a function`, `xs is not iterable`.
  * A missing object key or array index gives `undefined` instead of raising, so a need of kind
  * `key` or `index` is made by the pick (`pick.ts`) when the undefined came from one.

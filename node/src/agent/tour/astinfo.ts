@@ -1,6 +1,6 @@
 /**
  * What a statement is, for the tour's signals: its own calls, what each call reaches, whether it
- * binds one, as Pyokka's `agent/tour/astinfo.py` with the oxc AST instead of Python's `ast`.
+ * binds one, from the oxc AST.
  *
  * Pure functions over a file's source, cached per file by `TourRun`. A call is classified by its
  * dotted name: a file write or a child process (`io-write`, `subprocess`), the project's own code

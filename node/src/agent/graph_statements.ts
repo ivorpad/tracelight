@@ -1,6 +1,5 @@
 /**
- * The statement nodes of the execution graph (docs/PROTOCOL.md, "statement"), for `graph.ts`, as
- * Pyokka's `agent/graph_statements.py`.
+ * The statement nodes of the execution graph (docs/PROTOCOL.md, "statement"), for `graph.ts`.
  *
  * One node per simple statement a step ran in a user-code scope: its source (comments gone), the
  * names it assigns and reads (`names.ts`), its hits, then its rows (the logged value, the print,

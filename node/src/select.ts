@@ -1,6 +1,6 @@
 /**
- * Which files a run instruments: `libraryCode` / `libraryPackages`, `exclude` and `only`, as
- * Pyokka's recording limits (docs/PROTOCOL.md "Leaving code out") with JavaScript's names.
+ * Which files a run instruments: `libraryCode` / `libraryPackages`, `exclude` and `only`
+ * (docs/PROTOCOL.md "Recording limits").
  *
  * A pattern is a package name or glob (`lodash`, `@scope/*`; `lodash` also covers `lodash/fp`), or
  * a path glob, absolute or relative to the workspace root, where a directory covers what is under

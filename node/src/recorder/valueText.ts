@@ -1,6 +1,5 @@
 /**
- * The bounded text of a recorded value (a local's change, a function's return), as Pyokka's
- * values.value_text: at most `max` characters, a cut text ending in `…(+N chars)` when the full
+ * The bounded text of a recorded value (a local's change, a function's return): at most `max` characters, a cut text ending in `…(+N chars)` when the full
  * length is known and `…(cut)` when it is not, newlines escaped, secrets masked.
  *
  * Primitives and small arrays/plain objects of primitives are formatted inline (no user code runs);
@@ -123,7 +122,7 @@ export function displayText(v: unknown): string {
   }
 }
 
-/** `text` bounded to `max` characters, as Pyokka marks a cut. */
+/** `text` bounded to `max` characters, with the cut marked. */
 export function cutText(full: string, max: number): ValueText {
   let text = full.includes('\n') || full.includes('\r') ? full.replace(/\r\n?/g, '\n').replace(/\n/g, '\\n') : full;
   if (text.length <= max) return { text: secrets.scrub(text) };

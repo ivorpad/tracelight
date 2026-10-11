@@ -1,6 +1,5 @@
 /**
- * `TourRun`: one pass over a `SavedRun` into the arrays and indexes the tour's rules read, as
- * Pyokka's `agent/tour/model.py`.
+ * `TourRun`: one pass over a `SavedRun` into the arrays and indexes the tour's rules read.
  *
  * Per step: file, line, scope, depth, whether it entered a scope. Per scope: its steps, its
  * parent, the last step of everything under it. The walkthrough's moments with every library

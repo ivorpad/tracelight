@@ -1,6 +1,6 @@
 /**
  * `narrate`: ask a model for one sentence of gloss per walkthrough moment and store it in the
- * saved run (Pyokka's `pyokka narrate`; never automatic). The work is `narrate.ts`; `walkthrough`
+ * saved run (never automatic). The work is `narrate.ts`; `walkthrough`
  * shows the glosses afterwards (`meta.walkthroughGloss`).
  */
 import { basename } from 'node:path';

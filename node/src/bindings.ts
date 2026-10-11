@@ -1,6 +1,6 @@
 /**
- * Per-statement name bindings from the AST: what a statement assigns, reads and calls, as Pyokka's
- * bindings.py. The variable history (`var`, the Variable pane) needs which names a statement binds
+ * Per-statement name bindings from the AST: what a statement assigns, reads and calls.
+ * The variable history (`var`, the Variable pane) needs which names a statement binds
  * and reads; the provenance tree (`why`) adds the source text of the calls it makes. All come from
  * the source alone: the runner's `bindings` request, no run involved.
  *

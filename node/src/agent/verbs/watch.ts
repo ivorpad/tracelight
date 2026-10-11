@@ -9,7 +9,7 @@ import { AgentError } from '../source.ts';
 
 type Msg = Record<string, any>;
 
-/** the line a streamed event prints as; the live module replaces it with Pyokka's `watch_line` */
+/** the line a streamed event prints as; the live module replaces it with its own */
 export const watchFormat: { line: (event: Msg, source: Msg) => string } = {
   line: (event) => `${event.event ?? ''} ${oneLine(JSON.stringify(event))}`,
 };

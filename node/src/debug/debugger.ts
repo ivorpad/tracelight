@@ -1,6 +1,5 @@
 /**
- * The live debugger, main-thread half: decide at each statement whether the program stops, as
- * Pyokka's debugger.py does from its statement hook.
+ * The live debugger, main-thread half: decide at each statement whether the program stops.
  *
  * Python stops a thread by blocking it inside the hook while a control thread serves requests.
  * A JavaScript thread cannot wait on itself, so the stop comes from V8: a debug run starts a worker

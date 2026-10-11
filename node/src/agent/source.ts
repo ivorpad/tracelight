@@ -1,6 +1,6 @@
 /**
  * Where a run comes from: `RunSource` is the seam, `SavedRun`
- * reads `run.json` (written by `tracelight run --save`, Pyokka's `{meta, events}` shape).
+ * reads `run.json` (written by `tracelight run --save`, `{meta, events}`).
  *
  * The command layer (`commands.ts`) only ever sees the JSON shapes of docs/PROTOCOL.md ("Context
  * slice", the bridge replies). A live source (the extension's bridge, `live.ts` once ported)
@@ -462,7 +462,7 @@ export class SavedRun implements RunSource {
   close(): void {}
 }
 
-/** what a refused `evaluate` hint says can be evaluated (JavaScript's pure subset, as Pyokka's names Python's) */
+/** what a refused `evaluate` hint says can be evaluated (JavaScript's pure subset) */
 export const KEEP_EVAL_HINT = 'names, properties, subscripts, operators and pure calls can be evaluated (Math, JSON, non-mutating methods of String, Array, Object, Map and Set); a user function is refused and no statement is re-run';
 
 export { PROVENANCE_DEPTH };

@@ -1,7 +1,7 @@
 /**
- * The agent side of statement bindings, as the helpers of Pyokka's `bindings.py`: the variable
+ * The agent side of statement bindings: the variable
  * history's name rule, and the table keyed by global range id. The bindings themselves come from
- * the AST (`../bindings.ts` `statementBindings`, Pyokka's shape), plus the parameters of the
+ * the AST (`../bindings.ts` `statementBindings`), plus the parameters of the
  * functions that are not statements (methods, function expressions, arrows), as Pyokka's `def`
  * statement binds a method's parameters.
  */

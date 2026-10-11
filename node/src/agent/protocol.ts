@@ -1,5 +1,5 @@
 /**
- * The constants of Pyokka's `protocol.py` and `values.py` the agent verbs read, next to the wire
+ * The protocol and value constants the agent verbs read, next to the wire
  * constants this runtime already has (`../protocol.ts`, whose `decodeSteps` decodes a trace).
  */
 export { COV_COVERED, COV_ERROR_PATH, COV_ERROR_SOURCE, COV_IGNORED, COV_NOT_RUN, COV_PARTIAL, FLAG_ERROR, FLAG_LOG, FLAG_NO_CODE_MAPPING, FLAG_SCOPE_ENTRY, FLAG_UNWINDING, decodeSteps } from '../protocol.ts';

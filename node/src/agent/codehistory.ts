@@ -1,6 +1,5 @@
 /**
- * `history`: the data behind a code-history page, generated from a run, as Pyokka's
- * `agent/codehistory.py`.
+ * `history`: the data behind a code-history page, generated from a run.
  *
  * The page (`skills/tracelight/templates/code-history.html.hbs`) is numbered source on the left and
  * chronological checkpoints on the right. Everything on it that is a fact comes from here, and
@@ -59,7 +58,7 @@ export function validLink(value: unknown): boolean {
 }
 
 /**
- * Pyokka's `Checkpoint` argparse action: `--at`, `--var`, `--why` and `--pause` append to one
+ * The `Checkpoint` argparse action: `--at`, `--var`, `--why` and `--pause` append to one
  * ordered list. A page is a narrative and its order is the one that was written; separate lists
  * would lose it.
  */

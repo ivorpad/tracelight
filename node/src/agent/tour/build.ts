@@ -1,6 +1,5 @@
 /**
- * `tour`: chapters and candidate stops of a recorded run, every value from the recording, as
- * Pyokka's `agent/tour/build.py`.
+ * `tour`: chapters and candidate stops of a recorded run, every value from the recording.
  *
  * `buildTour(run, {goal, budget})` returns `tour.json` (docs/TOUR.md). A run whose walkthrough has
  * under `SMALL_MOMENTS` moments is one chapter whose candidates are the walkthrough's moments; a

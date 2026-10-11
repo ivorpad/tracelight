@@ -1,6 +1,6 @@
 /**
- * The provenance tree (`why`): why a value is what it is, walked backwards through the run, as
- * Pyokka's `agent/provenance.py` (docs/PROTOCOL.md, "Provenance").
+ * The provenance tree (`why`): why a value is what it is, walked backwards through the run
+ * (docs/PROTOCOL.md, "Provenance").
  *
  * Nothing here is new data: the root is the change `var` lists at the step (or the value the
  * name had when the step ran), a node's reads are `var`'s reads resolved one statement further

@@ -19,7 +19,7 @@ type Msg = Record<string, any>;
 
 export const LIVE_HINT = 'debugging needs a live session (`--live`)';
 
-/** the shared flags of a live-only verb (Pyokka's `live_arg` under the debugging commands) */
+/** the shared flags of a live-only verb */
 export function debugLiveArg(p: ArgumentParser): void {
   p.setDefaults({ run: null });
   p.addArgument('--json', { action: 'store_true', help: 'print the raw JSON shape' });

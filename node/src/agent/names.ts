@@ -1,6 +1,6 @@
 /**
- * The names a statement assigns and reads, from its source text alone, as Pyokka's
- * `agent/names.py` does for Python, here for JavaScript and TypeScript.
+ * The names a statement assigns and reads, from its source text alone, for JavaScript and
+ * TypeScript.
  *
  * A character scanner, not a parser: string literals, template literals (with the `${…}` parts,
  * which are code) and comments (`//`, `/* *\/`) are recognised so that the identifiers of the rest

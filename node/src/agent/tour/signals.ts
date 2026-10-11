@@ -1,6 +1,5 @@
 /**
- * The tour's signals: each proposes steps worth a stop, with the reason it proposes them, as
- * Pyokka's `agent/tour/signals.py`.
+ * The tour's signals: each proposes steps worth a stop, with the reason it proposes them.
  *
  * - `spine`: `why` backwards from the goal (the program's output, or `--goal`), then from the
  *   return of every project callee on the way; function headers and pass-through returns are dropped.

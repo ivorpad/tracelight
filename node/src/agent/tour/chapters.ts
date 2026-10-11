@@ -1,6 +1,5 @@
 /**
- * Chapters: consecutive step ranges that cover the run, each opened by a function call, as
- * Pyokka's `agent/tour/chapters.py`.
+ * Chapters: consecutive step ranges that cover the run, each opened by a function call.
  *
  * 1. Top level. Start at the module and descend while one call holds 80% of the frame's steps and
  *    the frame's other calls together hold under max(3%, 25 steps) (`<module>` to `main`). Each

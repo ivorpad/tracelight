@@ -1,6 +1,5 @@
 /**
- * Where an element came from when its container is not followed further back, as Pyokka's
- * `origin/containers.py`.
+ * Where an element came from when its container is not followed further back.
  *
  * The recording keeps a value's text, not its identity, so this is a match by key and text over the
  * statements that put values into containers (`xs.push(v)`, `o[k] = v`, `o.k = v`, `{ k: v }`,

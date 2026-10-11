@@ -1,6 +1,5 @@
 /**
- * `coverage`: which statements of each file ran, from the run's `coverage` events, as Pyokka's
- * `agent/coverage.py`.
+ * `coverage`: which statements of each file ran, from the run's `coverage` events.
  *
  * One `coverage` event per file (docs/PROTOCOL.md, "Events"): `states[localRid]` (0 not run,
  * 1 covered, 2 partial, 3 error source, 4 error path, 5 ignored) and `hits[localRid]`. A file's

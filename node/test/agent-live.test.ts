@@ -35,7 +35,7 @@ function sliceAt(step: number, over: Msg = {}): Msg {
     location: { file: FILE, line: 11, col: 0, function: '<module>', fileId: 1 },
     stale: false,
     stack: [{ file: FILE, line: 11, function: '<module>', step }],
-    block: { file: FILE, function: '<module>', scopeId: 0, lines: [{ line: 9, text: "pyokka = {'is_awesome': True}", step: 2 }, { line: 11, text: 'print(pyokka)', step, current: true }] },
+    block: { file: FILE, function: '<module>', scopeId: 0, lines: [{ line: 9, text: "config = {'is_awesome': True}", step: 2 }, { line: 11, text: 'print(config)', step, current: true }] },
     values: [{ line: 11, context: null, text: "{'is_awesome': True, 'api_key': 'sk-abcdefghijklmnopqrstuvwxyz'}", step, hit: 1, runtimeKey: '7' }],
     coverage: { notRun: [32] },
     moves: { into: step + 1, over: step + 1, out: 39, back: step - 1, backOver: step - 1, backOut: null },
@@ -444,8 +444,8 @@ test('context, values, eval, expand, var', async () => {
   assert.deepEqual(last(), { id: 1, type: 'context', step: 12, scope: true });
   assert.deepEqual(await cli('values', '--live', '--line', 'demo.py:7'), { code: 0, out: '2 values on demo.py:7\n  #4 hit 1  x = 3\n  #8 hit 2  x = 4\n', err: '' });
   assert.match((await cli('values', '--live', '--line', 'nope.py:1')).err, /not part of the run/);
-  assert.equal((await cli('eval', '--live', "pyokka['is_awesome']")).out, "pyokka['is_awesome'] = True\n");
-  assert.deepEqual(last(), { id: 1, type: 'eval', expression: "pyokka['is_awesome']" });
+  assert.equal((await cli('eval', '--live', "config['is_awesome']")).out, "config['is_awesome'] = True\n");
+  assert.deepEqual(last(), { id: 1, type: 'eval', expression: "config['is_awesome']" });
   assert.equal((await cli('expand', '--live', 'v:1', '--path', 'is_awesome')).out, 'dict {...}\n  is_awesome: True\n');
   assert.deepEqual(last(), { id: 1, type: 'expand', valueId: 'v:1', queryPath: ['is_awesome'] });
   const v = await json('var', '--live', 'rect1', '--file', 'demo.py', '--scope', '<module>', '--limit', '5');

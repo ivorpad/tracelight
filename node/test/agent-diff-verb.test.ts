@@ -1,6 +1,5 @@
 /**
- * `diff`: two runs of a file before and after an edit, compared statement by statement (Pyokka's
- * tests/test_diff.py, with JavaScript programs).
+ * `diff`: two runs of a file before and after an edit, compared statement by statement.
  *
  * The edit below changes a value (`qty * unit` gets `+ 50`), which flips a branch (`total > LIMIT`
  * takes true for the first order), adds a function and a call to it, and that call throws a new

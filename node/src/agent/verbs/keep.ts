@@ -1,6 +1,6 @@
 /**
- * The verbs that reach the runner `run --keep` left alive (`meta.keep.socket`), as Pyokka's
- * `eval`, `expand` and `release`: a request over the keeper's socket, the reply redacted.
+ * The verbs that reach the runner `run --keep` left alive (`meta.keep.socket`):
+ * `eval`, `expand` and `release`, a request over the keeper's socket, the reply redacted.
  */
 import { registerVerb } from '../commands.ts';
 import { renderEval, renderExpand, renderRelease } from '../render.ts';

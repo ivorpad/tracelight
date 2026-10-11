@@ -1,6 +1,6 @@
 /**
- * `narrate`: backend resolution, the prompt, strict parsing, writing glosses into the saved run
- * (the JS cases of Pyokka's tests/test_narrate.py). No live model: the backends are tiny shell
+ * `narrate`: backend resolution, the prompt, strict parsing, writing glosses into the saved run.
+ * No live model: the backends are tiny shell
  * scripts on a PATH of their own.
  */
 import { after, before, test } from 'node:test';

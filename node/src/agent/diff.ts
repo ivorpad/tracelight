@@ -1,6 +1,5 @@
 /**
- * `diff A B`: what an edit changed between two runs, statement by statement, as Pyokka's
- * `agent/diff.py`.
+ * `diff A B`: what an edit changed between two runs, statement by statement.
  *
  * Each side is a `RunSource` (a saved run, or the open VS Code session with `--live`) and is read
  * only through the verbs both kinds serve: `state`, `walkthrough` (uncapped, by step window) and

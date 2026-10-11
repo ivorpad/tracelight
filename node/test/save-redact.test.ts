@@ -1,4 +1,4 @@
-/** `run --save` redacts every saved event and keeps a redacted copy of the user's own files only, as Pyokka's save. */
+/** `run --save` redacts every saved event and keeps a redacted copy of the user's own files only. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

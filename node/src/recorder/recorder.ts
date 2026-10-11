@@ -383,7 +383,7 @@ export class Recorder {
       scope.raised = errorType(err);
       if (this.onException !== null) return this.onException(err, sid);
       // the statement that raised is the frame's last step; a frame the error only passes through
-      // flags its call statement as unwinding, as Pyokka does (errors.py)
+      // flags its call statement as unwinding
       const step = this.lastOf[sid]!;
       if (this.firstSighting(err)) this.flag(step, FLAG_ERROR);
       else this.flag(step, FLAG_UNWINDING);
@@ -819,7 +819,7 @@ function sizeOf(v: unknown): number {
   return -1;
 }
 
-/** The type name Pyokka's `raised` carries: the error's class, or the thrown value's type. */
+/** The type name `raised` carries: the error's class, or the thrown value's type. */
 export function errorType(err: unknown): string {
   if (err instanceof Error && typeof err.name === 'string' && err.name) return err.name;
   if (err === null) return 'null';

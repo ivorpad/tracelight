@@ -1,6 +1,5 @@
 /**
- * Text forms of the Debugger's replies, as Pyokka's `agent/render_debug.py` plus the debug
- * renderers of `render.py` (`render_stopped`, `render_break`, `render_watches`, `render_locals`).
+ * Text forms of the Debugger's replies: the stop, `break`, `watches` and `locals`.
  *
  * A `record: false` stop has no trace to move through, so `render.ts` hands it here through the
  * `debugRender` seam (installed at import): where it paused and why, the frame chain, the

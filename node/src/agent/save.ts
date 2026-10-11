@@ -1,5 +1,5 @@
 /**
- * The file helpers of Pyokka's `agent/save.py` the verbs need: a source file's text, and the hash
+ * The file helpers the verbs need: a source file's text, and the hash
  * that tells whether it changed since the run (`meta.files[].sha256`, written by `cli.ts` `run --save`).
  */
 import { createHash } from 'node:crypto';

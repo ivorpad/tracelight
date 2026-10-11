@@ -1,5 +1,5 @@
 /**
- * `tour`: chapters and candidate stops of a recorded run (docs/TOUR.md), as Pyokka's `agent/tour/`.
+ * `tour`: chapters and candidate stops of a recorded run (docs/TOUR.md).
  *
  *     model     `TourRun`: per-step arrays, scopes, moments, HTTP rows and local changes of a `SavedRun`
  *     astinfo   what a statement is (oxc AST): its calls, what each reaches, whether it keeps a result

@@ -1,5 +1,5 @@
 /**
- * The keeper, as Pyokka's `agent/keep.py` and on the same wire: it keeps a `serve` runner alive
+ * The keeper: it keeps a `serve` runner alive
  * after `tracelight run --save --keep` so `expand`, `source` (and `evaluate` once the debugger lands)
  * can reach the finished run.
  *
@@ -8,8 +8,7 @@
  * request lines, the keeper rewrites `id` to `"c<conn>:<id>"` and restores it on the reply, run
  * events go to the connection that sent that `run`, and `shutdown` (or the runner exiting, or
  * `--idle` seconds without a connection) ends it. `meta.keep = {pid, socket}` in the saved run;
- * `tracelight release run.json` (or `pyokka release`) sends `shutdown`. Pyokka's CLI speaks to it as
- * it does to its own keeper.
+ * `tracelight release run.json` sends `shutdown`.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';

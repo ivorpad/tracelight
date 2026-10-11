@@ -1,7 +1,6 @@
 /**
- * `tracelight origin`: the chain from a failing statement back to where its bad value was made, the
- * JavaScript twins of Pyokka's tests/test_origin.py. Each program is saved with `run --save` and
- * read back as a `SavedRun`; the errors are V8's (`Cannot read properties of undefined`, `… is not
+ * `tracelight origin`: the chain from a failing statement back to where its bad value was made.
+ * Each program is saved with `run --save` and read back as a `SavedRun`; the errors are V8's (`Cannot read properties of undefined`, `… is not
  * a function`) and a missing key or index gives `undefined` one step before the failure.
  */
 import { before, test } from 'node:test';

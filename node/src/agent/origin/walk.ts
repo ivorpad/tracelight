@@ -1,6 +1,6 @@
 /**
  * The walk behind `origin`: from a name at a step back through arguments, returns, assignments
- * and containers, as Pyokka's `origin/walk.py`, over the oxc AST (`js.ts`).
+ * and containers, over the oxc AST (`js.ts`).
  *
  * JavaScript differs from Python in a few places the walk knows about: a missing argument or a
  * function that ends without `return` gives `undefined`; a callback of `map` / `reduce` / ... gets

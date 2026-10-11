@@ -1,9 +1,7 @@
 /**
  * `tracelight tour`: chapters, candidates, value shaping, the budget, and `--prose` (the validator
- * and the merge), as Pyokka's python/tests/test_tour.py and test_tour_prose.py, over a small
- * multi-file JavaScript/TypeScript program. The source-parsing parts (statements, calls, what a
- * call reaches) are the oxc port's own; Python's reading of the same run parses the sources as
- * Python, so only the data-only parts are compared with it.
+ * and the merge), over a small multi-file JavaScript/TypeScript program. The source-parsing parts
+ * (statements, calls, what a call reaches) come from the oxc AST.
  */
 import { before, test } from 'node:test';
 import assert from 'node:assert/strict';

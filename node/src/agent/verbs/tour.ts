@@ -1,7 +1,7 @@
 /**
  * `tour RUN|--live [--goal NAME|FILE:LINE] [--budget TOKENS] [--prose PATH] [--out PATH] [--json]`:
  * chapters and candidate stops of a run, the input a guided tour is picked and narrated from
- * (Pyokka's `pyokka tour`, `agent/tour/cli.py`). `--prose` checks a narration against the run and
+ * (docs/TOUR.md). `--prose` checks a narration against the run and
  * merges it; a rejection lists every problem (`--json`: `violations`) and exits 2.
  */
 import { readFileSync, writeFileSync } from 'node:fs';

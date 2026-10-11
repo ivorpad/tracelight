@@ -1,6 +1,5 @@
 /**
- * `history`: the data behind a code-history page, over a saved JavaScript run (the JS cases of
- * Pyokka's tests/test_agent_history.py). The first test is the one the page rests on: every value
+ * `history`: the data behind a code-history page, over a saved JavaScript run. The first test is the one the page rests on: every value
  * on a card is what `context RUN N --json` prints for that step, rebuilt here by hand.
  */
 import { before, test } from 'node:test';

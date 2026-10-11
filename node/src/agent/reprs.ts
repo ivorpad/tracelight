@@ -1,6 +1,5 @@
 /**
- * Reading a recorded value back from its text, as Pyokka's `agent/reprs.py` does for Python's
- * `repr`: the type it names and, when it is a literal, the value.
+ * Reading a recorded value back from its text: the type it names and, when it is a literal, the value.
  *
  * A Tracelight recording keeps values as `util.inspect` text (`serialize.ts`: one line, depth 2, at
  * most 20 array items), cut to a budget (`'abc…'…(+69 chars)`), with `[Object]` / `[Array]` for a

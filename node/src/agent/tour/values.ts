@@ -1,6 +1,5 @@
 /**
- * What the program held at a candidate, and how it is shaped so the candidates fit a prompt, as
- * Pyokka's `agent/tour/values.py`.
+ * What the program held at a candidate, and how it is shaped so the candidates fit a prompt.
  *
  * Gathering, per step, from the recording only: the parameters a scope entered with (`in`), the
  * names the statement bound (`set`), values it logged (`value`), what it printed (`printed`), what

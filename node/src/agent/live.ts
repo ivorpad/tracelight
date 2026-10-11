@@ -439,7 +439,7 @@ export function watchLine(event: Msg, source: Msg, oneLine: (text: unknown, limi
   return pyStr(kind);
 }
 
-// -- opening a live source (Pyokka's `open_source`, the live half) ------------------------------------------
+// -- opening a live source ---------------------------------------------------------------------------------
 
 /** the live-only verbs: no saved-run form */
 export const DEBUG_COMMANDS = new Set([...DEBUG_VERBS, 'record']);

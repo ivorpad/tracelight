@@ -1,6 +1,5 @@
 /**
- * `graph --dot`: the execution graph of `graph.ts` as a Graphviz digraph, as Pyokka's
- * `agent/graph_dot.py`.
+ * `graph --dot`: the execution graph of `graph.ts` as a Graphviz digraph.
  *
  * Modules and functions are records (the label and location, then one row per line), packages
  * are folders, decisions diamonds, statements plain boxes with a monospace label (their rows

@@ -65,13 +65,13 @@ export function getVerb(name: string): Verb | undefined {
   return VERBS.get(name);
 }
 
-/** `RUN` and the shared flags, as Pyokka's `run_arg` */
+/** `RUN` and the shared flags */
 export function runArg(p: ArgumentParser): void {
   p.addArgument('run', { nargs: '?', metavar: 'RUN', help: `a run.json written by \`${NAME} run FILE --save run.json\` (omit with --live)` });
   liveArg(p, false);
 }
 
-/** the shared flags without `RUN`, as Pyokka's `live_arg` */
+/** the shared flags without `RUN` */
 export function liveArg(p: ArgumentParser, noRun = true): void {
   if (noRun) p.setDefaults({ run: null });
   p.addArgument('--json', { action: 'store_true', help: 'print the raw JSON shape' });
