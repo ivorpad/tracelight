@@ -28,17 +28,13 @@ export const STOP_OUTPUT_TAIL = 4_000;
 /* ---------- 3.2 the launch configuration ---------- */
 
 export interface LaunchConfig {
-  /** absolute path; exactly one of `program` / `module` */
+  /** absolute path of the JavaScript or TypeScript file to run */
   program?: string;
-  /** a module name; Node has no module launch, so the runtime refuses it */
-  module?: string;
   args: string[];
   /** the workspace folder of the program, else its directory */
   cwd: string;
   env: Record<string, string>;
-  /** interpreter path; undefined means resolve it as a run-all session does */
-  python?: string;
-  /** JS/TS programs: the node to run with; undefined means `tracelight.nodePath`, then `node` on PATH */
+  /** the node to run with; undefined means `tracelight.nodePath`, then `node` on PATH */
   node?: string;
   stopOnEntry: boolean;
   breakOnException: ExceptionMode;
@@ -59,7 +55,6 @@ export interface LaunchContext {
   workspaceRoot?: string;
 }
 
-const MODULE_RE = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 
 function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
@@ -87,12 +82,10 @@ export function substitute(value: string, ctx: LaunchContext): string {
 
 /**
  * A raw launch (the DAP `launch` request, a command, the URI handler, the bridge) as a
- * `LaunchConfig`. Throws when neither `program` nor `module` is given, when `module` is not a
- * dotted name, and when `module` is asked for with `record: true` (a recording run is a run-all
- * session on a document, and a module has none).
+ * `LaunchConfig`. Throws when `program` is missing, and on a `module` launch, which Node has not.
  */
 export function parseLaunch(raw: Record<string, unknown>, ctx: LaunchContext = {}): LaunchConfig {
-  const module = str(raw['module']);
+  if (str(raw['module'])) throw new Error('"module" has no meaning on Node: give "program", the JavaScript or TypeScript file to run');
   let program = str(raw['program']);
   if (program) {
     program = substitute(program, ctx);
@@ -102,9 +95,7 @@ export function parseLaunch(raw: Record<string, unknown>, ctx: LaunchContext = {
   if (recordFrom && !parseAt(recordFrom)) throw new Error(`"recordFrom" is FILE:LINE or a function name, the \`--at\` grammar: got ${JSON.stringify(recordFrom)}`);
   // recording from a pause is a recording session: the run-all session holds the trace once it starts
   const record = raw['record'] === true || !!recordFrom;
-  if (!program && !module) throw new Error('a Tracelight launch needs "program", the JavaScript or TypeScript file to run');
-  if (module && !MODULE_RE.test(module)) throw new Error(`"module" is a dotted module name, not a path: got ${JSON.stringify(module)}`);
-  if (module && record) throw new Error('"record": true runs the file as a Tracelight run-all session, which has no module launch; use "record": false, or a "program" launch');
+  if (!program) throw new Error('a Tracelight launch needs "program", the JavaScript or TypeScript file to run');
   const rawCwd = str(raw['cwd']);
   const cwd = rawCwd ? path.resolve(substitute(rawCwd, ctx)) : ctx.workspaceRoot || (program ? path.dirname(program) : process.cwd());
   const launch: LaunchConfig = {
@@ -116,12 +107,8 @@ export function parseLaunch(raw: Record<string, unknown>, ctx: LaunchContext = {
     libraryCode: raw['libraryCode'] === true,
     record,
   };
-  // `module` wins over `program`, as the runtime does, so a launch that names both is not ambiguous
-  if (module) launch.module = module;
-  else if (program) launch.program = program;
+  launch.program = program;
   if (recordFrom) launch.recordFrom = recordFrom;
-  const python = str(raw['python']);
-  if (python) launch.python = path.resolve(substitute(python, ctx));
   const node = str(raw['node']);
   // a bare `node` is a command on PATH, not a file in the cwd
   if (node) launch.node = /[\\/]/.test(node) ? path.resolve(substitute(node, ctx)) : node;
@@ -136,24 +123,22 @@ function realOr(p: string): string {
   }
 }
 
-/** The registry key: one debug session per program (or module) and working directory. */
+/** The registry key: one debug session per program and working directory. */
 export function launchKey(launch: LaunchConfig, real: (p: string) => string = realOr): string {
-  const head = launch.module ? `m:${launch.module}` : `f:${real(launch.program ?? '')}`;
-  return `${head}|${launch.cwd}`;
+  return `f:${real(launch.program ?? '')}|${launch.cwd}`;
 }
 
-/** `app.py` for a program launch, `-m app.server` for a module launch. */
+/** `app.ts`: the program's file name. */
 export function launchName(launch: LaunchConfig): string {
-  return launch.module ? `-m ${launch.module}` : path.basename(launch.program ?? '');
+  return path.basename(launch.program ?? '');
 }
 
 /** The one-line launch the status bar's tooltip and the CLI's `state` print. */
 export function launchLine(launch: LaunchConfig): string {
-  // the interpreter only when the launch names one: a session's is filled in from what it resolved,
-  // and printing `python3` for a session that runs a venv would be a guess, not a fact
-  const target = launch.module ? `-m ${launch.module}` : (launch.program ?? '');
-  const exe = launch.node ?? launch.python;
-  const head = exe ? `${exe} ${target}` : target;
+  // the Node only when the launch names one: a session's is filled in from what it resolved,
+  // and printing `node` for a session that runs an nvm Node would be a guess, not a fact
+  const target = launch.program ?? '';
+  const head = launch.node ? `${launch.node} ${target}` : target;
   return [head, ...launch.args].join(' ');
 }
 
@@ -171,11 +156,9 @@ export interface DebugUri {
 export function debugUri(launch: LaunchConfig, at?: string): string {
   const q = new URLSearchParams();
   if (launch.program) q.set('program', launch.program);
-  if (launch.module) q.set('module', launch.module);
   if (launch.args.length) q.set('args', JSON.stringify(launch.args));
   if (launch.cwd) q.set('cwd', launch.cwd);
   if (Object.keys(launch.env).length) q.set('env', JSON.stringify(launch.env));
-  if (launch.python) q.set('python', launch.python);
   if (launch.node) q.set('node', launch.node);
   if (launch.stopOnEntry) q.set('stopOnEntry', '1');
   if (launch.record) q.set('record', '1');
@@ -211,7 +194,7 @@ export function parseDebugUri(query: string): DebugUri {
     record: q.get('record') === '1',
     libraryCode: q.get('libraryCode') === '1',
   };
-  for (const key of ['program', 'module', 'cwd', 'python', 'node', 'breakOnException', 'recordFrom'] as const) {
+  for (const key of ['program', 'module', 'cwd', 'node', 'breakOnException', 'recordFrom'] as const) {
     const v = q.get(key);
     if (v !== null && v !== '') raw[key] = v;
   }
@@ -291,7 +274,7 @@ export function debugRunRequest(input: RunRequestInput): Omit<RunRequest, 'type'
   };
   return {
     runId: input.runId,
-    ...(l.module ? { module: l.module } : { file: { path: l.program ?? '', displayName: path.basename(l.program ?? '') } }),
+    file: { path: l.program ?? '', displayName: path.basename(l.program ?? '') },
     workspaceRoot: input.workspaceRoot,
     cwd: l.cwd,
     argv: [...l.args],
@@ -310,11 +293,9 @@ export function debugRunRequest(input: RunRequestInput): Omit<RunRequest, 'type'
 
 export interface DebugDescriptorLaunch {
   program: string | null;
-  module: string | null;
   args: string[];
   cwd: string;
-  python: string | null;
-  /** a JS/TS launch: the Node that runs it */
+  /** the Node that runs it, once known */
   node?: string;
   record: boolean;
 }
@@ -325,7 +306,7 @@ export interface DebugDescriptor {
   pid: number;
   kind: 'debug';
   workspace: string;
-  /** the main file once the run reported it; the launch's `cwd` until then (a module launch) */
+  /** the main file once the run reported it */
   file: string;
   displayName: string;
   launch: DebugDescriptorLaunch;
@@ -343,7 +324,7 @@ export function descriptorFor(input: { socket: string; token: string; pid: numbe
     workspace: input.workspace,
     file: input.file,
     displayName: launchName(l),
-    launch: { program: l.program ?? null, module: l.module ?? null, args: [...l.args], cwd: l.cwd, python: l.python ?? null, ...(l.node ? { node: l.node } : {}), record: l.record },
+    launch: { program: l.program ?? null, args: [...l.args], cwd: l.cwd, ...(l.node ? { node: l.node } : {}), record: l.record },
     runtimeVersion: input.runtimeVersion,
     started: typeof input.started === 'string' ? input.started : new Date(input.started).toISOString(),
   };
@@ -353,11 +334,9 @@ export function descriptorFor(input: { socket: string; token: string; pid: numbe
 export function launchReply(launch: LaunchConfig): Record<string, unknown> {
   return {
     program: launch.program ?? null,
-    module: launch.module ?? null,
     args: [...launch.args],
     cwd: launch.cwd,
     env: { ...launch.env },
-    python: launch.python ?? null,
     ...(launch.node ? { node: launch.node } : {}),
     stopOnEntry: launch.stopOnEntry,
     breakOnException: launch.breakOnException,

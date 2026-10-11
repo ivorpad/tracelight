@@ -76,13 +76,12 @@ export async function startDebugSession(launch: LaunchConfig, opts: { stopOnEntr
   const config: vscode.DebugConfiguration = {
     type: DEBUG_TYPE,
     request: 'launch',
-    name: launch.module ? `Tracelight: Debug ${launchName(launch)}` : LAUNCH_NAME,
+    name: LAUNCH_NAME,
     ...(launch.program ? { program: launch.program } : {}),
-    ...(launch.module ? { module: launch.module } : {}),
     ...(launch.args.length ? { args: launch.args } : {}),
     cwd: launch.cwd,
     ...(Object.keys(launch.env).length ? { env: launch.env } : {}),
-    ...(launch.python ? { python: launch.python } : {}),
+    ...(launch.node ? { node: launch.node } : {}),
     stopOnEntry: opts.stopOnEntry ?? launch.stopOnEntry,
     breakOnException: launch.breakOnException,
     libraryCode: launch.libraryCode,
@@ -259,9 +258,8 @@ export class TracelightDebugAdapter implements vscode.DebugAdapter {
     // the replay of the previous run gives way: this debug session shows the Time Machine from now on
     if (existing) await stopReplay(existing, { keepTimeMachine: true });
     if (existing && attached.has(existing)) throw new Error(`${existing.displayName} is already being debugged in another debug session: continue there, or stop it first`);
-    if (existing && launch.python && existing.interpreter.path !== launch.python) throw new Error(interpreterRefusal(existing.displayName));
     const recordFrom = recordFromSpec(launch);
-    const session = existing ?? (await this.mgr.start(doc, { debug: true, stopOnEntry: opts.stopOnEntry, ...(recordFrom ? { recordFrom } : {}), ...(launch.python ? { interpreter: launch.python } : {}) }));
+    const session = existing ?? (await this.mgr.start(doc, { debug: true, stopOnEntry: opts.stopOnEntry, ...(recordFrom ? { recordFrom } : {}) }));
     if (!session) throw new Error(`Tracelight could not start a session on ${program}`);
     applyLaunchOverrides(session, launch);
     log.info(`[${session.displayName}] DAP launch${existing ? '' : ' (fresh session: its first run is the paused one)'} (recording)`);
@@ -429,18 +427,18 @@ export function registerDapAdapter(mgr: SessionManager, debugMgr: DebugSessionMa
           config.request = 'launch';
           config.name = LAUNCH_NAME;
         }
-        if (!config['program'] && !config['module']) config['program'] = editor?.document.uri.scheme === 'file' ? editor.document.uri.fsPath : '${file}';
+        if (!config['program']) config['program'] = editor?.document.uri.scheme === 'file' ? editor.document.uri.fsPath : '${file}';
         // the Tracelight panel is where a run is read; the Debug Console opens when the user asks for it
         if (!config['internalConsoleOptions']) config['internalConsoleOptions'] = 'neverOpen';
         // a launch the parser refuses must not open a session that then fails: report it here,
         // where `undefined` aborts the start and `startDebugging` answers false
-        if (config['module'] && config['record'] === true) {
-          void vscode.window.showErrorMessage('Tracelight: "record": true runs the file as a Tracelight run-all session, which has no module launch; use "record": false, or a "program" launch.');
+        if (config['module']) {
+          void vscode.window.showErrorMessage('Tracelight: "module" has no meaning on Node: give "program", the JavaScript or TypeScript file to run.');
           return undefined;
         }
         // a second start on a launch key a live debug session already holds restarts it in place and
         // opens no second toolbar; `undefined` aborts this start silently
-        if (config['record'] !== true && (config['program'] || config['module'])) {
+        if (config['record'] !== true && config['program']) {
           const held = heldSession(config);
           if (held) {
             void held.restart({ stopOnEntry: config['stopOnEntry'] === true }).catch((err) => log.error(`debug restart failed (${held.displayName})`, err));

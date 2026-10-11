@@ -52,13 +52,13 @@ export function watchValue(w: DebugSessionWatch, running = false): { text: strin
 /**
  * `node server.js --port 8000  ·  cwd .`. Every path is the display path the host sent, which is
  * workspace-relative inside the workspace, so the line fits the panel instead of carrying two
- * absolute paths; the full command is in the row's `title`. The interpreter is shown only when the
- * host knows it (it fills it in from the session once it resolved one): printing `python3` for a
- * session that runs a venv would be a guess the reader cannot tell from a fact.
+ * absolute paths; the full command is in the row's `title`. The Node is shown only when the host
+ * knows it (it fills it in from the session once it resolved one): printing `node` for a session
+ * that runs an nvm Node would be a guess the reader cannot tell from a fact.
  */
 export function launchSummary(launch: DebugSessionPanel['launch']): string {
-  const target = launch.module ? `-m ${launch.module}` : (launch.program ?? '');
-  const head = launch.python ? `${launch.python} ${target}` : target;
+  const target = launch.program ?? '';
+  const head = launch.node ? `${launch.node} ${target}` : target;
   const command = [head, ...launch.args].join(' ');
   return launch.cwd ? `${command}  ·  cwd ${launch.cwd}` : command;
 }

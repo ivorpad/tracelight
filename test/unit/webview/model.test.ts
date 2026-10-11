@@ -197,7 +197,7 @@ describe('the Debugger view\'s output deltas', () => {
   const SESSION: DebugSessionPanel = {
     id: 'debug-1',
     displayName: 'run.py',
-    launch: { program: 'run.py', module: null, args: [], cwd: '.', python: '.venv/bin/python', record: false },
+    launch: { program: 'run.py', args: [], cwd: '.', node: '/usr/local/bin/node', record: false },
     launchTitle: 'run.py',
     running: true,
     paused: false,

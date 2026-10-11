@@ -170,7 +170,7 @@ function harness() {
   const session = new FakeSession();
   const out: DapMessage[] = [];
   const t = new DapTranslator(async (launch, opts) => {
-    session.calls.push(`resolve ${launch.module ? `-m ${launch.module}` : launch.program}${opts.stopOnEntry ? ' stopOnEntry' : ''}${launch.record ? ' record' : ''}`);
+    session.calls.push(`resolve ${launch.program}${opts.stopOnEntry ? ' stopOnEntry' : ''}${launch.record ? ' record' : ''}`);
     return session;
   }, (m) => out.push(m));
   let seq = 0;
@@ -205,10 +205,12 @@ describe('DapTranslator', () => {
     const bad = await send('launch', {});
     expect(bad.success).toBe(false);
     expect(bad.message).toContain('program');
-    // every launch attribute goes through parseLaunch: a module launch names no program
+    // every launch attribute goes through parseLaunch: a module launch is refused, Node has none
     const mod = harness();
-    await mod.send('launch', { module: 'app.server', args: ['--port', '8000'], cwd: '/w', record: false });
-    expect(mod.session.calls).toEqual(['resolve -m app.server', 'startDebug']);
+    const refused = await mod.send('launch', { module: 'app.server', args: ['--port', '8000'], cwd: '/w', record: false });
+    expect(refused.success).toBe(false);
+    expect(refused.message).toContain('"module" has no meaning on Node');
+    expect(mod.session.calls).toEqual([]);
     // the run goes to the first breakpoint unless the configuration asks to stop on entry
     const entry = harness();
     await entry.send('launch', { program: '/w/rank.py', stopOnEntry: true });

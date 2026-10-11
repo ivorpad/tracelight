@@ -13,8 +13,8 @@ const icons = (html: string): string[] => [...html.matchAll(/codicon-([a-z-]+)/g
 const PAUSED: DebugSessionPanel = {
   id: 'debug-2',
   displayName: 'app.py',
-  launch: { program: 'app.py', module: null, args: ['--port', '8000'], cwd: 'project', python: '.venv/bin/python', record: false },
-  launchTitle: '/ws/.venv/bin/python /ws/app.py --port 8000  ·  cwd /ws/project',
+  launch: { program: 'app.py', args: ['--port', '8000'], cwd: 'project', node: '/usr/local/bin/node', record: false },
+  launchTitle: '/usr/local/bin/node /ws/app.py --port 8000  ·  cwd /ws/project',
   running: true,
   paused: true,
   record: false,
@@ -61,10 +61,10 @@ describe('DebugSessionView, paused with a stack', () => {
     expect(html).toContain('>app.py:42<');
     expect(html).toContain('<span class="pk-dbg-chip">breakpoint</span>');
     expect(html).toContain('pk-dbg-chip pk-dbg-thread">Thread-3');
-    expect(html).toContain('.venv/bin/python app.py --port 8000');
+    expect(html).toContain('/usr/local/bin/node app.py --port 8000');
     // display paths in the row, the absolute command in its title
     expect(html).toContain('cwd project');
-    expect(html).toContain('title="/ws/.venv/bin/python /ws/app.py --port 8000  ·  cwd /ws/project"');
+    expect(html).toContain('title="/usr/local/bin/node /ws/app.py --port 8000  ·  cwd /ws/project"');
     expect(html).not.toContain('>/ws/');
     expect(html).not.toContain('Values were changed');
   });
@@ -275,11 +275,11 @@ describe('the rail', () => {
 describe('the view helpers', () => {
   it('builds the header, the labels and the output window', () => {
     expect(debugHeaderLine(PAUSED)).toBe('Paused at app.py:42 · breakpoint');
-    expect(launchSummary({ program: null, module: 'app.server', args: ['--port', '8000'], cwd: 'project', python: '.venv/bin/python', record: false })).toBe('.venv/bin/python -m app.server --port 8000  ·  cwd project');
-    // no interpreter to name yet: nothing is guessed in its place
-    expect(launchSummary({ program: 'app.py', module: null, args: [], cwd: 'project', python: null, record: false })).toBe('app.py  ·  cwd project');
+    expect(launchSummary({ program: 'server.ts', args: ['--port', '8000'], cwd: 'project', node: '/usr/local/bin/node', record: false })).toBe('/usr/local/bin/node server.ts --port 8000  ·  cwd project');
+    // no Node to name yet: nothing is guessed in its place
+    expect(launchSummary({ program: 'app.ts', args: [], cwd: 'project', node: null, record: false })).toBe('app.ts  ·  cwd project');
     // the host sends `.` for a cwd that is the workspace folder itself
-    expect(launchSummary({ program: null, module: 'api.main', args: [], cwd: '.', python: '.venv/bin/python', record: false })).toBe('.venv/bin/python -m api.main  ·  cwd .');
+    expect(launchSummary({ program: 'api/main.ts', args: [], cwd: '.', node: '/usr/local/bin/node', record: false })).toBe('/usr/local/bin/node api/main.ts  ·  cwd .');
     expect(frameLabel(PAUSED.stack[1]!)).toBe('handle_one_request  http/server.py:427');
     expect(breakpointLabel({ file: 'app.py', line: 60, condition: 'i == 3' })).toBe('app.py:60  if i == 3');
     expect(breakpointLabel({ file: 'app.py', line: 60, resolvedLine: 61 })).toBe('app.py:60  -> resolved line 61');

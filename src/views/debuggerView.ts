@@ -130,7 +130,7 @@ export class DebuggerViewHost {
     return {
       id: ds.id,
       displayName: ds.displayName,
-      launch: { program: ds.launch.program ? display(ds.launch.program, root) : null, module: ds.launch.module ?? null, args: [...ds.launch.args], cwd: cwdLabel(ds.launch.cwd, root), python: (ds.resolvedLaunch.node ?? ds.resolvedLaunch.python) ? display((ds.resolvedLaunch.node ?? ds.resolvedLaunch.python)!, root) : null, record: ds.launch.record },
+      launch: { program: ds.launch.program ? display(ds.launch.program, root) : null, args: [...ds.launch.args], cwd: cwdLabel(ds.launch.cwd, root), node: ds.resolvedLaunch.node ? display(ds.resolvedLaunch.node, root) : null, record: ds.launch.record },
       launchTitle: `${launchLine(ds.resolvedLaunch)}  ·  cwd ${ds.launch.cwd}`,
       running: ds.running,
       paused: !!p,

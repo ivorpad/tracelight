@@ -50,7 +50,7 @@ export interface DebugSessionOptions {
 
 /** Is the launch a JS/TS program, run on Node with the Tracelight runtime (`node/`)? */
 export function isJsLaunch(launch: LaunchConfig): boolean {
-  return !launch.module && !!launch.program && runtimeLanguage({ languageId: '', fileName: launch.program }) === 'javascript';
+  return !!launch.program && runtimeLanguage({ languageId: '', fileName: launch.program }) === 'javascript';
 }
 
 /**

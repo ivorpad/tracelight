@@ -124,15 +124,15 @@ describe('DebugSession', () => {
     ds.dispose();
   });
 
-  it('sends a module launch as `module`, with its arguments', async () => {
-    const ds = make({ program: undefined, module: 'app.server', args: ['--port', '8000'], env: { PORT: '8000' } });
+  it('sends the program with its arguments and environment', async () => {
+    const ds = make({ args: ['--port', '8000'], env: { PORT: '8000' } });
     await ds.start();
     const req = runners[0]!.requests[0]!;
-    expect(req.module).toBe('app.server');
-    expect(req.file).toBeUndefined();
+    expect(req.module).toBeUndefined();
+    expect(req.file?.path).toBe(APP);
     expect(req.argv).toEqual(['--port', '8000']);
     expect(req.env).toMatchObject({ BASE: '1', PORT: '8000' });
-    expect(ds.displayName).toBe('-m app.server');
+    expect(ds.displayName).toBe('app.py');
     ds.dispose();
   });
 
@@ -331,14 +331,14 @@ describe('a JS/TS program in the Debugger', () => {
   });
   const js = (over: Record<string, unknown> = {}) => new DebugSession({ id: 'debug-js', launch: parseLaunch({ program: '/ws/app.ts', cwd: '/ws', ...over }), runtimeDir: '/rt', workspaceRoot: '/ws' });
 
-  it('knows a JS/TS program from a Python one or a module', () => {
+  it('knows a JS/TS program, and refuses a module launch', () => {
     expect(isJsLaunch(parseLaunch({ program: '/ws/a.mts' }))).toBe(true);
     expect(isJsLaunch(parseLaunch({ program: '/ws/a.jsx' }))).toBe(true);
     expect(isJsLaunch(parseLaunch({ program: '/ws/a.py' }))).toBe(false);
-    expect(isJsLaunch(parseLaunch({ module: 'app.server' }))).toBe(false);
+    expect(() => parseLaunch({ module: 'app.server' })).toThrow(/"module" has no meaning on Node/);
   });
 
-  it('runs on Node with the Tracelight runtime, not under Python', async () => {
+  it('runs on Node with the Tracelight runtime', async () => {
     const ds = js();
     await ds.start();
     const r = runners[0]!;
@@ -347,7 +347,6 @@ describe('a JS/TS program in the Debugger', () => {
     expect(r.requests[0]!.file?.path).toBe('/ws/app.ts');
     expect(r.requests[0]!.config.record).toBe(false);
     expect(ds.resolvedLaunch.node).toBe('/usr/bin/node');
-    expect(ds.resolvedLaunch.python).toBeUndefined();
   });
 
   it('uses the launch\'s node when it names one', async () => {

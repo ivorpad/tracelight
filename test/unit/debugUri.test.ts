@@ -7,7 +7,7 @@ const app = path.join(root, 'app.py');
 
 describe('debugUri / parseDebugUri', () => {
   it('round-trips a whole launch', () => {
-    const launch = parseLaunch({ program: app, args: ['--port', '8000'], cwd: root, env: { PORT: '8000' }, python: '/v/bin/python', stopOnEntry: true, libraryCode: true, breakOnException: 'raised' });
+    const launch = parseLaunch({ program: app, args: ['--port', '8000'], cwd: root, env: { PORT: '8000' }, node: '/opt/node/bin/node', stopOnEntry: true, libraryCode: true, breakOnException: 'raised' });
     const uri = debugUri(launch, 'app.py:42');
     expect(uri.startsWith(`vscode://${URI_AUTHORITY}/debug?`)).toBe(true);
     const back = parseDebugUri(uri);
@@ -38,11 +38,8 @@ describe('debugUri / parseDebugUri', () => {
     expect(parseDebugUri(debugUri(parseLaunch({ program: app, cwd: root, stopOnEntry: true }))).launch.stopOnEntry).toBe(true);
   });
 
-  it('carries a module launch with no program', () => {
-    const launch = parseLaunch({ module: 'app.server', args: ['--port', '8000'], cwd: root });
-    const back = parseDebugUri(debugUri(launch)).launch;
-    expect(back).toEqual(launch);
-    expect(back.program).toBeUndefined();
+  it('refuses a URI that asks for a module launch', () => {
+    expect(() => parseDebugUri('module=app.server&cwd=%2Fws')).toThrow(/"module" has no meaning on Node/);
   });
 
   it('reports a malformed args or env instead of starting anything', () => {

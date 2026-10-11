@@ -396,7 +396,7 @@ export class DebugHost {
     return {
       id: run.runId,
       displayName: main.displayName,
-      launch: { program: main.displayName, module: null, args: [], cwd: '.', python: null, record: false },
+      launch: { program: main.displayName, args: [], cwd: '.', node: null, record: false },
       launchTitle: `${main.path}  ·  no recording`,
       running: run.running,
       paused: !!p,

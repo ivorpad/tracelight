@@ -188,7 +188,7 @@ export interface DebugOutputChunk {
 export interface DebugSessionPanel {
   id: string;
   displayName: string;
-  launch: { program: string | null; module: string | null; args: string[]; cwd: string; python: string | null; record: boolean };
+  launch: { program: string | null; args: string[]; cwd: string; node: string | null; record: boolean };
   /** the same command with every path absolute: the launch row's `title` */
   launchTitle: string;
   running: boolean;

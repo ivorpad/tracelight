@@ -21,40 +21,36 @@ describe('parseLaunch', () => {
     expect(parseLaunch({ program: 'app.py' }).program).toBe(path.resolve('app.py'));
   });
 
-  it('reads args, env, python, the exception mode and the toggles', () => {
-    const l = parseLaunch({ module: 'app.server', args: ['--port', 8000], env: { PORT: 8000 }, python: '/v/bin/python', cwd: root, stopOnEntry: true, breakOnException: 'raised', libraryCode: true });
-    expect(l).toEqual({ module: 'app.server', args: ['--port', '8000'], env: { PORT: '8000' }, python: '/v/bin/python', cwd: root, stopOnEntry: true, breakOnException: 'raised', libraryCode: true, record: false });
+  it('reads args, env, node, the exception mode and the toggles', () => {
+    const l = parseLaunch({ program: app, args: ['--port', 8000], env: { PORT: 8000 }, node: '/opt/node/bin/node', cwd: root, stopOnEntry: true, breakOnException: 'raised', libraryCode: true });
+    expect(l).toEqual({ program: app, args: ['--port', '8000'], env: { PORT: '8000' }, node: '/opt/node/bin/node', cwd: root, stopOnEntry: true, breakOnException: 'raised', libraryCode: true, record: false });
+    // a bare node is a command on PATH, not a file in the cwd
+    expect(parseLaunch({ program: app, node: 'node' }).node).toBe('node');
     // an unknown mode falls back to the default rather than reaching the runtime
     expect(parseLaunch({ program: app, breakOnException: 'sometimes' }).breakOnException).toBe('uncaught');
   });
 
-  it('refuses a launch with neither program nor module, and a module that is a path', () => {
+  it('refuses a launch with no program, and a module launch', () => {
     expect(() => parseLaunch({})).toThrow(/needs "program"/);
-    expect(() => parseLaunch({ module: 'app/server.py' })).toThrow(/dotted module name/);
-  });
-
-  it('refuses a module launch with record: true and names record: false', () => {
-    expect(() => parseLaunch({ module: 'app.server', record: true })).toThrow(/"record": false/);
-    // module wins over program, as the runtime does
-    expect(parseLaunch({ program: app, module: 'app.server' }).program).toBeUndefined();
+    expect(() => parseLaunch({ module: 'app.server' })).toThrow(/"module" has no meaning on Node/);
+    expect(() => parseLaunch({ program: app, module: 'app.server' })).toThrow(/"module" has no meaning on Node/);
   });
 
   it('names and prints a launch', () => {
     expect(launchName(parseLaunch({ program: app }))).toBe('app.py');
-    expect(launchName(parseLaunch({ module: 'app.server' }))).toBe('-m app.server');
-    expect(launchLine(parseLaunch({ module: 'app.server', args: ['--port', '8000'], python: '/v/bin/python', cwd: root }))).toBe('/v/bin/python -m app.server --port 8000');
-    // a launch that names no interpreter prints none: the session fills it in once it resolved one
-    expect(launchLine(parseLaunch({ module: 'app.server', args: ['--port', '8000'], cwd: root }))).toBe('-m app.server --port 8000');
-    expect(launchReply(parseLaunch({ program: app }))).toMatchObject({ program: app, module: null, python: null, record: false });
+    expect(launchLine(parseLaunch({ program: app, args: ['--port', '8000'], node: '/opt/node/bin/node', cwd: root }))).toBe(`/opt/node/bin/node ${app} --port 8000`);
+    // a launch that names no Node prints none: the session fills it in once it resolved one
+    expect(launchLine(parseLaunch({ program: app, args: ['--port', '8000'], cwd: root }))).toBe(`${app} --port 8000`);
+    expect(launchReply(parseLaunch({ program: app }))).toMatchObject({ program: app, record: false });
+    expect(launchReply(parseLaunch({ program: app }))).not.toHaveProperty('module');
   });
 });
 
 describe('launchKey', () => {
   const real = (p: string): string => p; // no realpath in the test: the key's other half is what matters
 
-  it('is the program (or the module) and the working directory', () => {
+  it('is the program and the working directory', () => {
     expect(launchKey(parseLaunch({ program: app }), real)).toBe(`f:${app}|${root}`);
-    expect(launchKey(parseLaunch({ module: 'app.server', cwd: root }), real)).toBe(`m:app.server|${root}`);
   });
 
   it('ignores args and separates by cwd', () => {

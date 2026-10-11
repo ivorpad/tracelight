@@ -120,7 +120,7 @@ describe.skipIf(!haveRuntime || process.platform === 'win32')('the debug socket 
     expect(d.kind).toBe('debug');
     expect(d.file).toBe(FILE);
     expect(d.launch.node).toBe(process.execPath);
-    expect(d.launch.python).toBeNull();
+    expect(d.launch).not.toHaveProperty('python');
   });
 
   it('answers the stop over the socket: context, locals, eval, with no recording behind it', async () => {

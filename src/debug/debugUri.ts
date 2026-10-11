@@ -45,7 +45,7 @@ export async function handleDebugUri(uri: vscode.Uri): Promise<void> {
   }
   const resource = vscode.Uri.file(launch.program ?? launch.cwd);
   if (!setting<boolean>(AGENT_ACCESS_SETTING, false, resource)) {
-    const name = launch.module ? `-m ${launch.module}` : path.basename(launch.program ?? '');
+    const name = path.basename(launch.program ?? '');
     log.warn(`URI handler: a debug start of ${name} arrived with tracelight.agentAccess off; asking`);
     // not awaited: the handler returns at once, and a click (the CLI may still be polling, or a
     // later `state --live` finds it) starts the very launch that was asked for

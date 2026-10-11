@@ -39,12 +39,12 @@ const REQUEST = bag(
   ]),
 );
 
-/** (a) paused at the breakpoint, exactly the session of the screenshot: `-m api.main`. */
+/** (a) paused at the breakpoint. */
 export const PAUSED: DebugSessionPanel = {
   id: 'debug-1',
-  displayName: '-m api.main',
-  launch: { program: null, module: 'api.main', args: [], cwd: '.', python: '.venv/bin/python', record: false },
-  launchTitle: '/path/to/project/.venv/bin/python -m api.main  ·  cwd /path/to/project',
+  displayName: 'main.ts',
+  launch: { program: 'api/main.ts', args: [], cwd: '.', node: '/usr/local/bin/node', record: false },
+  launchTitle: '/usr/local/bin/node /path/to/project/api/main.ts  ·  cwd /path/to/project',
   running: true,
   paused: true,
   record: false,
