@@ -20,9 +20,6 @@ Codex's `~/.codex/config.toml`: `[mcp_servers.tracelight]` with `command = "trac
 
 ## The tools
 
-The tools keep the names and arguments of Tracelight's own server, so an agent that knows one knows
-the other.
-
 | Tool | Command | Arguments |
 |---|---|---|
 | `tracelight_run` | `run FILE --save` | `file` (`.js`, `.mjs`, `.cjs`, `.ts`, `.mts`, `.cts`, `.jsx`, `.tsx`), `save` (default `.tracelight/runs/<name>.json` next to the file), `args`, `no_locals`, `http`, `timeout_ms`, `max_steps` |

@@ -3,9 +3,7 @@
 Every verb takes `RUN` (a `run.json`) or `--live` (an open VS Code session with
 `tracelight.agentAccess` on). Every verb takes `--json` for the raw shape; the text form is the one
 to read. Errors go to stderr as `error: <what>` plus a line saying what to do next, exit 2; with
-`--json` the same thing arrives as `{"ok": false, "error", "hint"}` on stdout. The verbs, flags,
-text and JSON shapes are the same as the `tracelight` CLI's for Python, so a page or a script built on
-one reads the other.
+`--json` the same thing arrives as `{"ok": false, "error", "hint"}` on stdout.
 
 Contents: [Recording a run](#recording-a-run) · [Mapping](#mapping-a-run-you-do-not-know) ·
 [Stepping](#stepping) · [Following a value](#following-a-value) ·

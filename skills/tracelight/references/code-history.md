@@ -151,8 +151,7 @@ source range or focus` tells you which card to fix.
 
 The source is coloured by Shiki here, while the file is being written, and the page carries the
 tokens as data. The grammar comes from each file's extension: `.js`, `.mjs`, `.cjs` and `.jsx`
-are JavaScript, `.ts`, `.mts` and `.cts` TypeScript, `.tsx` TSX (and `.py` Python, for a page
-`tracelight history` wrote). A file with another name takes `codeLang` from the data (`js`, `ts`,
+are JavaScript, `.ts`, `.mts` and `.cts` TypeScript, `.tsx` TSX. A file with another name takes `codeLang` from the data (`js`, `ts`,
 `tsx`), else the run's `meta.language`, else stays monochrome. That is why it still opens with nothing to fetch. `--theme` takes any Shiki
 theme; the default is `github-dark-dimmed`, whose background is the panel colour the
 design already uses. The renderer drops a file's colours rather than shift them when the token
