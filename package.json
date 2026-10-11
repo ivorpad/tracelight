@@ -1644,12 +1644,12 @@
             "Requests reach the network and every exchange is written to .tracelight/replay/ in the workspace.",
             "Every request is answered from the recording; nothing reaches the network."
           ],
-          "markdownDescription": "The HTTP layer of a run. `record` writes every HTTP exchange of the run (httpx, requests, urllib / http.client) to `.tracelight/replay/` in the workspace, one file per source file. `replay` answers every request from that file without touching the network, so a re-run of API-driven code costs nothing and returns the same values; a request with no recorded response fails as a connection error. Also a per-session choice in the panel Settings (\"HTTP\"); the next run uses it."
+          "markdownDescription": "The HTTP layer of a run. `record` writes every HTTP exchange of the run (`http`/`https`, `fetch`, `XMLHttpRequest`) to `.tracelight/replay/` in the workspace, one file per source file. `replay` answers every request from that file without touching the network, so a re-run of API-driven code costs nothing and returns the same values; a request with no recorded response fails as a connection error. Also a per-session choice in the panel Settings (\"HTTP\"); the next run uses it."
         },
         "tracelight.httpObserve": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Observe the HTTP clients (httpx, requests, urllib / http.client) in every run so the HTTP view lists the requests with their status, size, time and the statement that made them. Off leaves the clients untouched: no rows, no HTTP view. Record and replay (`tracelight.http`) work either way."
+          "markdownDescription": "Observe the HTTP clients (`http`/`https`, `fetch`, `XMLHttpRequest`) in every run so the HTTP view lists the requests with their status, size, time and the statement that made them. Off leaves the clients untouched: no rows, no HTTP view. Record and replay (`tracelight.http`) work either way."
         },
         "tracelight.delay": {
           "type": "number",

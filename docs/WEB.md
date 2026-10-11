@@ -1,13 +1,13 @@
 # Tracelight in a browser
 
-Tracelight is the browser page: the Pyokka panel, a code pane and the Time Machine in a plain browser tab, outside VS Code, for the Python runtime (Pyokka) and the JS/TS one alike. A
-small local bridge runs one runtime and relays its NDJSON protocol (`docs/PROTOCOL.md`) to the
-page over a WebSocket, so the page works with any runtime that speaks that protocol: the Python
-one and the JS/TS one.
+The browser page is the Tracelight panel, a code pane and the Time Machine in a plain browser
+tab, outside VS Code. A small local bridge runs the runtime and relays its NDJSON protocol
+(`docs/PROTOCOL.md`) to the page over a WebSocket. It runs JavaScript and TypeScript files with the
+runtime in `node/`; `--runtime "CMD ARGS"` points it at any other command that speaks the protocol.
 
 ```
 npm run build
-node dist/web/server.js path/to/file.py --open        # or: npm run tracelight-web -- path/to/file.py
+node dist/web/server.js path/to/file.ts --open        # or: npm run tracelight-web -- path/to/file.ts
 ```
 
 Open http://127.0.0.1:4777/. The left side is the file in Monaco with values after their lines,
@@ -27,8 +27,7 @@ Every view of the panel works as it does in VS Code:
   the recording in the code pane.
 - Narrate (the Walkthrough's sparkle) and the Tour with Narrate Tour. The bridge makes the one
   model call with `TRACELIGHT_EXPLAIN_COMMAND` when set (a command that reads the prompt on stdin),
-  else `claude -p`, else `codex exec`. The tour runs `python -m pyokka_runtime tour` over the run,
-  for a JS/TS run too, so it needs the `--python` interpreter.
+  else `claude -p`, else `codex exec`. The tour runs the runtime's own `tour` verb over the run.
 - The live Debugger: the header's debug button runs the file for real, with nothing recorded, and
   pauses at breakpoints. Click the gutter or press F9 to set one. Under the code pane are the call
   stack, the variables and continue, pause, step over, into and out, restart and stop (F5, F10,
@@ -56,10 +55,8 @@ main file at a time, of one runtime's language.
 | Option | |
 |---|---|
 | `--port N` | default 4777 (`TRACELIGHT_PORT`) |
-| `--runtime python` | the default for `.py`: `python3 -m pyokka_runtime serve` from `dist/python` |
-| `--runtime js` | the default for `.js`/`.ts`/`.jsx`/`.tsx`: the JS/TS runtime, `node node/bin/tracelight.mjs serve` from the checkout (`pyokka-js.mjs` until its rename lands) |
-| `--runtime "CMD ARGS"` | any command that speaks the protocol on stdio, started in the file's directory (`TRACELIGHT_RUNTIME`) |
-| `--python PATH` | the interpreter for the Python runtime, 3.12+ (`TRACELIGHT_PYTHON`, default `python3`) |
+| `--runtime js` | the default for `.js`/`.mjs`/`.cjs`/`.jsx`/`.ts`/`.mts`/`.cts`/`.tsx`: `node <dist>/node/bin/tracelight.mjs serve`, else the checkout's `node/bin/tracelight.mjs` |
+| `--runtime "CMD ARGS"` | any command that speaks the protocol on stdio, started in the file's directory (`TRACELIGHT_RUNTIME`); the only way to run a file of another language |
 | `--open` | open the page in the default browser |
 | `--no-watch` | do not re-run on save |
 | `--verbose` | log the runtime's spawn, stderr and exits |
@@ -112,7 +109,7 @@ they registered. A browser-automation agent can also call `window.tracelight` (t
 ## How it fits together
 
 ```
-runtime (python -m pyokka_runtime serve, or the JS one)
+runtime (node node/bin/tracelight.mjs serve, or --runtime "CMD ARGS")
    │ NDJSON on stdio, docs/PROTOCOL.md
 web/server.ts  ── the bridge: spawns it (RunnerClient), runs the file, watches it,
    │              relays events and requests, serves the page, the agent API;

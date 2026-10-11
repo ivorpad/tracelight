@@ -1,17 +1,22 @@
-# Pyokka runtime protocol
+# Tracelight runtime protocol
 
-The extension host spawns one **runner** per Python interpreter:
-`python -m pyokka_runtime serve`. Messages are NDJSON: one JSON object per
-line, host → runner on the runner's stdin, runner → host on the runner's
-stdout. The runner never lets user code touch that stdout: each run executes
-in a forked/spawned **child** whose fds 1/2 are pipes that the runner reads and
-forwards as `output` events.
+The extension host spawns one **runner** per Node binary:
+`node dist/node/bin/tracelight.mjs serve` (`node/bin/tracelight.mjs` in a checkout). Messages are
+NDJSON: one JSON object per line, host → runner on the runner's stdin, runner → host on the
+runner's stdout. The runner never lets user code touch that stdout: each run executes in a
+spawned **child** whose fds 1/2 are pipes that the runner reads and forwards as `output` events.
+
+The protocol was written first for Pyokka's Python runtime, and this runtime speaks it as it is:
+field names such as `pythonVersion` and the value vocabulary (`list`, `dict`, `None`) come from
+there (`docs/RUNTIME.md`, "On the wire", says how JavaScript values map onto them). Many examples
+below name `.py` files and Python frames; read them as any program. How the runtime in `node/`
+implements each part is in `docs/RUNTIME.md`.
 
 Every host request carries `id`; the runner answers with a message that
 carries the same `id` (`ok`, `error`, or a typed reply). Run events carry
 `runId` and a monotonically increasing `seq`.
 
-Positions: lines are 1-based, columns are 0-based (Python `ast` convention).
+Positions: lines are 1-based, columns are 0-based UTF-16 code units (what oxc and VS Code use).
 A **range** is `[startLine, startCol, endLine, endCol]`.
 Range ids (`rid`) are **global** across files within a run: each
 `file.instrumented` event declares `rangeBase`, and its local ranges occupy
@@ -26,7 +31,7 @@ order within a file.
 | `run` | see below | `ok`, then a stream of run events |
 | `expand` | `runId, valueId, queryPath: string[], limits?: {depth, elements, stringLength}` | `value {node}` or `error`. A `loadActionNode` has `id = <parent id> + " +"`; expanding it returns the parent with up to 100k elements. Served by the finished child from its registry until the next run. |
 | `evaluate` | `runId, expression, limits?, frameId?` | `evaluated {text, valueBag}` or `error`. Evaluates a pure expression against the finished run's `__main__` namespace in the still-alive child, or, while a debug run is paused, in the paused frame (locals over globals). `frameId` picks a frame of the pause (`0`, the default, is the paused frame); a `frameId` the pause does not have is an `error` (`LookupError: no frame N in this pause`). It is ignored after the run, where there is no frame. Pure is names, attributes, subscripts, operators, comprehensions, the builtins in `PURE_BUILTINS` (`len`, `type`, `sorted`, `isinstance`, ... , still bound to the real builtin where the expression runs) and the non-mutating methods of an exact builtin type (`dict.get` / `keys` / `values` / `items` / `copy`, `list.copy` / `count` / `index`, the set queries, any public method of `str`, `bytes`, the number types, `tuple`, `frozenset`, `range`); a user function, `list.append`, `dict.pop`, a method of a user object, a lambda, an await, a yield and the walrus are refused, one line saying which and what is allowed. No statement of the program is re-run; attribute access may still invoke properties and a subscript `__getitem__`. |
-| `exec` | `runId, source, frameId?` | `executed {text, valueBag?, modified: true, exception?: {type, message, traceback}}` or `error`. Runs `source` in the paused frame: anything `compile(source, "<pyokka-exec>", "exec")` accepts, so assignments, calls, imports, `del` and multi-line blocks. Served only while a debug run is paused, in either mode, and refused otherwise: `the program is running; pause it first` while it runs, `the run has ended; there is no frame to execute in` after it. `frameId` picks a frame of the pause as it does for `evaluate`. When the last statement is an expression it is evaluated in the same namespaces as the statements before it, so `x = 2` then `x * 3` answers `6` and `items.pop()` shows what it returned: its `text` is masked like any value and comes with a `valueBag` for `expand`. A block whose last statement is not an expression answers `text: ""` and no bag. A statement that raises is reported in `exception` and the session stays paused; only a request that cannot be served at all is an `error`. Capability `exec`. See the runtime notes for how the write reaches the frame and what `modified` means. |
+| `exec` | `runId, source, frameId?` | `executed {text, valueBag?, modified: true, exception?: {type, message, traceback}}` or `error`. Runs `source` in the paused frame: anything `compile(source, "<tracelight-exec>", "exec")` accepts, so assignments, calls, imports, `del` and multi-line blocks. Served only while a debug run is paused, in either mode, and refused otherwise: `the program is running; pause it first` while it runs, `the run has ended; there is no frame to execute in` after it. `frameId` picks a frame of the pause as it does for `evaluate`. When the last statement is an expression it is evaluated in the same namespaces as the statements before it, so `x = 2` then `x * 3` answers `6` and `items.pop()` shows what it returned: its `text` is masked like any value and comes with a `valueBag` for `expand`. A block whose last statement is not an expression answers `text: ""` and no bag. A statement that raises is reported in `exception` and the session stays paused; only a request that cannot be served at all is an `error`. Capability `exec`. See the runtime notes for how the write reaches the frame and what `modified` means. |
 | `complete` | `runId, expression, limit?, frameId?` | `completed {prefix, items: [{label, kind, type?}], error?}` or `error`. Completions for a watch expression typed so far: `expression` is the text before the caret, `prefix` the identifier at its end (what a chosen label replaces). After a dot, the balanced expression before it (`payload`, `rows[0]`, `self.items`) is evaluated under `evaluate`'s side-effect rule and the object's attributes are listed, classified with `inspect.getattr_static` so no property runs; otherwise locals, then globals, then builtins and the constant keywords, sorted, underscored names only once the prefix starts with `_` (`_pk_*` never). Same namespace as `evaluate`: the paused frame, or the finished run's `__main__`. `kind` is `variable`, `attribute`, `function`, `method`, `property`, `class`, `module`, `builtin` or `keyword`; `type` is the value's type name for a variable or attribute. An object that cannot be evaluated (a call, an unknown name) gives `items: []` and `error` rather than `error`. `limit` caps the list (default 100). Capability `complete`. Refused like `evaluate` while the program runs. |
 | `shadow` | `runId, source` | `evaluated {kind, context, text, valueBag}` or `error`. What one edited statement would show, computed from the finished run's state: `print(a, b)` (rendered like print, kind `log`), a bare expression, or `name = expr` (kind `value`, `context` = the target). Same side-effect rules as `evaluate`; the namespace is not modified. |
 | `source` | `runId, fileId` | `source {fileId, instrumentedSource}` or `error`. The instrumented source of one file of the finished run. `file.instrumented` omits it for library files (4-8 MB per run for `openai`), so hosts ask for it when someone wants to see it. |
@@ -41,7 +46,6 @@ order within a file.
 {
   "type": "run", "id": 12, "runId": "r-42",
   "file": { "path": "/abs/scratch.py", "displayName": "scratch.py", "content": "..." },
-  // "module": "app.server",   // instead of `file`: a `python -m` launch (see "The module launch")
   "workspaceRoot": "/abs/project", "cwd": "/abs/project",
   "argv": [], "env": { "A": "1" },
   "projectFiles": [ { "path": "/abs/project/lib.py", "content": "..." } ],   // unsaved buffers
@@ -86,24 +90,8 @@ buffer content, so what runs is what is saved.
 
 ### The module launch
 
-`module` replaces `file` and runs the name the way `python -m` does. Capability
-`module`.
-
-- `sys.argv` is `[<the module's resolved file>, *argv]`, and `cwd` goes on the
-  front of `sys.path` (a file launch puts the file's directory there instead)
-- the module runs as `__main__`, and a package `M` runs `M.__main__`
-- the module and everything it imports are instrumented as a file launch's
-  imports are, so `file.instrumented` arrives per file and a breakpoint set on a
-  line of the module resolves when it loads. The parent packages of a dotted
-  name are imported while the name is resolved, so they are instrumented first
-  and their `fileId` comes before the module's.
-- `SystemExit`, `KeyboardInterrupt` and an uncaught exception end the run
-  exactly as they do for a file
-- a name that cannot be imported is one `runner.error` (`cannot run -m NAME:
-  ...`) and exit code 1. Anything else a parent package raises on the way is the
-  program's own uncaught exception, with its `error` event and its traceback.
-- `module` and `file` together is a `runner.error` (`run.module and run.file are
-  both set; running the module NAME`) and the module runs
+`module` in place of `file` is refused: Node has no module launch. A debug launch names the file to
+run (`launch.program`), and the CLI's `debug` has no `--module`.
 
 ### A debug run without a recording
 
@@ -129,7 +117,7 @@ request in memory, which grows without bound in a server), and `mode` to
 `"normal"`; `markers`, `watch`, `expressionsToEvaluate`, `traceContext` and
 `maxTraceSteps` are ignored. All of them describe a recording.
 
-A `print` is Python's own print: it reaches `sys.stdout`, which is the stream the
+A `console.log` reaches the child's patched `process.stdout`, which is the stream the
 runtime turns into `output` events, so the program's output arrives as `output`
 rather than as a `log`. `step` on those events is the statement the write came
 from, as it is in a recording run.
@@ -419,7 +407,7 @@ the uncaught one first, then the caught ones in first-raise order.
 With `config.secrets.mask` (default) nothing that looks like a secret leaves the
 child process; the host and the panel only ever see `••••••••`. There is no
 value-shape detection (no `sk-` prefixes, no entropy): two provenance rules,
-implemented in `python/pyokka_runtime/secrets.py`.
+implemented in `node/src/secrets.ts`.
 
 - *Value provenance*: the value of every environment variable whose name is
   secret-looking (`OPENAI_API_KEY`, `DB_PASSWORD`, `AUTH_TOKEN`) and at least 8
@@ -443,69 +431,51 @@ buffer) is never scanned.
 
 ### Plugins
 
-`config.plugins` names Python modules (imported from the file's directory, the
-workspace root or `sys.path`). Each may define, all optional and all called
-with the raw `config` dict:
+`config.plugins` names modules by path (`./mock.mjs`, absolute) or package name, resolved from the
+file's directory, then the workspace root, then the runtime (`node/src/plugins.ts`). Each may
+export, all optional, all called with the raw `config` and the plugin API:
 
-- `before(config)`: once per runner process. In fork mode it runs in the runner
-  before the child is forked, so whatever it imports is inherited un-instrumented
-  by every run; import clients lazily (see the HTTP plugin) rather than here.
-- `before_each(config)`: in the run process, before the file is instrumented and
-  executed. The runtime's import finder is already first on `sys.meta_path`; a
-  finder the plugin inserts at position 0 sees every import before it.
-- `after(config) -> dict | None`: in the run process once the program has finished
-  (return, uncaught exception or `sys.exit`), before `run.finished`. A dict it
-  returns is merged into `run.finished`; the runtime's own fields win.
-- `pyokka_runtime.execute.current` is the running `Execution` from `before_each`
-  to `after` (its `spec.file_path` and `spec.workspace_root` say what runs where);
-  `None` in the runner process. `pyokka_runtime.execute.runner_error(message)`
-  emits a `runner.error` for the current run from plugin code (a no-op outside a
-  run).
+- `before(config, api)`: once per runner process, in the runner, before the first run that uses it.
+- `beforeEach(config, api)`: in the run child, after the runtime's load hook is registered (a hook
+  the plugin registers runs before it) and before the main file is imported. It may return a
+  promise; the run waits for it.
+- `after(config, api)`: in the run child once the program has finished (end of the event loop,
+  uncaught exception or `process.exit`), before `run.finished`. A plain object it returns is merged
+  into `run.finished`; the runtime's own fields win.
+- `api.current` is the running execution from `beforeEach` to `after` (`filePath`,
+  `workspaceRoot`, `runId`, `config`, `position()`), null in the runner process;
+  `api.runnerError(message)` emits a `runner.error` for the current run. A plugin outside the
+  runtime also finds the API as `globalThis.__tracelight`.
 
-A hook that raises produces a `runner.error` (`plugin NAME failed in STAGE: …`) and
+A hook that throws produces a `runner.error` (`plugin NAME failed in STAGE: …`) and
 the run goes on without it.
 
 ### HTTP record and replay
 
-`config.http` (`"off"` default) loads the runtime plugin
-`pyokka_runtime.plugins.http_record` (appended to `config.plugins` by the runtime
-when it is not listed). `record` lets every request through and writes each
+`config.http` (`"off"` default) loads the runtime's own `http` plugin
+(`node/src/plugins/http.ts`, appended to `config.plugins` when it is not listed). `record` lets every request through and writes each
 exchange down; `replay` answers every request from the recording and never
 touches the network, so a re-run of API-driven code costs nothing and returns
 the same values. The setting is per session in the panel ("HTTP" in Settings),
-`pyokka.http` as a default, `--http record|replay` on `pyokka run`.
+`tracelight.http` as a default, `--http record|replay` on `tracelight run`.
 
-**Clients.** The plugin patches, on import (a `sys.meta_path` hook) or at once
-when the module is already loaded: `httpx.Client._transport_for_url` and
-`httpx.AsyncClient._transport_for_url`, which wrap whatever transport the client
-picked (custom ones included, such as litellm's `AiohttpTransport`) so its
-`handle_request` / `handle_async_request` is recorded (also the `httpx2`
-package, the same classes under another name); `aiohttp.ClientSession._request`
-with the body taken from `aiohttp.StreamReader.feed_data` as it arrives, so a
-streamed response reaches the program at network speed in record mode, and an
-aiohttp session that an httpx transport drives is not counted twice (a
-ContextVar); `requests.adapters.HTTPAdapter.send`; and, as
-the fallback for `urllib.request`, `urllib3` and raw `http.client`,
-`http.client.HTTPConnection` (`send`, `getresponse`, `connect`, plus
-`HTTPSConnection.connect`): the request bytes are collected from `send` and
-parsed (start line, headers, body de-chunked) when `getresponse` is called. A
-request already handled by a higher-level hook (requests over urllib3 over
-http.client) passes through the fallback untouched (a thread-local depth). In
-replay mode `connect` is a no-op, so no DNS or TCP happens.
+**Clients.** The plugin intercepts `http` and `https` requests, `fetch` and `XMLHttpRequest`
+through `@mswjs/interceptors` (`node/src/http/record.ts`). In replay mode no request reaches the
+network.
 
 **The recording.** One file per source file:
-`<workspaceRoot>/.pyokka/replay/<hash>.jsonl`, `hash` = the first 16 hex digits
+`<workspaceRoot>/.tracelight/replay/<hash>.jsonl`, `hash` = the first 16 hex digits
 of sha256 of the file's real path (edits keep the file; a moved file starts a
-new one). When `<workspaceRoot>/.pyokka` is a regular file (the Quokka-style
-config file) the directory is `<workspaceRoot>/.pyokka-replay/` instead. Replay
+new one). When `<workspaceRoot>/.tracelight` is a regular file (the Quokka-style
+config file) the directory is `<workspaceRoot>/.tracelight-replay/` instead. Replay
 reads the first file found in `<workspaceRoot>`, then the file's directory and
-each of its ancestors (a run recorded by `pyokka run`, whose workspace root is
+each of its ancestors (a run recorded by `tracelight run`, whose workspace root is
 the file's directory, replays in the panel and the other way round). A record
 run *replaces* the file when its first exchange is written; a record run that
 made no request leaves the previous recording alone. Lines:
 
 ```jsonc
-{ "pyokka": "http", "version": 1, "file": "/abs/agent.py", "recorded": "2026-09-11T10:12:03Z", "python": "3.14.6" }
+{ "tracelight": "http", "version": 1, "file": "/abs/agent.py", "recorded": "2026-09-11T10:12:03Z", "python": "3.14.6" }
 { "n": 1, "key": "3f2a…",                              // n: request order; key: see below
   "client": "httpx",                                   // httpx | aiohttp | requests | http.client
   "request": { "method": "POST", "url": "https://openrouter.ai/api/v1/responses",
@@ -544,7 +514,7 @@ order, one per request; when they are used up the last one is served again. A
 key with no entry is a *miss*: the plugin emits
 `runner.error` `no recorded response for POST https://…/responses; run once in
 record mode (<file>)` (once per key per run) and the transport raises
-`ConnectionError("pyokka replay: no recorded response for POST https://…")` in
+`ConnectionError("tracelight replay: no recorded response for POST https://…")` in
 the program (an SDK's retry logic sees a connection error). Replay is fast, so
 `# ?` timings, coverage and the Time Machine reflect the recorded results, not the
 network. In record mode a request that fails (no response) is not written.
@@ -593,7 +563,7 @@ record run would write), `exists`/`recordedAt`/`entries` whether it is on disk
 after the run, its header's timestamp and its number of exchanges (`null` when
 absent); plus `replayed: true` when the mode was `replay`.
 
-**HTTP table** (`pyokka http RUN`, `--live`, bridge `http`, the panel's HTTP view),
+**HTTP table** (`tracelight http RUN`, `--live`, bridge `http`, the panel's HTTP view),
 built from the rows by one pure function per language and pinned by a shared
 fixture (`test/unit/fixtures/http-table*.json`):
 
@@ -624,184 +594,22 @@ and "HTTP replay" in one text); with the mode `off` the status bar keeps the las
 run's `· recorded N` / `· replayed`. When the mode is `off` and a recording exists
 for the file, the view's footer says `A recording from <date> (N requests) exists ·
 Replay`. On the first recording in a git workspace the host offers once to add
-`.pyokka/replay/` to the workspace `.gitignore`.
+`.tracelight/replay/` to the workspace `.gitignore`.
 
-## Runtime notes (python/pyokka_runtime)
+## Runtime notes
 
-- Hooks are installed as builtins named `_pk_s`, `_pk_c`, `_pk_f`, `_pk_x`,
-  `_pk_v`, `_pk_t`, `_pk_print`, `_pk_logpoint`, `_pk_time`,
-  `_pk_snap_error`, plus the markers `_pk_u` and `_pk_end`; the per-function
-  scope local is `_pk_scope_`. A `__pk_`
-  prefix is impossible: Python mangles `__name` identifiers inside class
-  bodies, methods included. `instrumentedSource` shows these names.
-- Return values: a function body starts with `_pk_rv_ = _pk_u`, every
-  `return value` becomes `return (_pk_rv_ := value)` (a bare `return` gets
-  `_pk_rv_ = None` before it and stays bare, as an async generator requires),
-  the end of the body sets `_pk_rv_ = _pk_end`, and the exit hook in the
-  `finally` is `_pk_x(_pk_scope_, _pk_rv_)`. Still `_pk_u` there means an
-  exception is leaving the frame (`sys.exception()` names it). A return costs
-  a local store, not a hook call; the text is made once per call at exit.
-- Compound statements (`if`, `for`, `def`, `class`, ...) have a *header*
-  range (up to the end of the test / iterator / signature), not the whole
-  block. `functions[].bodyRange` is the whole `def`.
-- Print output is not echoed to stdout; the `log` event (kind `log`) is the
-  record. `print(..., file=sys.stderr)` logs with `context: "stderr"`. Other
-  `file=` targets pass through untouched.
-- `time` events are emitted for every timed range at the end and every 250 ms
-  while running; `log` events of kind `time` carry the running aggregate in
-  `time`.
-- `watch` events are emitted for steps `traceContext.step <= s <
-  traceContext.step + prefetch`; each has either `valueBag` or `error`.
-  (JS, a run with worker threads: the window starts at `traceContext.mainStep`
-  main-thread statements, see "Worker threads".)
-- Coverage-ignore hints on a compound statement ignore the whole block.
-- Scope parents: `_pk_f` reads the caller's `_pk_scope_` by walking up to four
-  `f_back` frames from the entered function's frame (a decorator wrapper or a
-  `sorted(key=...)` callback sits between caller and callee; a task resumed by
-  the event loop or a thread's target has no instrumented caller within reach and
-  gets the module, parent 0). A module frame ends the walk: an imported project
-  module's global `_pk_scope_`, else 0. Only frames whose code has `_pk_scope_`
-  among its variable names have `f_locals` read, so uninstrumented frames cost an
-  attribute lookup (on 3.12 `f_locals` snapshots the frame's locals; 3.13+ hands
-  out a proxy). Measured on a 100k-call loop this costs 5–9 % over the previous
-  "current scope" rule, 11–16 % when every call comes from another instrumented
-  function; a frame-id map keyed at entry and cleared at exit was slower.
-- `libraryCode`: a library module's body is coverage-only, and so is everything
-  it calls while importing. The module body is wrapped in `_pk_f(<module rid>)`
-  / `_pk_x`, which make the tracer *quiet* until the import finishes: hits are
-  counted, steps, scopes and handled exceptions are not. Steps and scopes are
-  recorded for library functions called afterwards from stepped code (pydantic
-  building its models at import time was 1.7 M steps otherwise). No scope is
-  created past `maxTraceSteps`.
-- Instrumented library files are cached under `~/.pyokka/cache/`
-  (`PYOKKA_CACHE_DIR` overrides the directory, an empty value disables the
-  cache), keyed by runtime version, interpreter bytecode magic, real path,
-  mtime, size and instrumentation options. The code object is stored compiled
-  at a sentinel range base and its range-id constants are rebased on load
-  (`instrument.relocate`). Project files are never cached. Entries not
-  rewritten for 30 days are swept. `pyokka cache` reports the directory, entry
-  count and size; `pyokka cache --clear` and the extension's "Clear Library
-  Cache" command remove the entries (`cache.clear`; the directory stays).
-- The debugger (`debugger.py`, `control.py`): a run started with `config.debug` or
-  `breakpoints` can pause at its frontier. The statement and function-entry hooks call
-  `Debugger.on_step` only while a debugger is attached, so other runs pay nothing. A pause
-  blocks the program thread inside the control channel, which serves requests against the
-  live frame until `continue` or `step`; a stop while paused goes through the usual SIGTERM
-  flush. Step semantics are the Time Machine's, computed from the scope parent chain (into:
-  the next step; over: the next step in this scope or an ancestor; out: in an ancestor), so
-  recursion is exact and a step over an awaited gather skips the gathered tasks. `locals`
-  entries flushed at a pause are not re-sent at the end (`locals_flushed`).
-- No run with `config.debug` is on the timeout clock, recording or not: the host
-  sends `timeoutMs: 0` and `Runner.handle_run` arms no timer for a debug run
-  whatever the request says. A debug run that looks busy may be a server waiting
-  for a request, and a stale host must not be able to kill a paused program.
-  `stop` is how a debug run ends early.
-- A debug run with `config.record: false` installs a second hook set
-  (`hooks_debug.py`) instead of the recorder's. Per statement it increments one
-  integer and reads one list cell; while a reason is armed it also reads the
-  breakpoint index. No list append, no tuple, no dict write, no frame fetch, no
-  attribute lookup on the tracer, no clock read, and no call into the debugger
-  unless a breakpoint matched or a reason other than a breakpoint is armed.
-  `Debugger.on_step` fetches the frame itself (`sys._getframe(2)`) and only once
-  a reason needs one, so a breakpoint without a condition touches no frame until
-  it pauses. Step Over and Step Out keep no per-call state either: `_pk_f` hands
-  out a per-call id from a counter, and the `_pk_x` the instrumenter already
-  calls from a `finally` tells the debugger when the frame it is stepping in has
-  returned, which re-arms the step in the nearest instrumented ancestor of that
-  frame, the module body included. When the frame has no such ancestor within
-  four frames, because it was called from code that is not instrumented (a thread
-  target, a request handler under a web framework, a library callback) or from
-  nothing at all, the step becomes the next statement of the program's own code
-  wherever it runs, which is what a debugger with "just my code" does: a handler
-  that unwound into the framework has no frame of ours to come back to, and
-  waiting for one means the next request is served with the client still waiting
-  for its stop. The pause reports the kind that was asked for, so a Step Over
-  that degraded still says `over`. A frame that suspends (a `yield`, an `await`) runs no `finally`, so
-  the step belongs to that frame and lands where it resumes; a frame that never
-  resumes leaves the step armed and the run goes on to the next reason. Frame 0
-  of the stack reports the line the pause reports, which differs from the
-  frame's own `f_lineno` at a function entry: the pause is on the `def` line and
-  the frame is about to run the first body statement. A server running for an
-  hour holds one integer, one pending tuple and the breakpoint index.
-- `exec` (`dbgexec.py`) is the only place the runtime writes into a running
-  program; everything else that reads a paused frame goes through `pure.py` and
-  cannot have an effect. How the write reaches the frame's own variables depends
-  on the interpreter: at module level the frame's globals are the module dict,
-  so an assignment is already in place; on 3.13+ `f_locals` is the write-through
-  proxy of PEP 667 and the exec lands in the fast locals directly; on 3.12
-  `f_locals` is a snapshot dict cached on the frame, so the exec writes into the
-  snapshot and `ctypes.pythonapi.PyFrame_LocalsToFast` pushes it back. That is
-  the one thing here that needs `ctypes`, and a build without it refuses the
-  request (`cannot write to a frame on Python 3.12 without ctypes`) before
-  running anything rather than after. A name the function itself declares reaches
-  the program's own code on both branches; a brand-new name stays in the frame's
-  locals mapping, so a later `exec`, `evaluate` or `locals` sees it but the
-  compiled code does not, because it has no slot for it. Any `exec` attempt sets
-  `modified`, successful or not, because the runtime cannot know what a statement
-  did and one that raised halfway may already have written; from then on it rides
-  on every `debug.paused` and on every `locals` reply, until a new run.
-- A `function: NAME` breakpoint (`dbgbreakpoints.py`) is resolved by the runtime,
-  not the host: a module imported later gets its breakpoint when it loads, which
-  an AST scan of the program cannot do for an arbitrary `sys.path` module, and
-  the instrumenter already built the table. `info.function_names` maps the rid of
-  a `def` to its name, and that rid is the one `_pk_f` is called with, so the
-  breakpoint pauses at every call, before the function's first statement. The
-  table holds bare names, so a dotted NAME matches on its last segment
-  (`Ranker.rank` finds `rank`). With a `path` only that file is searched; without
-  one, every instrumented non-library file, in the order they were instrumented,
-  and inside a file in source order. Another file that defines the same name does
-  not move the breakpoint: the first match keeps it and the echo carries
-  `also defined in lib/rank.py:12; give FILE:LINE to pick one`.
-- Exception tracking with `config.record: false` keeps nothing per exception but
-  its identity: `ErrorMixin.seen` holds the last 256 exception objects by
-  `id(exc)` so a first sighting stays a first sighting, and no `ErrorRecord`
-  survives the callback. With `breakOnException: "off"` a non-recording run
-  installs no `sys.monitoring` callbacks at all; the `exceptions` action installs
-  them when it switches away from `off` and removes them when it switches back.
-- `mode: "profile"` runs the plain (uninstrumented) file under `cProfile`; the
-  `.cpuprofile` is a flat profile (every function under `(root)`, self time as
-  samples).
-- `mode: "snaps"`: `"""{{ ... }}"""` fences anywhere in the file; every
-  top-level statement and every snap statement runs in its own try/except, so
-  errors are reported (as `error` events, coverage 3/4) and execution
-  continues. Snap values are logged with kind `value`.
-- Awaitables: a coroutine that is the value of a bare expression statement
-  logged by `# ?` is run to completion (`asyncio.run`, or scheduled on the
-  running loop); Tasks/Futures are logged on completion; a coroutine bound to a
-  name is shown as `<coroutine ...>` and left alone.
-- Child mode (`pyokka_runtime/forksafety.py`): a run child is a fork of the
-  runner on Linux and a fresh interpreter (spawn) on macOS and Windows;
-  `PYOKKA_SPAWN=1` forces spawn anywhere, `PYOKKA_FORK=1` forces fork on macOS.
-  `ready.capabilities[0]` says which. Forking on macOS died after the first
-  run: the parent has threads once a run finished (the pipe readers, the
-  waiter, the timeout timer), which arms Apple's `objc_initializeAfterForkError`
-  check in every later child, and the first Objective-C class the child
-  initialises that the parent had not aborts it (SIGABRT, exit -6). User code
-  gets there through Apple frameworks: building an `httpx` client (its proxy
-  lookup runs `urllib.request.getproxies()`, SystemConfiguration,
-  `+[NSCharacterSet initialize]`), `getproxies()` itself (`+[NSNumber
-  initialize]`), a TLS handshake verified by `truststore`; the openai SDK does
-  the first when the client is constructed, before any request. A spawned child
-  costs about 35 ms more than a fork (interpreter start plus the runtime's
-  imports; user imports are cold either way) and has no such rule. Whoever forks
-  on macOS must set `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for the runner;
-  the runner's own threads never enter Objective-C, so the check is a false
-  positive there. A child that dies from a signal without a `child.done` (a
-  negative exit code that is not a timeout or a stop) produces a `runner.error`
-  naming the signal, with a hint, before `run.finished`; the runner never
-  re-runs it.
-
+How the runtime in `node/` implements this contract (the loader, the instrumentation hooks, the
+child's fds, async parents, workers, the debugger's control pipe): `docs/RUNTIME.md`.
 
 ## Agent access: saved runs, the context slice, the bridge
 
-Agents (Claude Code, Codex exec, scripts) read a run through the `pyokka` CLI
-(`python -m pyokka_runtime`, a stdlib argparse program with a `pyokka` console
-script). Two sources feed the same commands: a **saved run** file, and the
+Agents (Claude Code, Codex exec, scripts) read a run through the `tracelight` CLI
+(`node node/bin/tracelight.mjs`, or `~/.local/bin/tracelight`, which the extension writes). Two sources feed the same commands: a **saved run** file, and the
 **bridge** of a live VS Code session (`--live`). Both produce the same JSON
 shapes; the CLI renders them as bounded text (`--json` prints them raw). Every
 string that leaves the runtime or the extension goes through **redaction**.
 
-### Saved run (`pyokka run FILE --save run.json`)
+### Saved run (`tracelight run FILE --save run.json`)
 
 `run.json` is the NDJSON event stream of `run` as a JSON array (`events`), plus
 `meta`: `{"runtimeVersion", "python", "file", "workspaceRoot", "argv",
@@ -830,7 +638,7 @@ it those commands say the run must be repeated with `--keep` or `--live`.
   "errors": [ { "line": 16, "type": "OpenAIError", "message": "Missing credentials...", "step": 2143 } ] }
 ```
 
-### Variable history (`pyokka var RUN NAME`, bridge `var`)
+### Variable history (`tracelight var RUN NAME`, bridge `var`)
 
 ```jsonc
 { "name": "api_key", "total": 2, "truncated": false, "recordedLocals": true,
@@ -872,7 +680,7 @@ Machine is inactive. Source lines in `block.lines[].text` are code and are not
 redacted; every value, context, error message and eval result is. The same shape answers "context for
 `file:line`" (the first step on that line) and every `step` move.
 
-### Provenance (`pyokka why RUN STEP [NAME]`, bridge `why`)
+### Provenance (`tracelight why RUN STEP [NAME]`, bridge `why`)
 
 ```jsonc
 { "name": "label", "step": 24, "depth": 5, "nodes": 7, "truncated": false, "recordedLocals": true,
@@ -940,7 +748,7 @@ marked `cut: true` (no `reads`, `calls`, `opaque`); `truncated: true` says the b
 value; `statement` and `opaque` are source and are not.
 
 `conclusion` is the answer in words, one or two sentences built from the root and its first
-level by fixed rules, so it never guesses (`python/pyokka_runtime/agent/why_text.py`,
+level by fixed rules, so it never guesses (`node/src/agent/why_text.ts`,
 `provenanceConclusion` in `src/shared/provenanceText.ts`; the fixture cases pin both to the same
 strings). The first sentence is the value and where: `NAME is VALUE at #STEP (file.py:LINE)`
 (the file's base name, values one line cut at 60 characters). The second is the first rule that
@@ -953,9 +761,9 @@ which has been VALUE since #STEP (file.py:LINE)`); a `.get(...)` or subscript th
 from a recorded container (`EXPR is None: the key is not in CONTAINER (N keys)`, the count only
 when the recorded text is a whole dict); otherwise `It reads a = X, b = Y` for up to three
 recorded reads. It is `""` for a leaf, for a statement query (empty name) and for a root whose
-value was not recorded. The text forms (`pyokka why`, the panel) print it as the last line.
+value was not recorded. The text forms (`tracelight why`, the panel) print it as the last line.
 
-Text form (`pyokka why`, the panel's Details pane; `src/shared/provenanceText.ts` is the
+Text form (`tracelight why`, the panel's Details pane; `src/shared/provenanceText.ts` is the
 reference, `render_why` its twin): `why NAME at #STEP` (`why #STEP` without a name), then one
 line per node, depth-first, two spaces of indent per level: `← name = text   #step
 file:line function   statement` (no arrow on the root; `name = ?` for a leaf without a value, `name = ?   made before #0, where the recording started` for a `beforeRecording` leaf;
@@ -964,13 +772,13 @@ after an unchanged value; `  …` after a cut node), its reads first (each with 
 then its calls as `↳ name #entry–#return file:line   in a = 1, b = 2   out text`, then `· call
 text   not stepped` per opaque call. Values are cut to 100 characters, statements and results to
 80, inputs to 60. A truncated tree ends with `… more inputs than 60 nodes show; ask why for a
-node's name at its step`. `pyokka why --live [STEP] [NAME]` takes the Time Machine's step when
+node's name at its step`. `tracelight why --live [STEP] [NAME]` takes the Time Machine's step when
 `STEP` is left out.
 
 ### Bridge (live session)
 
-The extension listens on a Unix socket per session when `pyokka.agentAccess`
-is on (default off): `~/.pyokka/sessions/<pid>-<n>.sock`, described by a
+The extension listens on a Unix socket per session when `tracelight.agentAccess`
+is on (default off): `~/.tracelight/sessions/<pid>-<n>.sock`, described by a
 sibling `<pid>-<n>.json`: `{"socket", "token", "pid", "kind": "run", "workspace",
 "file", "displayName", "runtimeVersion", "started"}`. Both are removed on
 dispose. `kind` is new and additive: a Debugger session writes its own
@@ -980,7 +788,7 @@ without `kind` is a run-all session.
 Wire: NDJSON both ways. First client line `{"token": "..."}`; a bad token
 closes the connection. Requests carry `id` and `type`; replies are `{"id",
 "ok": true, ...}` or `{"id", "ok": false, "error", "hint"}`. Every request is
-logged in the Pyokka output channel. `file` fields accept an absolute path, a
+logged in the Tracelight output channel. `file` fields accept an absolute path, a
 workspace-relative path or the display name; a missing `file` means the
 session's main file. `context`/`values` include `valueBag`s only with
 `valueBag: true` (`eval` always does, so `expand` has a `valueId`).
@@ -1002,8 +810,8 @@ session's main file. `context`/`values` include `valueBag`s only with
 | `graph` | `all?, scope?, expand?: string[] | string, statements?: boolean` | the execution graph shape below (`expand`: package names to unroll; `statements: false` leaves the statement nodes out) |
 | `exceptions` | | the exceptions report shape below |
 | `http` | | the HTTP table ("HTTP record and replay"); answers while a run is in flight with the rows so far (`running: true`) |
-| `recording` | | the session's run as a saved run, `{meta, events}` ("Saved run"): `file.instrumented`, `coverage`, `log` (the host's own `live-` and `shadow-` evaluations left out), one `locals`, `error`, `http.exchange`, the final `trace` (`steps` base64 as the runtime sent them, `scopes`, `truncated`, `midRun?`) and `run.finished`; `meta` is `{runId, file, workspaceRoot, exitCode, durationMs, stepCount, files: [{fileId, path, source?}], live: true}`, `source` being the lines the host has for the file. Text values, URLs and sources go through `redact`. Waits for an idle session like `walkthrough`; a `kind: "debug"` socket refuses it. `pyokka tour --live` reads it (`docs/TOUR.md`) |
-| `debug` | `stopOnEntry?`, `launch?` | starts a debug session of the program inside a VS Code debug session, so the standard debug views open with the panel. `launch` is optional and every field inside it is optional (`{program, module, args, cwd, env, python, stopOnEntry, breakOnException, libraryCode, record, recordFrom}`, as `parseLaunch` reads them; `recordFrom` is `FILE:LINE` or a function name and implies `record`): `program` defaults to this session's file, and `libraryCode` and `record` default to false. `libraryCode: true` is `pyokka debug FILE --library-code`: the run instruments third-party packages, so a breakpoint in a library function hits and `step --into` enters it. Without `record` the host creates a `record: false` Debugger session of its own (nothing is recorded, this run-all session is untouched) and the reply is that session's first stop; with `record: true` it starts today's recording run on this run-all session and the reply is its first stop. The run stops at the first breakpoint; with none that can hit, or with `stopOnEntry: true`, it pauses before the first statement instead. When this session is already paused the reply is its current frontier and nothing is started |
+| `recording` | | the session's run as a saved run, `{meta, events}` ("Saved run"): `file.instrumented`, `coverage`, `log` (the host's own `live-` and `shadow-` evaluations left out), one `locals`, `error`, `http.exchange`, the final `trace` (`steps` base64 as the runtime sent them, `scopes`, `truncated`, `midRun?`) and `run.finished`; `meta` is `{runId, file, workspaceRoot, exitCode, durationMs, stepCount, files: [{fileId, path, source?}], live: true}`, `source` being the lines the host has for the file. Text values, URLs and sources go through `redact`. Waits for an idle session like `walkthrough`; a `kind: "debug"` socket refuses it. `tracelight tour --live` reads it (`docs/TOUR.md`) |
+| `debug` | `stopOnEntry?`, `launch?` | starts a debug session of the program inside a VS Code debug session, so the standard debug views open with the panel. `launch` is optional and every field inside it is optional (`{program, module, args, cwd, env, python, stopOnEntry, breakOnException, libraryCode, record, recordFrom}`, as `parseLaunch` reads them; `recordFrom` is `FILE:LINE` or a function name and implies `record`): `program` defaults to this session's file, and `libraryCode` and `record` default to false. `libraryCode: true` is `tracelight debug FILE --library-code`: the run instruments third-party packages, so a breakpoint in a library function hits and `step --into` enters it. Without `record` the host creates a `record: false` Debugger session of its own (nothing is recorded, this run-all session is untouched) and the reply is that session's first stop; with `record: true` it starts today's recording run on this run-all session and the reply is its first stop. The run stops at the first breakpoint; with none that can hit, or with `stopOnEntry: true`, it pauses before the first statement instead. When this session is already paused the reply is its current frontier and nothing is started |
 | `stop` | | ends the debug run and leaves debug mode: `{stopped: true, runId, finished: {exitCode, stepCount, durationMs}}`. The session, its recording and the Time Machine stay, and so does the run to read; the VS Code debug session showing it ends. With no debug run in flight the reply is `{stopped: false, hint}`, not an error |
 | `restart` | `stopOnEntry?` | stops the debug run and starts a fresh one of the same file inside the same VS Code debug session; the reply is the first stop of the new run, by the `debug` rule, or `{finished}` when it ended without pausing. With no debug run in flight it does what `debug` does |
 | `continue` | `noWait?`, `until?`, `to?: {file, line}` | resumes; replies at the next stop, or `{finished}` when the run ended. `noWait: true` answers `{"ok": true, "resumed": true}` at once instead: a server may not stop again for minutes. `until: EXPR` runs to the first statement where the expression is true, through a break-when watch with the id `until` that the host installs before the resume and removes after the stop (and when the run ends instead); the stop carries `paused.reason: "watch"` with `watch: {id: "until", exp, text}`. `to` runs to a line through the transient run-to-line breakpoint. `until` and `to` are mutually exclusive |
@@ -1011,8 +819,8 @@ session's main file. `context`/`values` include `valueBag`s only with
 | `break` | `set?: [{file, line, condition?}]`, `add?: [...]`, `remove?: [{file, line}]`, `at?: "NAME" \| "FILE:LINE"`, `list?: true`, `exceptions?: "off" \| "uncaught" \| "raised"` | `{breakpoints: [{file?, line?, function?, condition?, rid?, fileId?, resolvedLine?, error?}], exceptions}` after the change (`set` replaces them all); the bridge mirrors them into VS Code's breakpoint list, so the gutter shows them, and sends them to the run in progress. `at` with a bare (or dotted) name is a function breakpoint: it goes on the session's own list as `{function: NAME}` and into the Breakpoints view as a function breakpoint, and the **runtime** resolves the name, so a module imported later gets its breakpoint when it loads. An unresolved spec is echoed as `{path: "", line: 0, function: NAME}`, so an empty `rid` is not a failure; once resolved the echo carries `path, line, rid, fileId, resolvedLine` all filled, and `error: "also defined in lib/rank.py:12; give FILE:LINE to pick one"` when another file defines the name (the run still pauses at the first, and resolution can arrive late, in `debug.paused.breakpoint`). A dotted name (`Ranker.rank`) matches on its last segment; the class is not verified. `at` with `FILE:LINE` is an ordinary breakpoint. `exceptions` sets where an exception pauses the run (`uncaught` by default: only one nobody caught, at the top; `raised`: every raise in user code; `off`: never); a run in flight learns at once, and every reply reports the mode |
 | `watches` | `set?`, `add?: [{id?, exp, breakWhen?: "change" | "true"}]`, `remove?: [id]`, `list?: true` | `{watches: [...]}`: an item with `breakWhen` is a break-when watch `{id, exp, breakWhen, error?}` (ids `w1`, `w2`, … when absent), sent to the run in progress; an item without it is a displayed watch expression `{id, exp, kind: "display", text?, error?}`, the panel's LOGS-pane watch evaluated at the current step (in the paused frame at the frontier; `text` is the value when the evaluation lands within 1.5 s). `remove` takes either kind's id; `set` replaces both kinds. |
 | `locals` | `valueBag?`, `frameId?` | `{locals: [{name, text, type?, length?, valueBag?}], modified?}`: the variables of frame `frameId` of the pause (innermost 0, the default), each with the `type` of its value node and `length` for a sized value (both left out for a masked value); an error while the program runs |
-| `record` | | records from the current pause on, in a run started with `launch.recordFrom` (`pyokka debug FILE --record-from X`) that has not started recording yet: the reply is the same pause as step 0, a stop reply with `already: false` and `paused.recordingStarted`. A session that records already answers `already: true` with its current stop. An error while the program runs and when no debug run is paused; a `kind: "debug"` socket refuses it (a `record: false` session has no run-all session to hold a trace). A pause of a `recordFrom` run before its recording started has no trace: its stop reply is built like a `record: false` one (`block`, frame `stack`, no `moves`) and carries `recording: false`; `state.debug` carries `recordFrom` and `recording` |
-| `exec` | `source`, `frameId?` | `{text, modified, valueBag?, exception?: {type, message, traceback?}}`: runs `source` as a statement in frame `frameId` of the pause (innermost 0, the default). Anything `compile(source, "<pyokka-exec>", "exec")` accepts: an assignment, a call, an import, a `del`, a multi-line block, a bare expression. `text` is the last statement's value when that statement is an expression (with a `valueBag` to expand), else `""`. A statement that raised answers `exception` and the session stays paused: the request succeeded, the statement did not. A `source` that does not compile is an **error** reply (`SyntaxError: invalid syntax`), not an `executed` with an `exception`. `modified` is true on every `executed`, because a statement that raised halfway may already have written, and from then on every stop, the Debugger view and the status bar tooltip say the values are no longer the program's own; it is not on the `debug.paused` that served the exec (that event went out before it) but it is on any `locals` reply taken afterwards, the one at the same pause included. An error while the program runs (`the program is running; pause it first`), after it ended or with no run at all (`the run has ended; there is no frame to execute in`), and for a `frameId` the pause does not have (`LookupError: no frame N in this pause`). Hovers, displayed watches, break-when watches, `eval`, completions and `shadow` never reach it: they stay on `evaluate`, which is pure |
+| `record` | | records from the current pause on, in a run started with `launch.recordFrom` (`tracelight debug FILE --record-from X`) that has not started recording yet: the reply is the same pause as step 0, a stop reply with `already: false` and `paused.recordingStarted`. A session that records already answers `already: true` with its current stop. An error while the program runs and when no debug run is paused; a `kind: "debug"` socket refuses it (a `record: false` session has no run-all session to hold a trace). A pause of a `recordFrom` run before its recording started has no trace: its stop reply is built like a `record: false` one (`block`, frame `stack`, no `moves`) and carries `recording: false`; `state.debug` carries `recordFrom` and `recording` |
+| `exec` | `source`, `frameId?` | `{text, modified, valueBag?, exception?: {type, message, traceback?}}`: runs `source` as a statement in frame `frameId` of the pause (innermost 0, the default). Anything `compile(source, "<tracelight-exec>", "exec")` accepts: an assignment, a call, an import, a `del`, a multi-line block, a bare expression. `text` is the last statement's value when that statement is an expression (with a `valueBag` to expand), else `""`. A statement that raised answers `exception` and the session stays paused: the request succeeded, the statement did not. A `source` that does not compile is an **error** reply (`SyntaxError: invalid syntax`), not an `executed` with an `exception`. `modified` is true on every `executed`, because a statement that raised halfway may already have written, and from then on every stop, the Debugger view and the status bar tooltip say the values are no longer the program's own; it is not on the `debug.paused` that served the exec (that event went out before it) but it is on any `locals` reply taken afterwards, the one at the same pause included. An error while the program runs (`the program is running; pause it first`), after it ended or with no run at all (`the run has ended; there is no frame to execute in`), and for a `frameId` the pause does not have (`LookupError: no frame N in this pause`). Hovers, displayed watches, break-when watches, `eval`, completions and `shadow` never reach it: they stay on `evaluate`, which is pure |
 
 A save while an agent navigates re-runs and re-anchors (Time Machine rules);
 `state.stale` and a `{"event": "rerun", "runId"}` line on watch streams say so.
@@ -1054,7 +862,7 @@ default, that is the only exception pause, the innermost user frame is live for 
 pauses at the first sighting of every exception in user code, before it unwinds, with
 `uncaught: false`; one that nobody catches pauses again at the top with `uncaught: true`. Behind the frontier the recording is
 navigated as on a finished run (`step` backward kinds, `context N`, `why`, `var`); at the
-frontier `eval` and `locals` read the live frame. The CLI: `pyokka debug --live
+frontier `eval` and `locals` read the live frame. The CLI: `tracelight debug --live
 [--stop-on-entry]`, `restart --live [--stop-on-entry]`, `stop --live`, `continue --live`,
 `pause --live`, `break --live [FILE:LINE ...] [--when EXPR] [--remove
 FILE:LINE] [--list] [--on-exception off|uncaught|raised]`, `watches --live [--add EXPR [--break-when change|true]] [--remove ID]
@@ -1073,13 +881,13 @@ refuses the debugging commands with the hint "debugging needs a live session (`-
 
 ### Replay debug session (the Time Machine in VS Code's debug views)
 
-The Time Machine is a VS Code debug session of type `pyokka` while it navigates
+The Time Machine is a VS Code debug session of type `tracelight` while it navigates
 (`src/debug/replaySession.ts`, `dapReplay.ts`). Opening it on a finished run (the panel, `Shift+F5`,
 the Code Story, or the bridge's `step`) starts this launch, and closing it stops the
 session; Stop in the debug toolbar closes the Time Machine:
 
 ```jsonc
-{ "type": "pyokka", "request": "launch", "name": "Pyokka Time Machine: demo.py",
+{ "type": "tracelight", "request": "launch", "name": "Tracelight Time Machine: demo.py",
   "program": "/abs/demo.py", "replay": "<session key>", "internalConsoleOptions": "neverOpen" }
 ```
 
@@ -1126,17 +934,17 @@ While the step shown is a recorded one (not the live pause):
 - A frame focused in the Call Stack (`vscode.debug.onDidChangeActiveStackItem`, frame id > 1)
   moves the Time Machine to that frame's step.
 
-The Variables view's context menu has `pyokka.whyVariable` (Why This Value) while the Time
+The Variables view's context menu has `tracelight.whyVariable` (Why This Value) while the Time
 Machine navigates: the why tree for the row's `evaluateName` at the current step.
 
 ### The Debugger's socket (`kind: "debug"`)
 
 A Debugger session (`config.record: false`) is not a run-all session: it has no document, no
 recording and no Time Machine, and when the program exits it is gone. It publishes its own socket
-and its own descriptor, behind the same `pyokka.agentAccess` setting and in the same directory:
+and its own descriptor, behind the same `tracelight.agentAccess` setting and in the same directory:
 
 ```jsonc
-{ "socket": "/Users/x/.pyokka/sessions/4711-d1.sock", "token": "…", "pid": 4711,
+{ "socket": "/Users/x/.tracelight/sessions/4711-d1.sock", "token": "…", "pid": 4711,
   "kind": "debug",
   "workspace": "/abs/project", "file": "/abs/project/app.py", "displayName": "app.py",
   "launch": { "program": "/abs/project/app.py", "module": null, "args": ["--port", "8000"],
@@ -1159,7 +967,7 @@ refuses:
 
 | requests | error | hint |
 |---|---|---|
-| `var`, `why`, `walkthrough`, `graph`, `exceptions`, `http`, `values`, `story`, `find`, `steps`, `recording` | `<verb> needs a recording` | start the debug session with recording (`pyokka debug FILE --record`), or read a run-all session of the file |
+| `var`, `why`, `walkthrough`, `graph`, `exceptions`, `http`, `values`, `story`, `find`, `steps`, `recording` | `<verb> needs a recording` | start the debug session with recording (`tracelight debug FILE --record`), or read a run-all session of the file |
 | `step` with `back`, `backOver`, `backOut` or `to` | `this debug session records nothing, so there is nothing behind the pause to replay` | into, over and out execute; `--record` gives you the backward moves |
 
 `break` here goes into VS Code's own breakpoint list, so the gutter shows it and the host pushes it
@@ -1168,7 +976,7 @@ to the program in flight, exactly as the run socket's `break` does. `watches --a
 frame; with `--break-when` it is a watch the runtime holds and pauses on.
 
 `debug` on this socket answers the current pause when it is paused. A session that has not paused
-yet is a start in flight, so it waits for the first stop: that is what a cold `pyokka debug FILE`
+yet is a start in flight, so it waits for the first stop: that is what a cold `tracelight debug FILE`
 reads after the URI route. A session that has already paused and run on is refused while the
 program runs (`the debug session of app.py is running`, with the hint that `pause --live` stops it
 at its next statement and `restart --live` starts it again from the top): an agent that says "start
@@ -1222,7 +1030,7 @@ counter, and the socket closes right after.
              "exceptions": "uncaught", "modified": false },
   "thread": { "name": "Thread-3", "ident": 6108209152 },
   "output": { "text": "listening on 8000\n", "truncated": false },
-  "others": [ { "kind": "run", "displayName": "app.py", "descriptor": "/Users/x/.pyokka/sessions/4711-1.json",
+  "others": [ { "kind": "run", "displayName": "app.py", "descriptor": "/Users/x/.tracelight/sessions/4711-1.json",
                 "running": false, "steps": 1240 } ] }
 ```
 
@@ -1251,19 +1059,19 @@ thing) and a run socket otherwise. With none of the preferred kind the other kin
 several, the CLI prints "N live sessions; say which" and their descriptor paths.
 `--session <descriptor path>` selects exactly that socket, whatever the verb.
 
-**How the CLI reaches a window.** `pyokka debug FILE` tries three routes and stops at the first
+**How the CLI reaches a window.** `tracelight debug FILE` tries three routes and stops at the first
 that applies: a `kind: "debug"` descriptor whose launch matches (connect and read the pause); else a
 `kind: "run"` descriptor for the file (send `debug` with the launch over that socket, so no URI is
 needed and the focused-window problem does not arise); else the URI
-`vscode://ivor.pyokka/debug?program=…&args=…&cwd=…&env=…&python=…&stopOnEntry=1&at=app.py:42`,
-handed to `<code> --open-url` (`$PYOKKA_CODE` if set, else `code` on PATH), after which the CLI
-polls `~/.pyokka/sessions` every 100 ms for up to 20 s for the descriptor the window writes. Every
+`vscode://ivor.tracelight/debug?program=…&args=…&cwd=…&env=…&python=…&stopOnEntry=1&at=app.py:42`,
+handed to `<code> --open-url` (`$TRACELIGHT_CODE` if set, else `code` on PATH), after which the CLI
+polls `~/.tracelight/sessions` every 100 ms for up to 20 s for the descriptor the window writes. Every
 value is percent-encoded; `args` is a JSON array of strings and `env` a JSON object of strings.
-**The URI handler obeys `pyokka.agentAccess`**: with the setting off the window starts nothing and
+**The URI handler obeys `tracelight.agentAccess`**: with the setting off the window starts nothing and
 shows a warning with an Open Settings action, because a paused program nobody can continue is worse
 than a refusal. That is why the timeout message names the setting first.
 
-`pyokka shell --live [--session NAME] [--json]` runs many of them in one process: it reads one
+`tracelight shell --live [--session NAME] [--json]` runs many of them in one process: it reads one
 command line per stdin line (the same words without `--live`), holds a single bridge connection
 so the token handshake happens once, and prints every result the way the one-shot command would,
 with a blank line after it, or as one JSON line per result with `--json` (an error is `error:`
@@ -1274,10 +1082,10 @@ is what the shell saves per command.
 
 ### Walkthrough (what happened, in order)
 
-`pyokka walkthrough run.json [--file F] [--scope NAME] [--from N --to M] [--all] [--json]`,
+`tracelight walkthrough run.json [--file F] [--scope NAME] [--from N --to M] [--all] [--json]`,
 `--live` through the bridge request above, the WALKTHROUGH section of the panel and the top
 of the Code Story all show the same list: one moment per line in execution order, derived
-from the recording by `python/pyokka_runtime/agent/walkthrough.py` (saved runs) and
+from the recording by `node/src/agent/walkthrough.ts` (saved runs) and
 `src/session/walkthrough.ts` (live sessions); `test/unit/fixtures/walkthrough-*.json` pins
 both to identical output. Deterministic and instant; a model only ever fills `gloss`.
 
@@ -1307,8 +1115,8 @@ What becomes a moment, in step order:
   `--library-code`) are merged into one moment per user-code call site and package
   ("call to OpenAI.__init__ (openai) from <module>, 3 nested calls") unless `--all`. Repeated
   calls of the same function from the same site are numbered ("call 2 of 4"). Values: the
-  parameters (recorded locals at entry, so `pyokka run --save` has them by default and a
-  live session needs `pyokka.timeMachine.recordLocals`; `def` logpoints; `self`/`cls`
+  parameters (recorded locals at entry, so `tracelight run --save` has them by default and a
+  live session needs `tracelight.timeMachine.recordLocals`; `def` logpoints; `self`/`cls`
   skipped, ≤ 20) as `in`; the last value logged on a `return` line of the callee, else the value the call
   statement produced, else the local a bare `return name` returned, as `out return` / `out
   <name>`; an uncaught exception raised inside as `out raised`.
@@ -1348,12 +1156,12 @@ per line.
 
 ### Execution graph (the diagram of a run)
 
-`pyokka graph run.json [--all] [--scope NAME] [--expand PKG ...] [--no-statements] [--json | --dot]`, `--live`
+`tracelight graph run.json [--all] [--scope NAME] [--expand PKG ...] [--no-statements] [--json | --dot]`, `--live`
 through the bridge request `graph`, the host's `buildExecutionGraph`
 (`src/session/executionGraph.ts`) and the panel's Execution Diagram view all show the same
 picture: where the run started, which functions were called from where and how often, which
 decisions were taken, what went into each call and what came out, where it raised. It is a
-projection of the walkthrough: `python/pyokka_runtime/agent/graph.py` and
+projection of the walkthrough: `node/src/agent/graph.ts` and
 `src/session/executionGraph.ts` build it from the (uncapped) moments of the walkthrough with
 the same `all` / `scope` options; `test/unit/fixtures/execution-graph.json` pins both to
 identical output. Deterministic and instant, no model.
@@ -1485,7 +1293,7 @@ to dropped nodes and their `moments` entries go too. `truncated: true` says a `s
 `steps`, `rows` or data-edge cap cut something. `--scope NAME` applies the walkthrough's
 scope window before building.
 
-Text form (`pyokka graph run.json`): a header line (`12 nodes, 9 edges over 33 steps`),
+Text form (`tracelight graph run.json`): a header line (`12 nodes, 9 edges over 33 steps`),
 then one line per node in `firstStep` order (`n3 Account.withdraw example.py:12  ×1  in
 amount = 30 · out 55.5`; `out` omits the name `return`; `raised Type: message`; a package
 `n7 openai  ×3  320 nested`), decisions and statements indented under their parent in
@@ -1495,13 +1303,13 @@ response = client.responses.parse(…)  ×1  out response = ParsedResponse(…)`
 Graphviz, nodes as records with their rows, decisions as diamonds, data edges dashed,
 edges labelled `×N`.
 
-### Exceptions report (`pyokka exceptions`, the EXCEPTIONS section)
+### Exceptions report (`tracelight exceptions`, the EXCEPTIONS section)
 
-`pyokka exceptions run.json [--json]`, `--live` through the bridge request `exceptions`, the
+`tracelight exceptions run.json [--json]`, `--live` through the bridge request `exceptions`, the
 host's `buildExceptionReport` (`src/session/exceptionReport.ts`) and the EXCEPTIONS section of
 the panel's Output view all show the same list: every exception the run raised, where it was
 raised, where it was caught, how often, with the broad handlers flagged. Built from the
-`error` events, the file table and the trace by `python/pyokka_runtime/agent/exceptions.py`
+`error` events, the file table and the trace by `node/src/agent/exceptions.ts`
 (saved runs) and `src/session/exceptionReport.ts` (live sessions);
 `test/unit/fixtures/exceptions.json` pins both to identical output over the fixture run
 `test/unit/fixtures/exceptions-run.json` (program: `test/unit/fixtures/exceptions/`).
@@ -1553,17 +1361,17 @@ the last raise is a different step; ≤ 100 chars per line, every message redact
 section lists the same rows, uncaught first, a click moves the Time Machine to the row's
 `step`, the locations open the file, and "broad handler" is a badge on the row.
 
-### Narration (`pyokka narrate`, the panel's Narrate button)
+### Narration (`tracelight narrate`, the panel's Narrate button)
 
-Never automatic. `pyokka narrate run.json [--command "…"] [--dry-run]` builds the
-walkthrough, fills `python/pyokka_runtime/agent/narrate_prompt.md` with it (values and
+Never automatic. `tracelight narrate run.json [--command "…"] [--dry-run]` builds the
+walkthrough, fills `node/src/agent/narrate_prompt.md` with it (values and
 source redacted) and the source of the user functions the moments touch (≤ 200 lines each,
 ≤ 20 functions), sends the prompt on stdin to one command, and expects a JSON object
 `{"<moment id>": "<one sentence>"}` back (fences and prose around it are tolerated; unknown
 ids are dropped, sentences are cut at 140 chars; anything else fails once and keeps every
 `gloss: null`). The glosses are written to `meta.walkthroughGloss` of the saved run, so
 `walkthrough` shows them from then on. The backend is `--command` / the setting
-`pyokka.explain.command` when set, else `claude -p --output-format json --tools ""
+`tracelight.explain.command` when set, else `claude -p --output-format json --tools ""
 --no-session-persistence` when `claude` is on the PATH (its `result` field is the answer),
 else `codex exec --skip-git-repo-check --ephemeral --sandbox read-only -o FILE -` (the last
 message is read from FILE), and inside VS Code `vscode.lm.selectChatModels({vendor:
@@ -1576,7 +1384,7 @@ bridge.
 Applied to every `text`, value node `value`, output chunk and error message
 before it is written to a saved run, printed by the CLI, or sent by the
 bridge (the panel and hovers are not redacted: they are the user's own
-screen). Rules, identical in `pyokka_runtime/redact.py` and
+screen). Rules, identical in `node/src/agent/redact.ts` and
 `src/util/redact.ts`, checked by `test/unit/fixtures/redact.json`: whole
 tokens `sk-…` (16+), `AKIA…` (16 upper/digits), `ghp_…` (30+), `xox[abp]-…`,
 JWTs, `Bearer <token>`; and the value of any key whose name contains
@@ -1596,7 +1404,7 @@ innocent name. It applies to agent-facing output only.
 
 Nothing a recording leaves out is dropped silently.
 
-- **Step cap.** `config.maxTraceSteps` (default 999,999; `pyokka run --max-steps`) bounds the
+- **Step cap.** `config.maxTraceSteps` (default 999,999; `tracelight run --max-steps`) bounds the
   recorded trace. Past it the program runs on, unrecorded; the final `trace` carries
   `truncated: true, cap, stepsRun, spentBy`. A saved run copies that into `meta.recording`
   (`{truncated, cap, kept, stepsRun, spentBy: [{path, steps}], exclude}`, paths as the CLI prints
@@ -1610,7 +1418,7 @@ Nothing a recording leaves out is dropped silently.
   bare file or directory name matches anywhere. An excluded module is not instrumented: it runs at
   full speed and records no steps, values or coverage. With `only`, just the matching modules are
   instrumented, library ones included without `libraryCode`. `exclude` wins over `only`, and
-  neither applies to the program file itself. VS Code: `pyokka.timeMachine.exclude`.
+  neither applies to the program file itself. VS Code: `tracelight.timeMachine.exclude`.
 - **Value text.** A `log` text, a `locals` change text and a scope's `returned` are bounded `repr`s:
   `config.maxValueChars` characters (unset: 120 for a local or a return, 200 for a logged value; 0, or more
   than the ceiling, is 1,000,000). A cut text ends in `…(+N chars)`, N being what the full `repr`
@@ -1620,4 +1428,4 @@ Nothing a recording leaves out is dropped silently.
   since a `trace`'s own `truncated` means the step cap. A masked secret carries neither. Raising `maxValueChars` raises the
   value bag's string length and `maxLogEntrySize` to match, so the expandable value holds as much.
   The CLI's own line cuts keep the mark and add what they cut: `…(+N chars)` counts both, and
-  `--json` adds `truncated`/`length` to any `text` that ends in the mark. VS Code: `pyokka.maxValueChars`.
+  `--json` adds `truncated`/`length` to any `text` that ends in the mark. VS Code: `tracelight.maxValueChars`.

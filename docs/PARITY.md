@@ -1,5 +1,8 @@
 # Tracelight parity map: every Pyokka feature against its Node.js / TypeScript equivalent
 
+> History: the checklist Tracelight was built against while it lived in the Pyokka repository,
+> before the split of 2026-10-11. File paths on the Pyokka side point into that repository, not this one.
+
 Tracelight is Pyokka (live values, coverage, Time Machine, frontier debugger, agent CLI) for
 JavaScript and TypeScript on Node.js. This file lists every Pyokka feature with its source
 file, the Node mechanism or library that replaces it, a difficulty, and the workstream that

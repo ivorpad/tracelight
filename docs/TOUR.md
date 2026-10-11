@@ -1,6 +1,6 @@
-# `pyokka tour` and `tour.json`
+# `tracelight tour` and `tour.json`
 
-`pyokka tour RUN|--live [--session NAME] [--goal NAME|FILE:LINE] [--budget TOKENS] [--prose PATH] [--out PATH] [--json]`
+`tracelight tour RUN|--live [--session NAME] [--goal NAME|FILE:LINE] [--budget TOKENS] [--prose PATH] [--out PATH] [--json]`
 splits a recorded run into chapters and lists, per chapter, the steps worth a stop, each with
 the signals that proposed it and the values the program held there. Nothing in it is written by
 a model: every value is read from the recording. It is the input a tour is picked and narrated
@@ -8,9 +8,8 @@ from (one model call, or the agent reading it), and `tour.json` is the contract 
 validator and the Tour view read. `--prose` checks and merges what was written from it
 ("tour.prose.json" below); `--out` writes the tour, merged or not, to a file.
 
-Code: `python/pyokka_runtime/agent/tour/`. The rules come from the ablation of 2026-10-01
-(session e499ce3c, `scratchpad/ablation/REPORT.md` and `poc/`); the corpus it used is the test
-fixture set (`python/tests/fixtures/tour/`, `python/tests/test_tour.py`).
+Code: `node/src/agent/tour/`, tests in `node/test/agent-tour.test.ts`. The chapter and signal
+rules were tuned on Pyokka's Python runs before the split (2026-10-01) and ported as they were.
 
 ## tour.json
 
@@ -89,7 +88,7 @@ per candidate: `id  #step  file:line  signals  statement  → name = value`.
 ## tour.prose.json
 
 What a model (or an agent) writes from `tour.json`, and the only part of a tour it writes. The
-prompt is `skills/pyokka/references/tour-prompt.md`: the skill's `show` mode and the
+prompt is `skills/tracelight/references/tour-prompt.md`: the skill's `show` mode and the
 extension's Narrate Tour both send its text, a blank line, then the compact `tour.json`.
 
 ```
@@ -107,9 +106,9 @@ value's `name` when only one value has it. `value` is read as `field` (the proto
 `from` and `to` are offsets into the value's full recorded text, not the 300 characters the tour
 shows.
 
-`pyokka tour RUN|--live --prose tour.prose.json [--out tour.json]` builds the tour again (give
+`tracelight tour RUN|--live --prose tour.prose.json [--out tour.json]` builds the tour again (give
 it the same `--goal` and `--budget`; the ids and value numbering come from them), checks the
-prose and merges it. Code: `python/pyokka_runtime/agent/tour/prose.py`.
+prose and merges it. Code: `node/src/agent/tour/prose.ts`.
 
 Rejected, with every problem listed, exit status 2 (`--json`: `{ok: false, error, hint,
 violations: [str]}`); each line names the place (`s12-3fa9c1.text`, `c2.title`, `intro`):
@@ -150,18 +149,18 @@ The merged tour is `tour.json` unchanged plus:
 }
 ```
 
-`quote.text` is cut by Pyokka from the recorded value, `length` is the length the recording
+`quote.text` is cut by Tracelight from the recorded value, `length` is the length the recording
 holds, and `recordingCut: true` says the recording had cut the value itself, so the original was
 longer. The rule `title` of a chapter stays; the prose title rides in `prose`.
 
-`skills/pyokka/scripts/render-tour.cjs tour.json page.html [--title TEXT]` renders a merged tour
+`skills/tracelight/scripts/render-tour.cjs tour.json page.html [--title TEXT]` renders a merged tour
 as one page with no scripts: intro, a chapter map (title, step range, LLM call count), chapters
 as `<details>` sections, a card per pick (title, text, `file:line`, `#step`, the quoted slice)
 with the statement and values folded behind a toggle, a repeated value as "same as `name` at
 #step". It is separate from `render-code-history.cjs`, which renders a two-panel, script-driven,
 dark-only source viewer through Handlebars and Shiki; the tour is a document that reads at 400px
-in light and dark with nothing but HTML and CSS. `skills/pyokka/templates/tour.example.json` is
-the RRF fixture merged with `python/tests/fixtures/tour/rrf.prose.json`.
+in light and dark with nothing but HTML and CSS. `skills/tracelight/templates/tour.example.json` is
+a merged tour of the RRF demo (`examples/js/rrf`).
 
 The PageIndex proof (2026-10-01, `learn.json`): one `claude -p` call (claude-opus-5-5, 79,584
 input and 6,970 output tokens, $0.77, 69 s) over the 159,792-character tour; the first reply
@@ -234,65 +233,22 @@ small chapter leaves goes to the others; inside a share the candidates go by sco
 chapter keeps its best 3 whatever they weigh. Values are shaped again after each cut, since a
 `sameAs` target may have gone.
 
-## Recall
-
-Measured with the ablation's hit rule (a candidate within 3 steps of a reference stop, or on its
-line in the same scope when that line ran once there), at the default budget, against the
-ablation's "all four" union of signals (REPORT.md):
-
-| run | steps | references | `pyokka tour` | ablation "all four" | candidates kept / found |
-|---|---:|---|---:|---:|---|
-| rrf | 243 | 8, written from source | 7 | 2 | 35 / 35 |
-| logscan | 4,886 | 10, written from source | 10 | 10 | 32 / 32 |
-| lg_fake | 144 | 12, written from source | 12 | 12 | 32 (small run) |
-| lg_llm | 105 | 10, written from source | 10 | 10 | 29 (small run) |
-| PageIndex | 23,567 | 14 cards of `history.json` | 13 | 14 | 217 / 340 |
-| PageIndex chat | (same run) | 8 cards of `chat-tour.json` | 6 | 8 | |
-| PageIndex chat | (same run) | 11, written after the cards | 10 | 11 | |
-
-The three PageIndex stops below "all four", and what reached them there:
-
-- `#20181` ("the parent summary"): the response of the 13th concurrent leaf summary, `if reply:`.
-  The tour has it unbudgeted; at 40,000 tokens it is a seventh repeat of the line and goes.
-  "All four" reached it through `if reply: took True 14/14, other arm never`, a never-taken-arm
-  signal the ablation found noise and dropped. The parent summary's own response lands at
-  `#20210`, which the tour keeps.
-- `#22410` ("the model's instructions"): `_refuse_skeleton(extra_body)`, the step after
-  `_openai_agent` was entered with the 2,578-character instructions. "All four" reached it with
-  the pre-0.1.7 walkthrough, which filed `_openai_agent` as a callback; it is a plain call. The
-  instructions first go into a call at `#22402` (`_conversation_cache_key`), which is where
-  `narrative:text-in` puts them.
-- `#22889` ("one entry of that tree"): the 7th of 14 recursive `_format_structure` calls; "all
-  four" reached it the same way, as a callback.
-
-Runtime on the PageIndex run (10.8 MB `run.json`, 23,567 steps): 0.8 s for the whole command,
-0.7 s of it building the tour (25 `why` trees). `tour.json` is 159,584 characters of compact JSON
-(39,874 estimated tokens) at the default budget and 234,449 without one; `--json` prints it
-indented, 202,364 characters. The estimate is on the compact form, which is what a prompt should
-carry.
-
-## Live
-
-`--live` asks the bridge for `recording`: the session's run in the saved-run shape
-(`docs/PROTOCOL.md`, "Bridge"), and runs the same code over it. A Debugger session that records
-nothing refuses it, as it refuses `walkthrough`.
-
 ## Tour view
 
 The panel's TOUR section runs this same command. While the section is open, `src/views/tourPane.ts`
 writes each finished run of the bound session (the bridge's `recording` document, built by
 `sessionRecording` in `src/agent/bridgeSupport.ts`) to a temporary `run.json` and spawns
-`python -m pyokka_runtime tour RUN --json` with the session's interpreter in the runtime directory
-(`src/agent/tourRun.ts`). A one-shot child rather than a request to the running runtime: the
+the runtime's `tour RUN --json` with the session's Node (`node dist/node/bin/tracelight.mjs tour …`,
+`src/agent/tourRun.ts`). A one-shot child rather than a request to the running runtime: the
 runner is the session's program host and may be executing a run; the CLI already reads a saved run,
 and a 10 MB recording parsed in a child that exits leaves nothing behind in the runner. 83 ms on the
 243-step rrf run. Nothing about chapters or signals is computed in TypeScript; `src/session/tourPanel.ts`
 only picks a row's title and one short value.
 
 Narrate Tour sends the prompt file (`dist/prompts/tour-prompt.md`, copied by esbuild from
-`skills/pyokka/references/tour-prompt.md`), a blank line, and the compact `tour.json` with every
+`skills/tracelight/references/tour-prompt.md`), a blank line, and the compact `tour.json` with every
 string redacted, through Narrate's backends. The answer's JSON object goes to `prose.json` beside
 the run file and back through `tour RUN --prose prose.json --json` with the same `--goal` and
 `--budget`; exit 2 with `{ok: false, violations}` is shown once. The click on a stop is stored in
-the workspace state under `pyokka.tour.resume`, per file: `{runId, stopId, key, pass, step}`; a
+the workspace state under `tracelight.tour.resume`, per file: `{runId, stopId, key, pass, step}`; a
 later run reopens at the same `key`'s same pass.
