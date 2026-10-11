@@ -65,7 +65,7 @@ export function shortText(value: unknown, maxLen = PREVIEW_LEN, strings: 'quote'
   return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text;
 }
 
-/** `value_text` of Pyokka: a bounded text with the full length when it was cut. */
+/** `value_text`: a bounded text with the full length when it was cut. */
 export function cutText(text: string, max: number): { text: string; truncated?: boolean; length?: number } {
   if (max <= 0 || text.length <= max) return { text };
   return { text: `${text.slice(0, max - 1)}…(+${(text.length - max + 1).toLocaleString('en-US')} chars)`, truncated: true, length: text.length };

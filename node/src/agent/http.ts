@@ -1,6 +1,6 @@
 /**
  * The HTTP table of a run and its text form (docs/PROTOCOL.md, "HTTP record and replay", HTTP
- * table), as Pyokka's `agent/http.py`: the `http.exchange` rows and `run.finished.http`, in `n`
+ * table): the `http.exchange` rows and `run.finished.http`, in `n`
  * (request) order.
  */
 import { basename, extname } from 'node:path';

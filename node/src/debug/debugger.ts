@@ -111,7 +111,7 @@ export class Breakpoint {
 
 /** `SyntaxError: ...` when `expression` is not one JavaScript expression, else null. */
 export function syntaxError(expression: string): string | null {
-  const res = parseSync('pyokka-condition.js', `(${expression}\n)`, { sourceType: 'script' });
+  const res = parseSync('tracelight-condition.js', `(${expression}\n)`, { sourceType: 'script' });
   if (res.errors.length) return `SyntaxError: ${res.errors[0]!.message}`;
   const body = res.program.body;
   if (body.length !== 1 || body[0]!.type !== 'ExpressionStatement') return 'SyntaxError: not one expression';

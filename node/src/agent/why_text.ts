@@ -1,5 +1,5 @@
 /**
- * The closing sentence of a provenance tree, as Pyokka's `agent/why_text.py`: the answer in words,
+ * The closing sentence of a provenance tree: the answer in words,
  * built from the tree alone, for JavaScript statements and values.
  *
  * `conclusion(tree)` reads the root of a `why` result and its first level (the reads with

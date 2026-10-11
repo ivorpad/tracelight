@@ -1,6 +1,6 @@
 /**
  * The execution graph: the diagram of a run as a projection of the walkthrough (docs/PROTOCOL.md,
- * "Execution graph"). Built by `executionGraph.ts` (host) and `python/pyokka_runtime/agent/graph.py`
+ * "Execution graph"). Built by `executionGraph.ts` (host) and `node/src/agent/graph.ts`
  * (saved runs) with identical output; `test/unit/fixtures/execution-graph.json` pins both.
  */
 

@@ -1,5 +1,5 @@
 /**
- * NDJSON client of a kept runner's Unix socket (`keep.ts`), as Pyokka's `agent/link.py`
+ * NDJSON client of a kept runner's Unix socket (`keep.ts`)
  * `SocketLink`; a live session's bridge socket (`live.ts`, later) speaks the same lines.
  *
  * `send`, `recv` and `call` (send, then read until the reply that carries the request id, handing

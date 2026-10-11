@@ -6,7 +6,7 @@ import * as crypto from 'node:crypto';
 /**
  * Where Pyokka keeps its per-user state: `$PYOKKA_HOME`, else `~/.pyokka`. A leading `~` is
  * expanded and an empty value counts as unset. The runtime resolves it with the same rule
- * (`python/pyokka_runtime/home.py`), so a CLI in a terminal finds the sessions of a window that
+ * (`node/src/home.ts`), so a CLI in a terminal finds the sessions of a window that
  * sees the same `PYOKKA_HOME`.
  */
 export function pyokkaHome(env: Record<string, string | undefined> = process.env): string {

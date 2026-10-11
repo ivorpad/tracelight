@@ -1,5 +1,5 @@
 /**
- * `diff`: what an edit changed, two runs compared statement by statement (Pyokka's `pyokka diff`).
+ * `diff`: what an edit changed, two runs compared statement by statement.
  * Opens its own pair: two saved runs, or one saved run (the before) and `--live` (the open VS Code
  * session as the after).
  */
@@ -13,7 +13,7 @@ registerVerb({
   configure(p) {
     p.addArgument('runs', { metavar: 'RUN', nargs: '*', help: 'the before and the after run.json; with --live only the before, and the open VS Code session is the after' });
     p.addArgument('--json', { action: 'store_true', help: 'print the raw JSON shape' });
-    p.addArgument('--live', { action: 'store_true', help: 'the open VS Code session is the after (setting pyokka.agentAccess)' });
+    p.addArgument('--live', { action: 'store_true', help: 'the open VS Code session is the after (setting tracelight.agentAccess)' });
     p.addArgument('--session', { metavar: 'NAME|PATH', help: "with --live: the session's file name or descriptor path, when more than one is open" });
     p.addArgument('--limit', { type: 'int', default: 40, metavar: 'K', help: 'at most this many statements (default 40)' });
     p.setDefaults({ run: null });

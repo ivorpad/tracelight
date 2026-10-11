@@ -1,5 +1,5 @@
 /**
- * `debug FILE`: the three routes to a window, as Pyokka's `agent/debug_start.py`. In order:
+ * `debug FILE`: the three routes to a window. In order:
  *
  * (a) a `kind: "debug"` descriptor whose launch matches: connect and read the current pause.
  * (b) else a `kind: "run"` descriptor for the file: send `debug` with the launch over that socket.
@@ -49,12 +49,8 @@ export const AT_UNREADABLE = '--at wants FILE:LINE or a function name';
 /** a function name `--at` accepts: `rrf`, or `Ranker.rank` for a method */
 const AT_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 
-export const MODULE_REFUSED = `--module runs a Python module; ${NAME} debugs a JavaScript or TypeScript file`;
-export const MODULE_HINT = `give the entry file instead: \`${NAME} debug app.ts\` (\`--args ...\` passes the program's arguments)`;
-
 export interface LaunchOpts {
   program?: string | null;
-  module?: string | null;
   args?: string[];
   cwd?: string | null;
   env?: Record<string, string>;
@@ -67,7 +63,6 @@ export interface LaunchOpts {
 
 /** the launch the host parses: absolute paths, the flags that are set */
 export function buildLaunch(o: LaunchOpts = {}): Msg {
-  if (o.module) throw new AgentError(MODULE_REFUSED, MODULE_HINT);
   if (!o.program) throw new AgentError('debug needs a file', `e.g. \`${NAME} debug app.ts\`, or \`${NAME} debug server.ts --args --port 8000\``);
   const launch: Msg = { args: [...(o.args || [])], env: { ...(o.env || {}) }, stopOnEntry: !!o.stopOnEntry, libraryCode: !!o.libraryCode, record: !!o.record };
   launch.program = resolve(o.program);
@@ -135,11 +130,9 @@ function compactJson(x: unknown): string {
 export function buildUri(launch: Msg, at: string | string[] | null = null): string {
   const parts: [string, string][] = [];
   if (launch.program) parts.push(['program', String(launch.program)]);
-  if (launch.module) parts.push(['module', String(launch.module)]);
   if (launch.args?.length) parts.push(['args', compactJson([...launch.args])]);
   if (launch.cwd) parts.push(['cwd', String(launch.cwd)]);
   if (launch.env && Object.keys(launch.env).length) parts.push(['env', compactJson({ ...launch.env })]);
-  if (launch.python) parts.push(['python', String(launch.python)]);
   if (launch.node) parts.push(['node', String(launch.node)]);
   if (launch.stopOnEntry) parts.push(['stopOnEntry', '1']);
   if (launch.record) parts.push(['record', '1']);
@@ -186,11 +179,10 @@ function sameFile(a: unknown, b: unknown): boolean {
   return real(String(a)) === real(String(b));
 }
 
-/** a debug descriptor that describes this launch: the same program (by realpath) or module */
+/** a debug descriptor that describes this launch: the same program (by realpath) */
 export function matchesLaunch(descriptor: Msg, launch: Msg): boolean {
   if (descriptorKind(descriptor) !== 'debug') return false;
   const d = descriptor.launch && typeof descriptor.launch === 'object' ? descriptor.launch : {};
-  if (launch.module) return d.module === launch.module;
   if (!launch.program) return false;
   const theirs = d.program || descriptor.file;
   return !!theirs && sameFile(theirs, launch.program);
@@ -249,7 +241,7 @@ export async function pollForDescriptor(launch: Msg, since: number, opts: { time
     if (found) return found;
     await sleep(POLL_INTERVAL_S);
   }
-  const name = launch.module ? `-m ${launch.module}` : basename(String(launch.program || ''));
+  const name = basename(String(launch.program || ''));
   throw new AgentError(`the VS Code window did not start a debug session for ${name}`, TIMEOUT_HINT);
 }
 

@@ -1,6 +1,6 @@
 /**
  * A run cut at the step cap (`maxTraceSteps`), said in words: the Time Machine's banner and the
- * bridge's `state.recording` use these, and `pyokka_runtime/agent/recording.py` says the same for
+ * bridge's `state.recording` use these, and `node/src/agent/recording.ts` says the same for
  * a saved run. Pure, so the webview can import it.
  */
 import type { TraceCap, TraceSpent } from './protocol';

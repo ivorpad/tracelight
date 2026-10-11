@@ -1,5 +1,5 @@
 /**
- * The runtime's HTTP plugin (`BUILTIN.http`), as Pyokka's `plugins/http_record.py`: `config.http`
+ * The runtime's HTTP plugin (`BUILTIN.http`): `config.http`
  * record or replay, or observe only ("off"), on `@mswjs/interceptors` (http/record.ts). Installed
  * in `beforeEach`, before the main file is imported; `after` puts `{http, replayed?}` on
  * `run.finished` and removes the interceptors.

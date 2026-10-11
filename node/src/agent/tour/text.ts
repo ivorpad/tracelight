@@ -1,5 +1,5 @@
 /**
- * The text form of `tour.json`, as Pyokka's `agent/tour/text.py`: the run, the goal, chapters with
+ * The text form of `tour.json`: the run, the goal, chapters with
  * their step ranges, then one line per candidate; a tour merged with its prose lists the picks.
  */
 import { basename } from 'node:path';

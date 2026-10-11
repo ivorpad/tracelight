@@ -1,6 +1,6 @@
 /**
  * The execution graph: the diagram of a run as a projection of the walkthrough (docs/PROTOCOL.md,
- * "Execution graph"), as Pyokka's `agent/graph.py`.
+ * "Execution graph").
  *
  * Nodes are the modules, the user functions, the library packages (or, unrolled, their functions),
  * the decisions a run touched and the simple statements it ran in user code (`graph_statements.ts`);

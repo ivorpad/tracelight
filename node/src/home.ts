@@ -8,7 +8,7 @@
  *   else `$TRACELIGHT_HOME/sessions`. The extension resolves the same two variables
  *   (`src/util/paths.ts` in its build), so a terminal finds the sessions of a window that sees them.
  *
- * A leading `~` is expanded and an empty value counts as unset, as Pyokka's `home.py` does.
+ * A leading `~` is expanded and an empty value counts as unset.
  */
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';

@@ -50,7 +50,7 @@ export function watchValue(w: DebugSessionWatch, running = false): { text: strin
 }
 
 /**
- * `.venv/bin/python -m api.main  ·  cwd .`. Every path is the display path the host sent, which is
+ * `node server.js --port 8000  ·  cwd .`. Every path is the display path the host sent, which is
  * workspace-relative inside the workspace, so the line fits the panel instead of carrying two
  * absolute paths; the full command is in the row's `title`. The interpreter is shown only when the
  * host knows it (it fills it in from the session once it resolved one): printing `python3` for a

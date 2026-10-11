@@ -5,16 +5,14 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-export const PROJECT_MARKERS = ['pyproject.toml', 'setup.py', 'setup.cfg', 'requirements.txt', 'Pipfile', 'uv.lock', 'poetry.lock', 'Pipfile.lock', 'pdm.lock'];
-/** a JS/TS file's project: a package.json, a tsconfig, or a lockfile */
-export const JS_PROJECT_MARKERS = ['package.json', 'tsconfig.json', 'jsconfig.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lockb', 'bun.lock', 'deno.json'];
+/** a file's project: a package.json, a tsconfig, or a lockfile */
+export const PROJECT_MARKERS = ['package.json', 'tsconfig.json', 'jsconfig.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lockb', 'bun.lock', 'deno.json'];
 
-/** True when any of `dirs` contains a project marker file of `language`. */
-export function looksLikeProject(dirs: (string | undefined)[], language: 'python' | 'javascript' = 'python'): boolean {
-  const markers = language === 'javascript' ? JS_PROJECT_MARKERS : PROJECT_MARKERS;
+/** True when any of `dirs` contains a project marker file. */
+export function looksLikeProject(dirs: (string | undefined)[]): boolean {
   for (const dir of dirs) {
     if (!dir) continue;
-    for (const m of markers) {
+    for (const m of PROJECT_MARKERS) {
       try {
         if (fs.existsSync(path.join(dir, m))) return true;
       } catch {

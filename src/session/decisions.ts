@@ -1,7 +1,7 @@
 /**
  * What a source file's statements *are*, for the walkthrough: decisions, loops, returns,
  * qualified names. The host has no Python parser, so this reads indentation and the
- * statement ranges of `file.instrumented`; `python/pyokka_runtime/agent/decisions.py` is the
+ * statement ranges of `file.instrumented`; `node/src/agent/decisions.ts` is the
  * `ast` version and `test/unit/fixtures/walkthrough-*` pins both to the same moments.
  *
  * Shapes (1-based lines):

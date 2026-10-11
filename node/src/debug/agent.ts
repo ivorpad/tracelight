@@ -56,7 +56,7 @@ const out = new LineWriter(data.eventFd, data.lock);
 const session = new Session();
 session.connectToMainThread();
 const post: Post = (method, params) => session.post(method as any, params as any);
-const GROUP = 'pyokka-req';
+const GROUP = 'tracelight-req';
 /** the session of the stopped thread: the main thread's, or a worker's while one is held */
 const at: Post = (method, params) => (stopped?.thread?.post ?? post)(method, params);
 // keeps this thread alive: an inspector session alone does not
@@ -210,7 +210,7 @@ function argOf(r: Remote): Record<string, unknown> {
 }
 
 async function globalObject(): Promise<string> {
-  if (!globalId) globalId = (await post('Runtime.evaluate', { expression: 'globalThis', objectGroup: 'pyokka-global' })).result.objectId;
+  if (!globalId) globalId = (await post('Runtime.evaluate', { expression: 'globalThis', objectGroup: 'tracelight-global' })).result.objectId;
   return globalId!;
 }
 
@@ -482,7 +482,7 @@ async function bindingsOf(frame: Frame, group: string): Promise<Binding[]> {
   return out;
 }
 
-const PM_GROUP = 'pyokka-postmortem';
+const PM_GROUP = 'tracelight-postmortem';
 const PM_FRAMES = 10;
 
 /** Hand the main half the bindings of the raising frames (values by reference), keyed by the exception. */
@@ -581,7 +581,7 @@ function newThread(sessionId: string, ident: number, name: string): Thread {
       relay!.postMessage({ op: 'send', sessionId, message: JSON.stringify({ id, method, params: params ?? {} }) });
     }),
     async globalObject() {
-      if (!globalId) globalId = (await t.post('Runtime.evaluate', { expression: 'globalThis', objectGroup: 'pyokka-global' })).result.objectId;
+      if (!globalId) globalId = (await t.post('Runtime.evaluate', { expression: 'globalThis', objectGroup: 'tracelight-global' })).result.objectId;
       return globalId!;
     },
   };
@@ -971,7 +971,7 @@ async function exec(req: Req): Promise<void> {
     const ex = r.exceptionDetails.exception;
     const desc = String(ex?.description ?? r.exceptionDetails.text);
     const type = ex?.className ?? 'Error';
-    reply.exception = { type, message: desc.split('\n')[0]!.replace(new RegExp(`^${type}:\\s*`), ''), traceback: desc.split('\n').filter((l) => !/node:inspector|pyokka|__tk/.test(l)).join('\n') };
+    reply.exception = { type, message: desc.split('\n')[0]!.replace(new RegExp(`^${type}:\\s*`), ''), traceback: desc.split('\n').filter((l) => !/node:inspector|tracelight-|__tk/.test(l)).join('\n') };
   } else if (showsValue(source)) {
     Object.assign(reply, await describeAt(r.result, source));
   }
@@ -1032,7 +1032,7 @@ async function debugAction(req: Req): Promise<void> {
         const exp = String(spec?.exp ?? '').trim();
         if (!exp) continue;
         const w: Watch = { id: String(spec.id ?? `w${echo.length + 1}`), exp, mode: spec.breakWhen === 'true' ? 'true' : 'change', last: undefined, missing: false };
-        const res = parseSync('pyokka-watch.js', `(${exp}\n)`, { sourceType: 'script' });
+        const res = parseSync('tracelight-watch.js', `(${exp}\n)`, { sourceType: 'script' });
         if (res.errors.length) w.error = `SyntaxError: ${res.errors[0]!.message}`;
         else kept.push(w);
         echo.push({ id: w.id, exp: w.exp, breakWhen: w.mode, ...(w.error ? { error: w.error } : {}) });

@@ -1,5 +1,5 @@
 /**
- * Secret masking by provenance, as Pyokka's secrets.py: values of secret-looking environment
+ * Secret masking by provenance: values of secret-looking environment
  * variables are scrubbed from every outgoing text, and a string under a secret-looking name is
  * masked whatever it holds. No value-shape detection.
  */

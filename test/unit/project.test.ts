@@ -11,18 +11,19 @@ describe('looksLikeProject', () => {
     const proj = path.join(root, 'proj');
     fs.mkdirSync(scratch);
     fs.mkdirSync(proj);
-    fs.writeFileSync(path.join(proj, 'pyproject.toml'), '[project]\nname = "x"\n');
+    fs.writeFileSync(path.join(proj, 'package.json'), '{}');
     expect(looksLikeProject([scratch])).toBe(false);
     expect(looksLikeProject([undefined, scratch, proj])).toBe(true);
     expect(looksLikeProject([path.join(root, 'missing')])).toBe(false);
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('reads JS/TS project markers for a JS/TS file, and only for one', () => {
+  it('reads a tsconfig or a lockfile as a project, a pyproject.toml not', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pyokka-proj-'));
-    fs.writeFileSync(path.join(root, 'package.json'), '{}');
-    expect(looksLikeProject([root], 'javascript')).toBe(true);
+    fs.writeFileSync(path.join(root, 'pyproject.toml'), '[project]\nname = "x"\n');
     expect(looksLikeProject([root])).toBe(false);
+    fs.writeFileSync(path.join(root, 'tsconfig.json'), '{}');
+    expect(looksLikeProject([root])).toBe(true);
     fs.rmSync(root, { recursive: true, force: true });
   });
 });

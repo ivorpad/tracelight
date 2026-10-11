@@ -7,7 +7,6 @@ import * as crypto from 'node:crypto';
 import type { SessionManager } from '../session/sessionManager';
 import { setting } from '../config/settings';
 import { log } from '../util/log';
-import { IS_TRACELIGHT } from '../brand';
 
 const SHOWN_KEY = 'pyokka.startViewShown.v1';
 
@@ -49,7 +48,7 @@ export class StartView implements vscode.Disposable {
   private async onMessage(msg: { type: string }): Promise<void> {
     switch (msg.type) {
       case 'demo':
-        await this.launchDemo(IS_TRACELIGHT ? 'typescript' : 'python');
+        await this.launchDemo();
         return;
       case 'newJsFile':
         await vscode.commands.executeCommand('pyokka.newJavaScriptFile');
@@ -60,14 +59,8 @@ export class StartView implements vscode.Disposable {
       case 'node':
         await vscode.commands.executeCommand('pyokka.selectNode');
         return;
-      case 'newFile':
-        await vscode.commands.executeCommand('pyokka.newPythonFile');
-        return;
       case 'recent':
         await vscode.commands.executeCommand('pyokka.viewRecentFiles');
-        return;
-      case 'interpreter':
-        await vscode.commands.executeCommand('pyokka.selectInterpreter');
         return;
       case 'settings':
         await vscode.commands.executeCommand('workbench.action.openSettings', 'pyokka');
@@ -77,9 +70,10 @@ export class StartView implements vscode.Disposable {
     }
   }
 
-  /** The demo: Pyokka's in Python (`examples/demo.py`), Tracelight's in TypeScript (`examples/demo.ts`, run on Node). */
-  async launchDemo(language: 'python' | 'typescript' = 'python'): Promise<void> {
-    const rel = language === 'python' ? 'examples/demo.py' : 'examples/demo.ts';
+  /** The demo: `examples/demo.ts`, run on Node. */
+  async launchDemo(): Promise<void> {
+    const language = 'typescript';
+    const rel = 'examples/demo.ts';
     const file = this.context.asAbsolutePath(rel);
     let content: string;
     try {
@@ -100,7 +94,7 @@ export class StartView implements vscode.Disposable {
     const mod = isMac ? '⌘' : 'Ctrl';
     const rows: [string, string][] = [
       ['Start on the current file', `${mod}+K Q`],
-      [IS_TRACELIGHT ? 'New JavaScript file' : 'New Python file', `${mod}+K J`],
+      ['New JavaScript file', `${mod}+K J`],
       ['New file from snippet / recent', `${mod}+K L`],
       ['Show value of the selection', `${mod}+K V`],
       ['Copy value', `${mod}+K X`],
@@ -136,14 +130,14 @@ export class StartView implements vscode.Disposable {
   p { line-height: 1.45; }
 </style></head>
 <body>
-${(IS_TRACELIGHT ? nodeIntro : pythonIntro)(String(logo))}
+${intro(String(logo))}
 <h2>Keyboard shortcuts</h2>
 <table>${rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
 <p class="sub">In Cursor, every <code>${mod}+K</code> chord is also available as <code>Ctrl+Alt+P</code> + letter.</p>
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
   const bind = (id, type) => document.getElementById(id).addEventListener('click', () => vscode.postMessage({ type }));
-  for (const [id, type] of [['demo', 'demo'], ['newJs', 'newJsFile'], ['newTs', 'newTsFile'], ['node', 'node'], ['new', 'newFile'], ['recent', 'recent'], ['interp', 'interpreter'], ['settings', 'settings']]) {
+  for (const [id, type] of [['demo', 'demo'], ['newJs', 'newJsFile'], ['newTs', 'newTsFile'], ['node', 'node'], ['recent', 'recent'], ['settings', 'settings']]) {
     document.getElementById(id)?.addEventListener('click', () => vscode.postMessage({ type }));
   }
 </script>
@@ -151,24 +145,8 @@ ${(IS_TRACELIGHT ? nodeIntro : pythonIntro)(String(logo))}
   }
 }
 
-/** Pyokka's welcome: Python. */
-const pythonIntro = (logo: string): string => `<header><img src="${logo}" alt=""><div><h1>Welcome to Pyokka</h1><p class="sub">A live Python scratchpad: values next to your code as you type, coverage in the gutter, and a Time Machine that steps backwards.</p></div></header>
-<div class="actions">
-  <button id="demo">🚀 Launch Interactive Demo</button>
-  <button id="new" class="secondary">New Python File</button>
-  <button id="recent" class="secondary">Recent Files</button>
-  <button id="interp" class="secondary">Select Python Interpreter</button>
-  <button id="settings" class="secondary">Settings</button>
-</div>
-<div class="cards">
-  <div class="card"><b>Live values</b>Type a variable name on its own line, use <code>print()</code>, or add <code>&nbsp;# ?</code> after any expression. <code>?.</code> times it, <code>?+</code> expands it.</div>
-  <div class="card"><b>Time Machine</b>Press <code>Shift+F5</code> on any line. Step forwards and backwards; the panel shows the timeline, call stack and watches.</div>
-  <div class="card"><b>Code Story</b>Run <i>Pyokka: View Code Story</i> to read the execution in order, one block per function call.</div>
-  <div class="card"><b>Requirements</b>Python 3.12 or newer. The runtime ships inside the extension; nothing is installed into your environment.</div>
-</div>`;
-
-/** Tracelight's welcome: JavaScript and TypeScript on Node. */
-const nodeIntro = (logo: string): string => `<header><img src="${logo}" alt=""><div><h1>Welcome to Tracelight</h1><p class="sub">A live JavaScript and TypeScript scratchpad: values next to your code as you type, coverage in the gutter, and a Time Machine that steps backwards.</p></div></header>
+/** The welcome: JavaScript and TypeScript on Node. */
+const intro = (logo: string): string => `<header><img src="${logo}" alt=""><div><h1>Welcome to Tracelight</h1><p class="sub">A live JavaScript and TypeScript scratchpad: values next to your code as you type, coverage in the gutter, and a Time Machine that steps backwards.</p></div></header>
 <div class="actions">
   <button id="demo">🚀 Launch Interactive Demo</button>
   <button id="newJs" class="secondary">New JavaScript File</button>
@@ -181,5 +159,5 @@ const nodeIntro = (logo: string): string => `<header><img src="${logo}" alt=""><
   <div class="card"><b>Live values</b>Type a variable name on its own line, use <code>console.log()</code>, or add <code>&nbsp;// ?</code> after any expression. <code>?.</code> times it, <code>?+</code> expands it.</div>
   <div class="card"><b>Time Machine</b>Press <code>Shift+F5</code> on any line. Step forwards and backwards; the panel shows the timeline, call stack and watches.</div>
   <div class="card"><b>Debugger</b>Press <code>F5</code> with a breakpoint set: the program runs at full speed and stops there with the frame live.</div>
-  <div class="card"><b>Requirements</b>Node.js 22.18 or newer (<code>tracelight.nodePath</code>, else <code>node</code> on PATH). The runtime ships inside the extension; nothing is installed into your project.</div>
+  <div class="card"><b>Requirements</b>Node.js 22.18 or newer (<code>pyokka.nodePath</code>, else <code>node</code> on PATH). The runtime ships inside the extension; nothing is installed into your project.</div>
 </div>`;

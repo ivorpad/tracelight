@@ -1,6 +1,5 @@
 /**
- * Which candidates stay: novelty for repeated lines, a score per candidate, and the token budget,
- * as Pyokka's `agent/tour/rank.py`.
+ * Which candidates stay: novelty for repeated lines, a score per candidate, and the token budget.
  *
  * Novelty: a source line that ran again is a new candidate only when the call it made (or, for a
  * return, the call it returns from) had arguments not seen on that line before, at most

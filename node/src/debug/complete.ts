@@ -1,5 +1,5 @@
 /**
- * Completions for a watch expression typed so far, as Pyokka's complete.py.
+ * Completions for a watch expression typed so far.
  *
  * `expression` is the text before the caret and `prefix` the identifier at its end (what a chosen
  * label replaces). After a dot, the balanced expression before it (`payload`, `rows[0]`,
@@ -81,7 +81,7 @@ async function primitiveWrapper(post: Post, globalId: string, remote: Remote, gr
 }
 
 export async function completionsFor(
-  post: Post, target: Target, expression: string, scopes: { names: { name: string; remote: Remote }[] }[], globalId: string, limit = 100, group = 'pyokka',
+  post: Post, target: Target, expression: string, scopes: { names: { name: string; remote: Remote }[] }[], globalId: string, limit = 100, group = 'tracelight',
 ): Promise<Completed> {
   const { object, prefix } = splitDotted(expression);
   const items: Completion[] = [];

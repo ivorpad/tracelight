@@ -1,4 +1,4 @@
-/** The TOUR section's host: one Python run per session run, resume by file, Narrate Tour cached per run and refused once. */
+/** The TOUR section's host: one tour run per session run, resume by file, Narrate Tour cached per run and refused once. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -40,13 +40,13 @@ function fakeSession(runId = 'r-1', locals: { recordLocals: boolean; changes: nu
     displayName: 'rrf.py',
     running: false,
     isDisposed: false,
-    interpreter: { path: 'python3' },
+    interpreter: { path: '/usr/bin/node', language: 'javascript' },
     state: { runId, finished: { exitCode: 0 }, locals: Array.from({ length: locals.changes }, () => ({})), files: { all: () => [{ fileId: 0, path: '/w/rrf.py' }] } },
     displayPath: () => 'rrf.py',
   };
 }
 
-function setup(answer = '{"pick": ["s53-189112"], "stops": {}}', resolvePython: () => Promise<{ path: string }> = async () => ({ path: '/v/bin/python' }), hasNodeTour = (_exe: string, _entry: string) => false) {
+function setup(answer = '{"pick": ["s53-189112"], "stops": {}}', hasNodeTour = (_exe: string, _entry: string) => true) {
   const store = new Map<string, unknown>();
   const ext = fs.mkdtempSync(path.join(os.tmpdir(), 'pk-tour-ext-'));
   fs.mkdirSync(path.join(ext, 'skills', 'pyokka', 'references'), { recursive: true });
@@ -57,16 +57,14 @@ function setup(answer = '{"pick": ["s53-189112"], "stops": {}}', resolvePython: 
   const posted: (TourPanel | null)[] = [];
   const calls: string[][] = [];
   let next: (argv: string[]) => TourDoc = () => fixture();
-  const pythons: string[] = [];
   const nodes: ({ exe: string; entry: string } | undefined)[] = [];
-  const run = vi.fn(async (o: { python: string; node?: { exe: string; entry: string } }, argv: string[]) => {
-    pythons.push(o.python);
+  const run = vi.fn(async (o: { node: { exe: string; entry: string } }, argv: string[]) => {
     nodes.push(o.node);
     calls.push(argv);
     return next(argv);
   });
-  const host = new TourHost(context as never, '/rt', narrator as never, (_s, msg: HostToWebview) => msg.type === 'tour' && posted.push(msg.tour), run as never, resolvePython, hasNodeTour);
-  return { host, store, askModel, posted, calls, pythons, nodes, setNext: (f: typeof next) => (next = f) };
+  const host = new TourHost(context as never, '/rt', narrator as never, (_s, msg: HostToWebview) => msg.type === 'tour' && posted.push(msg.tour), run as never, hasNodeTour);
+  return { host, store, askModel, posted, calls, nodes, setNext: (f: typeof next) => (next = f) };
 }
 
 beforeEach(() => {
@@ -179,28 +177,18 @@ describe('TourHost', () => {
   });
 });
 
-describe('TourHost on a JS/TS session', () => {
-  it('builds the tour with Tracelight\'s own tour verb when it has one, without Python', async () => {
-    const resolvePython = vi.fn(async () => ({ path: '/v/bin/python' }));
-    const t = setup(undefined, resolvePython, () => true);
-    const s = { ...fakeSession(), interpreter: { path: '/usr/bin/node', language: 'javascript' }, document: { uri: { fsPath: '/w/app.ts' } } };
+describe('TourHost and the runtime', () => {
+  it("builds the tour with the runtime's own tour verb and the session's Node", async () => {
+    const t = setup();
+    const s = { ...fakeSession(), document: { uri: { fsPath: '/w/app.ts' } } };
     expect(await t.host.ensure(s as never)).toBeDefined();
     expect(t.nodes).toEqual([{ exe: '/usr/bin/node', entry: path.join('/', 'node', 'bin', 'tracelight.mjs') }]);
-    expect(resolvePython).not.toHaveBeenCalled();
   });
-  it('falls back to the workspace Python when Tracelight has no tour verb', async () => {
-    const t = setup();
-    const s = { ...fakeSession(), interpreter: { path: '/usr/bin/node', language: 'javascript' }, document: { uri: { fsPath: '/w/app.ts' } } };
-    expect(await t.host.ensure(s as never)).toBeDefined();
-    expect(t.pythons).toEqual(['/v/bin/python']);
-  });
-  it('says the tour needs Python when none is found', async () => {
-    const t = setup(undefined, async () => {
-      throw new Error('python3 not found');
-    });
-    const s = { ...fakeSession(), interpreter: { path: '/usr/bin/node', language: 'javascript' }, document: { uri: { fsPath: '/w/app.ts' } } };
+  it('says so when the runtime has no tour verb', async () => {
+    const t = setup(undefined, () => false);
+    const s = { ...fakeSession(), document: { uri: { fsPath: '/w/app.ts' } } };
     expect(await t.host.ensure(s as never)).toBeUndefined();
     expect(t.posted.at(-1)).toMatchObject({ status: 'error' });
-    expect(t.posted.at(-1)!.error).toContain('Python 3.12');
+    expect(t.posted.at(-1)!.error).toContain('no tour verb');
   });
 });

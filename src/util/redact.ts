@@ -1,7 +1,7 @@
 /**
  * Redaction of secret-looking text before it leaves the process (bridge replies).
  * The rules are the ones of docs/PROTOCOL.md "Redaction" and must stay identical to
- * python/pyokka_runtime/redact.py; test/unit/fixtures/redact.json checks both.
+ * node/src/agent/redact.ts; test/unit/fixtures/redact.json checks both.
  */
 import type { ValueBag, ValueNode } from '../shared/protocol';
 
@@ -21,7 +21,7 @@ const BEARER_RE = /\b(Bearer\s+)(?!«)[A-Za-z0-9._~+/=-]+/g;
 // unquoted value ends at `&` so a URL's `?api_key=…&v=1` keeps its other query parameters
 const KEY_WORDS = 'api_key|apikey|secret|token|password|passwd|authorization';
 // The lookbehind after the quote is what keeps this linear, and must stay in step with
-// python/pyokka_runtime/redact.py, which explains it. Without it the leading `[A-Za-z0-9_.-]*`
+// node/src/agent/redact.ts, which explains it. Without it the leading `[A-Za-z0-9_.-]*`
 // restarts at every offset of a run of those characters and backtracks the length of the run at
 // each one: O(n²), seconds for a line of a few tens of KB. It rules out only starts that could
 // never have won, because a match inside a run always has an equivalent where the run begins.

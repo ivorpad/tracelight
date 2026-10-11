@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { SHIM_MARKER, findLauncher, jsShimScript, onPath, profileFor, shimScript, shimState, syncShim } from '../../src/features/cliShim';
+import { SHIM_MARKER, findLauncher, onPath, profileFor, shimScript, shimState, syncShim } from '../../src/features/cliShim';
 
 // the module imports vscode for activation; the helpers under test never touch it
 vi.mock('vscode', () => ({}));
@@ -13,35 +13,21 @@ function tmpdir(): string {
 }
 
 describe('shimScript', () => {
-  it('runs the runtime from its directory and passes every argument through, quotes included', () => {
-    const dir = tmpdir();
-    const runtime = path.join(dir, "it's here");
-    fs.mkdirSync(path.join(runtime, 'pyokka_runtime'), { recursive: true });
-    fs.writeFileSync(path.join(runtime, 'pyokka_runtime', '__init__.py'), '');
-    fs.writeFileSync(path.join(runtime, 'pyokka_runtime', '__main__.py'), 'import os, sys; print(sys.argv[1:], os.environ.get("PYOKKA_CODE"))');
-    const file = path.join(dir, 'pyokka');
-    fs.writeFileSync(file, shimScript({ runtimeDir: runtime, python: 'python3', launcher: '/opt/ed/bin/code', version: '9.9.9' }), { mode: 0o755 });
-    const env = { ...process.env, PYOKKA_PYTHON: '', VIRTUAL_ENV: '', PYOKKA_CODE: '' };
-    expect(execFileSync(file, ['eval', "len(r['a'])"], { env, encoding: 'utf8' }).trim()).toBe(`['eval', "len(r['a'])"] /opt/ed/bin/code`);
-    // a launcher the caller already chose is kept
-    expect(execFileSync(file, [], { env: { ...env, PYOKKA_CODE: '/mine' }, encoding: 'utf8' }).trim()).toBe('[] /mine');
-  });
-  it('leaves PYOKKA_CODE out when the editor has no launcher', () => {
-    expect(shimScript({ runtimeDir: '/r', python: 'python3', version: '1' })).not.toContain('PYOKKA_CODE');
-  });
-});
-
-describe('jsShimScript', () => {
   it('runs the Node CLI entry with every argument, and $TRACELIGHT_CLI_NODE picks the Node', () => {
     const dir = tmpdir();
     const entry = path.join(dir, "it's", 'tracelight.mjs');
     fs.mkdirSync(path.dirname(entry), { recursive: true });
     fs.writeFileSync(entry, 'console.log(JSON.stringify(process.argv.slice(2)), process.env.PYOKKA_CODE)');
     const file = path.join(dir, 'tracelight');
-    fs.writeFileSync(file, jsShimScript({ entry, node: process.execPath, launcher: '/opt/ed/bin/code', version: '9.9.9' }), { mode: 0o755 });
+    fs.writeFileSync(file, shimScript({ entry, node: process.execPath, launcher: '/opt/ed/bin/code', version: '9.9.9' }), { mode: 0o755 });
     const env = { ...process.env, TRACELIGHT_CLI_NODE: '', PYOKKA_CODE: '' };
     expect(execFileSync(file, ['why', "a b's"], { env, encoding: 'utf8' }).trim()).toBe(`["why","a b's"] /opt/ed/bin/code`);
+    // a launcher the caller already chose is kept
+    expect(execFileSync(file, [], { env: { ...env, PYOKKA_CODE: '/mine' }, encoding: 'utf8' }).trim()).toBe('[] /mine');
     expect(() => execFileSync(file, [], { env: { ...env, TRACELIGHT_CLI_NODE: path.join(dir, 'no-node') }, stdio: 'pipe' })).toThrow();
+  });
+  it('leaves PYOKKA_CODE out when the editor has no launcher', () => {
+    expect(shimScript({ entry: '/r/bin/tracelight.mjs', node: 'node', version: '1' })).not.toContain('PYOKKA_CODE');
   });
 });
 

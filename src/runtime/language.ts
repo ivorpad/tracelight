@@ -1,24 +1,22 @@
 /**
- * Which documents a build runs, and with which runtime: Pyokka runs Python files with
- * `pyokka_runtime`, Tracelight runs JavaScript and TypeScript files with the Node runtime in `node/`
- * (it speaks the same protocol). `runtimeLanguage` only classifies a file; `isRunnable` and
- * `RUNNABLE_SELECTOR` are what this build actually runs (`src/brand.ts`).
+ * Which documents the extension runs: JavaScript and TypeScript files, with the Node runtime in
+ * `node/`. `runtimeLanguage` only classifies a file (a Python file is recognised so it can be
+ * refused); `isRunnable` and `RUNNABLE_SELECTOR` are what the extension actually runs.
  * vscode-free so the rules can be unit tested.
  */
-import { IS_TRACELIGHT } from '../brand';
 
 export type RuntimeLanguage = 'python' | 'javascript';
 
 export const JS_LANGUAGE_IDS = new Set(['javascript', 'typescript', 'javascriptreact', 'typescriptreact']);
 const JS_EXT = /\.(m?js|cjs|m?ts|cts|jsx|tsx)$/i;
 
-/** The language a build runs: Pyokka Python, Tracelight JavaScript and TypeScript. */
-export function brandLanguage(tracelight: boolean = IS_TRACELIGHT): RuntimeLanguage {
-  return tracelight ? 'javascript' : 'python';
+/** The language the extension runs. */
+export function brandLanguage(): RuntimeLanguage {
+  return 'javascript';
 }
 
-/** The document selector of the languages this build runs. */
-export const RUNNABLE_SELECTOR = (brandLanguage() === 'javascript' ? [...JS_LANGUAGE_IDS] : ['python']).map((language) => ({ language }));
+/** The document selector of the languages the extension runs. */
+export const RUNNABLE_SELECTOR = [...JS_LANGUAGE_IDS].map((language) => ({ language }));
 
 export interface DocLike {
   languageId: string;
@@ -31,12 +29,12 @@ export function runtimeLanguage(doc: DocLike): RuntimeLanguage | undefined {
   return undefined;
 }
 
-/** A file this build runs: a Python file in Pyokka, a JS/TS file in Tracelight. */
-export function isRunnable(doc: DocLike, tracelight: boolean = IS_TRACELIGHT): boolean {
-  return runtimeLanguage(doc) === brandLanguage(tracelight);
+/** A file the extension runs: JavaScript or TypeScript. */
+export function isRunnable(doc: DocLike): boolean {
+  return runtimeLanguage(doc) === 'javascript';
 }
 
-/** Tracelight's entry point next to the Python runtime directory (`dist/python` -> `dist/node`, `python` -> `node`). */
+/** The runtime's entry point, `bin/tracelight.mjs` under the runtime directory (`dist/node`, or the checkout's `node`). */
 export function jsRuntimeEntry(runtimeDir: string, join: (...p: string[]) => string, dirname: (p: string) => string): string {
   return join(dirname(runtimeDir), 'node', 'bin', 'tracelight.mjs');
 }
@@ -79,7 +77,7 @@ const EXT_LANGUAGE: [RegExp, string][] = [
 /**
  * The editor language to open text in when only its name or its content is known (a recent file
  * that is gone, a snippet, a clone): the extension first, then a snippet's `scope`, then a look at
- * the code. Python unless the code reads as JS/TS.
+ * the code. JavaScript unless the code reads as TypeScript or Python.
  */
 export function languageIdFor(opts: { fileName?: string; scope?: string; content?: string }): string {
   for (const [re, id] of EXT_LANGUAGE) if (opts.fileName && re.test(opts.fileName)) return id;
@@ -90,5 +88,5 @@ export function languageIdFor(opts: { fileName?: string; scope?: string; content
   if (/(^|\n)\s*(const |let |var |function |export |import .+ from |interface |type \w+ =)|=>|console\.\w+\(|;\s*$/m.test(text)) {
     return /(:\s*(string|number|boolean|unknown|any)\b|^\s*(interface|type \w+ =)|\bas const\b)/m.test(text) ? 'typescript' : 'javascript';
   }
-  return 'python';
+  return 'javascript';
 }

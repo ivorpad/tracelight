@@ -1,10 +1,10 @@
 /**
  * The part of Python's argparse the agent verbs use, so `tracelight <verb>` takes the same words,
- * in the same places, and refuses them with the same `usage:` and `error:` lines as `pyokka <verb>`.
+ * in the same places, and refuses them with argparse's own `usage:` and `error:` lines.
  *
  * The parsing is argparse's: the arguments become a pattern of `O` (an option), `A` (an argument)
  * and `-` (`--`), positionals are consumed in runs between options with argparse's greedy regular
- * expressions (so `step 5 run.json --into` reads 5 as RUN, as `pyokka` does), long options may be
+ * expressions (so `step 5 run.json --into` reads 5 as RUN), long options may be
  * abbreviated to a unique prefix, `--opt=value` works, a negative number is an argument, and
  * mutually exclusive groups refuse a second member. Usage lines wrap the way argparse wraps them
  * (width `$COLUMNS - 2`, default 78).

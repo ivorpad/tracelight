@@ -32,7 +32,6 @@ import { DapTranslator, type DebugSessionLike } from './dapTranslator';
 import type { DapMessage } from './dapTypes';
 import { NoRecordCapabilityError, type DebugSession } from './debugSession';
 import { isRunnable } from '../runtime/language';
-import { IS_TRACELIGHT } from '../brand';
 import type { DebugSessionManager } from './debugSessionManager';
 import { launchKey, launchName, parseLaunch, recordFromSpec, type LaunchConfig } from './debugSessionState';
 import { wrapDebugSession, type DebugTarget, type ReplaySource } from './debugTarget';
@@ -419,11 +418,11 @@ export function registerDapAdapter(mgr: SessionManager, debugMgr: DebugSessionMa
       resolveDebugConfiguration(_folder, config) {
         // the Time Machine's own launch (startReplay) is complete as it is
         if (typeof config['replay'] === 'string') return config;
-        // F5 on a Python file with no launch.json arrives empty; a launch without `program` means the active file
+        // F5 on a JS/TS file with no launch.json arrives empty; a launch without `program` means the active file
         const editor = vscode.window.activeTextEditor;
         if (!config.type && !config.request && !config.name) {
           if (!editor || !isRunnable(editor.document)) {
-            void vscode.window.showInformationMessage(IS_TRACELIGHT ? 'Tracelight: open a JavaScript or TypeScript file to debug it.' : 'Pyokka: open a Python file to debug it.');
+            void vscode.window.showInformationMessage('Tracelight: open a JavaScript or TypeScript file to debug it.');
             return undefined;
           }
           config.type = DEBUG_TYPE;

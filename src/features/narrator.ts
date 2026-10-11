@@ -14,7 +14,6 @@ import { GlossCache, NarrationError, buildPrompt, collectSources, parseGlosses, 
 import { walkthroughInputs } from '../agent/bridgeSupport';
 import { setting } from '../config/settings';
 import { log } from '../util/log';
-import { IS_TRACELIGHT } from '../brand';
 
 export const EXPLAIN_COMMAND_SETTING = 'explain.command';
 
@@ -87,9 +86,8 @@ export class Narrator implements vscode.Disposable {
   }
 
   private promptTemplate(): string {
-    // the runtime's template: `pyokka_runtime/agent/` in Pyokka, `src/agent/` of the Node runtime in Tracelight
-    const dir = IS_TRACELIGHT ? path.join(this.runtimeDir, 'src', 'agent') : path.join(this.runtimeDir, 'pyokka_runtime', 'agent');
-    return fs.readFileSync(path.join(dir, 'narrate_prompt.md'), 'utf8');
+    // the runtime's template, in `src/agent/` of the Node runtime
+    return fs.readFileSync(path.join(this.runtimeDir, 'src', 'agent', 'narrate_prompt.md'), 'utf8');
   }
 
   /** One batched call for the session's last run. Resolves with the glosses, or undefined when it failed (reported once). */

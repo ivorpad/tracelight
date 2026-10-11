@@ -59,7 +59,7 @@ const CLIENTS: [new () => any, string][] = [
 ];
 
 export function missError(method: string, url: string): Error {
-  const err = new Error(`pyokka replay: no recorded response for ${method} ${store.publicUrl(url)}`);
+  const err = new Error(`tracelight replay: no recorded response for ${method} ${store.publicUrl(url)}`);
   (err as any).code = 'ECONNREFUSED';
   return err;
 }

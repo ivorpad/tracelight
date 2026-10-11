@@ -1,15 +1,14 @@
 /** `tracelight mcp` as a subprocess: a whole session over JSON-RPC on stdin/stdout. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { join, resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { project } from './helpers.ts';
 import { wordsDebug, wordsStep, wordsValue } from '../src/mcp/server.ts';
 
 const BIN = resolve(import.meta.dirname, '../bin/tracelight.mjs');
-const havePython = spawnSync('python3', ['-c', 'import sys; assert sys.version_info >= (3, 12)']).status === 0;
 
 function session() {
   const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', BIN, 'mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -42,7 +41,7 @@ function session() {
 
 const text = (r: any) => r.result.content[0].text as string;
 
-test('words match pyokka mcp', () => {
+test('each tool turns its arguments into the words of one agent command', () => {
   assert.deepEqual(wordsStep({ run: 'r.json', step: 4, move: 'into' }), ['step', '--into', '--', 'r.json', '4']);
   assert.deepEqual(wordsStep({ run: 'r.json', line: 'a.ts:3' }), ['context', '--line=a.ts:3', '--', 'r.json']);
   assert.deepEqual(wordsValue({ action: 'why', run: 'r.json', step: 9, name: 'total' }), ['why', '--', 'r.json', '9', 'total']);
@@ -50,7 +49,7 @@ test('words match pyokka mcp', () => {
   assert.throws(() => wordsStep({ run: 'r.json', move: 'sideways', step: 1 }), /unknown move/);
 });
 
-test('a session: initialize, tools/list, run, map, step, value, errors', { skip: !havePython && 'python3 >= 3.12 not found' }, async () => {
+test('a session: initialize, tools/list, run, map, step, value, errors', async () => {
   const dir = project({ 'main.mjs': 'function sq(n) {\n  return n * n;\n}\nlet total = 0;\nfor (const x of [1, 2, 3]) total += sq(x);\nconsole.log(total);\n' });
   const s = session();
   try {
@@ -59,28 +58,28 @@ test('a session: initialize, tools/list, run, map, step, value, errors', { skip:
     assert.equal(init.result.serverInfo.name, 'tracelight');
     s.notify('notifications/initialized');
     const list = await s.call('tools/list');
-    assert.deepEqual(list.result.tools.map((t: any) => t.name), ['pyokka_run', 'pyokka_map', 'pyokka_step', 'pyokka_value', 'pyokka_coverage', 'pyokka_debug']);
-    assert.match(list.result.tools[1].description, /- walkthrough: \S/, 'action help comes from the CLI parser');
+    assert.deepEqual(list.result.tools.map((t: any) => t.name), ['tracelight_run', 'tracelight_map', 'tracelight_step', 'tracelight_value', 'tracelight_coverage', 'tracelight_debug']);
+    assert.match(list.result.tools[1].description, /- walkthrough: \S/, 'action help comes from the verbs');
 
-    const run = await s.call('tools/call', { name: 'pyokka_run', arguments: { file: join(dir, 'main.mjs') } });
+    const run = await s.call('tools/call', { name: 'tracelight_run', arguments: { file: join(dir, 'main.mjs') } });
     assert.equal(run.result.isError, false, text(run));
-    const saved = join(dir, '.pyokka', 'runs', 'main.json');
+    const saved = join(dir, '.tracelight', 'runs', 'main.json');
     assert.match(text(run), new RegExp(`run: ${saved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
     assert.ok(existsSync(saved));
 
-    const story = await s.call('tools/call', { name: 'pyokka_map', arguments: { action: 'story', run: saved } });
+    const story = await s.call('tools/call', { name: 'tracelight_map', arguments: { action: 'story', run: saved } });
     assert.equal(story.result.isError, false, text(story));
     assert.match(text(story), /sq/);
-    const step = await s.call('tools/call', { name: 'pyokka_step', arguments: { run: saved, step: 1 } });
+    const step = await s.call('tools/call', { name: 'tracelight_step', arguments: { run: saved, step: 1 } });
     assert.equal(step.result.isError, false, text(step));
-    const v = await s.call('tools/call', { name: 'pyokka_value', arguments: { action: 'var', run: saved, name: 'total' } });
+    const v = await s.call('tools/call', { name: 'tracelight_value', arguments: { action: 'var', run: saved, name: 'total' } });
     assert.equal(v.result.isError, false, text(v));
     assert.match(text(v), /14/);
 
-    const bad = await s.call('tools/call', { name: 'pyokka_step', arguments: { run: saved } });
+    const bad = await s.call('tools/call', { name: 'tracelight_step', arguments: { run: saved } });
     assert.equal(bad.result.isError, true);
     assert.match(text(bad), /give `step` or `line`/);
-    const missing = await s.call('tools/call', { name: 'pyokka_run', arguments: { file: join(dir, 'nope.ts') } });
+    const missing = await s.call('tools/call', { name: 'tracelight_run', arguments: { file: join(dir, 'nope.ts') } });
     assert.equal(missing.result.isError, true);
     assert.equal((await s.call('tools/call', { name: 'nope', arguments: {} })).error.code, -32602);
     assert.equal((await s.call('bogus')).error.code, -32601);
@@ -90,29 +89,37 @@ test('a session: initialize, tools/list, run, map, step, value, errors', { skip:
   }
 });
 
-test('a Tracelight run is answered in-process, with no pyokka CLI to shell out to', async () => {
+test('a Tracelight run is answered in-process', async () => {
   const dir = project({ 'main.mjs': 'function sq(n) {\n  return n * n;\n}\nlet total = 0;\nfor (const x of [1, 2, 3]) total += sq(x);\nconsole.log(total);\n' });
-  const saved = process.env.TRACELIGHT_PYOKKA;
-  process.env.TRACELIGHT_PYOKKA = join(dir, 'no-such-pyokka');
-  try {
-    const { callTool, nativeFor } = await import('../src/mcp/server.ts');
-    const run = await callTool('pyokka_run', { file: join(dir, 'main.mjs') });
-    assert.equal(run.isError, false, run.content[0].text);
-    const file = join(dir, '.pyokka', 'runs', 'main.json');
-    assert.ok(nativeFor(['story', '--', file]));
-    assert.ok(!nativeFor(['no-such-verb', '--', file]));
-    const story = await callTool('pyokka_map', { action: 'story', run: file });
-    assert.equal(story.isError, false, story.content[0].text);
-    assert.match(story.content[0].text, /sq/);
-    const step = await callTool('pyokka_step', { run: file, step: 1 });
-    assert.equal(step.isError, false, step.content[0].text);
-    const v = await callTool('pyokka_value', { action: 'var', run: file, name: 'total' });
-    assert.equal(v.isError, false, v.content[0].text);
-    assert.match(v.content[0].text, /14/);
-    const bad = await callTool('pyokka_step', { run: file, step: 99999 });
-    assert.equal(bad.isError, true);
-  } finally {
-    if (saved === undefined) delete process.env.TRACELIGHT_PYOKKA;
-    else process.env.TRACELIGHT_PYOKKA = saved;
-  }
+  const { callTool, nativeFor } = await import('../src/mcp/server.ts');
+  const run = await callTool('tracelight_run', { file: join(dir, 'main.mjs') });
+  assert.equal(run.isError, false, run.content[0].text);
+  const file = join(dir, '.tracelight', 'runs', 'main.json');
+  assert.ok(nativeFor(['story', '--', file]));
+  assert.ok(!nativeFor(['no-such-verb', '--', file]));
+  const story = await callTool('tracelight_map', { action: 'story', run: file });
+  assert.equal(story.isError, false, story.content[0].text);
+  assert.match(story.content[0].text, /sq/);
+  const step = await callTool('tracelight_step', { run: file, step: 1 });
+  assert.equal(step.isError, false, step.content[0].text);
+  const v = await callTool('tracelight_value', { action: 'var', run: file, name: 'total' });
+  assert.equal(v.isError, false, v.content[0].text);
+  assert.match(v.content[0].text, /14/);
+  const bad = await callTool('tracelight_step', { run: file, step: 99999 });
+  assert.equal(bad.isError, true);
+});
+
+test('a Python file or run is refused with the way to Pyokka', async () => {
+  const dir = project({ 'main.py': 'total = 1\n' });
+  const { callTool } = await import('../src/mcp/server.ts');
+  const run = await callTool('tracelight_run', { file: join(dir, 'main.py') });
+  assert.equal(run.isError, true);
+  assert.match(run.content[0].text, /it is Python/);
+  assert.match(run.content[0].text, /pyokka mcp/);
+  mkdirSync(join(dir, 'runs'), { recursive: true });
+  const pyRun = join(dir, 'runs', 'py.json');
+  writeFileSync(pyRun, JSON.stringify({ meta: { language: 'python' }, events: [] }));
+  const story = await callTool('tracelight_map', { action: 'story', run: pyRun });
+  assert.equal(story.isError, true);
+  assert.match(story.content[0].text, /not a recording of a JavaScript or TypeScript run/);
 });

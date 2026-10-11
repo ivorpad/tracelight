@@ -1,5 +1,5 @@
 /**
- * `shell --live`: many verbs over one bridge connection, as Pyokka's `agent/shell.py`.
+ * `shell --live`: many verbs over one bridge connection.
  *
  * It reads one command line per stdin line, keeps the live connection open and prints every result
  * the way the one-shot verb would (a blank line after each, or one JSON line with `--json`), so a

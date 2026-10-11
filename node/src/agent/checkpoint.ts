@@ -1,5 +1,5 @@
 /**
- * The parts one code-history checkpoint is made of, as Pyokka's `agent/checkpoint.py`: pure
+ * The parts one code-history checkpoint is made of: pure
  * functions plus one index.
  *
  * The history document (`codehistory.ts`, later) assembles the page; everything here shapes a

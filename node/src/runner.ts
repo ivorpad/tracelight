@@ -1,6 +1,6 @@
 /**
- * The long-lived runner: NDJSON requests on stdin, replies and run events on stdout, the same
- * contract as `python -m pyokka_runtime serve` (docs/PROTOCOL.md).
+ * The long-lived runner: NDJSON requests on stdin, replies and run events on stdout
+ * (docs/PROTOCOL.md).
  *
  * Each `run` executes in a child Node process (child.ts) with an IPC channel for run events and
  * pipes for fds 1 and 2, which the runner forwards as `output` events (fd-level writes; writes

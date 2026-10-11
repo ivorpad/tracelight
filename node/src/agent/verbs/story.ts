@@ -1,4 +1,4 @@
-/** `story`: the Code Story, the lines that ran, in order, one block per scope (Pyokka's `pyokka story`). */
+/** `story`: the Code Story, the lines that ran, in order, one block per scope. */
 import { parseLine, registerVerb } from '../commands.ts';
 import { renderStory } from '../render.ts';
 

@@ -1,4 +1,4 @@
-/** `graph`: the execution graph (Pyokka's `pyokka graph`): nodes, call/tool/data edges; `--dot` for Graphviz. */
+/** `graph`: the execution graph: nodes, call/tool/data edges; `--dot` for Graphviz. */
 import { registerVerb } from '../commands.ts';
 import { graph, renderGraph } from '../graph.ts';
 import { renderDot } from '../graph_dot.ts';

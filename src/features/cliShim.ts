@@ -1,9 +1,8 @@
 /**
  * The extension's command on PATH: a shell script at `~/.local/bin/pyokka` that runs this
- * extension's own `dist/python` runtime (Tracelight's build writes `~/.local/bin/tracelight`, which
- * runs its `dist/node`). An agent then finds the CLI without knowing where the extension lives,
- * and a path it saved from an older version cannot go stale, because every activation rewrites the
- * script with the current one.
+ * extension's own `dist/node` runtime. An agent then finds the CLI without knowing where the
+ * extension lives, and a path it saved from an older version cannot go stale, because every
+ * activation rewrites the script with the current one.
  *
  * Written only while `pyokka.agentAccess` is on, since that is the user saying agents may use
  * Pyokka. A script that is already ours is refreshed whatever the setting. Anything else at that
@@ -15,24 +14,17 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { AGENT_ACCESS_SETTING } from '../agent/bridge';
 import { setting } from '../config/settings';
-import { resolveInterpreter, resolveNode } from '../runtime/interpreter';
+import { resolveNode } from '../runtime/interpreter';
 import { jsRuntimeEntry } from '../runtime/language';
 import { log } from '../util/log';
-import { IS_TRACELIGHT } from '../brand';
 
 /** the line that marks a script as one this extension wrote and may rewrite */
 export const SHIM_MARKER = '# pyokka-shim: written by the Pyokka extension';
-/**
- * Before Tracelight was its own extension, Pyokka wrote the `tracelight` shim too. Tracelight
- * takes that script over (it pointed into Pyokka's `dist/node`, which Pyokka no longer ships).
- */
-const LEGACY_SHIM_MARKER = '# pyokka-shim: written by the Pyokka extension'; // brand: keep
-
 export interface ShimInputs {
-  /** the directory holding `pyokka_runtime` */
-  runtimeDir: string;
-  /** the interpreter the window resolved, used when neither $PYOKKA_PYTHON nor a venv is active */
-  python: string;
+  /** `bin/tracelight.mjs` of the runtime inside the extension */
+  entry: string;
+  /** the Node the window resolved (`pyokka.nodePath`, else `node` on PATH), used unless $TRACELIGHT_CLI_NODE is set */
+  node: string;
   /** the editor's own launcher, exported as $PYOKKA_CODE unless the caller set one */
   launcher?: string;
   version: string;
@@ -42,34 +34,11 @@ function shQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-/** The script. $PYOKKA_PYTHON wins, then an activated venv (so `pyokka run` sees the project's packages), then the window's interpreter. */
-export function shimScript(i: ShimInputs): string {
-  const lines = [
-    '#!/bin/sh',
-    `${SHIM_MARKER} ${i.version}. It is rewritten on every activation; edit nothing here.`,
-    'py=${PYOKKA_PYTHON:-}',
-    'if [ -z "$py" ] && [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ]; then py="$VIRTUAL_ENV/bin/python"; fi',
-    `if [ -z "$py" ]; then py=${shQuote(i.python)}; fi`,
-  ];
-  if (i.launcher) lines.push(`if [ -z "\${PYOKKA_CODE:-}" ]; then PYOKKA_CODE=${shQuote(i.launcher)}; export PYOKKA_CODE; fi`);
-  lines.push(`PYTHONPATH=${shQuote(i.runtimeDir)}\${PYTHONPATH:+:$PYTHONPATH} exec "$py" -m pyokka_runtime "$@"`, '');
-  return lines.join('\n');
-}
-
-export interface JsShimInputs {
-  /** `node/bin/tracelight.mjs` inside the extension */
-  entry: string;
-  /** the Node the window resolved (`pyokka.nodePath`, else `node` on PATH), used unless $TRACELIGHT_CLI_NODE is set */
-  node: string;
-  launcher?: string;
-  version: string;
-}
-
 /**
- * The `tracelight` script. $TRACELIGHT_CLI_NODE picks the Node that runs the CLI itself (22.18+);
- * the program's Node stays the CLI's `--node` / $TRACELIGHT_NODE.
+ * The script. $TRACELIGHT_CLI_NODE picks the Node that runs the CLI itself (22.18+); the program's
+ * Node stays the CLI's `--node` / $TRACELIGHT_NODE.
  */
-export function jsShimScript(i: JsShimInputs): string {
+export function shimScript(i: ShimInputs): string {
   const lines = ['#!/bin/sh', `${SHIM_MARKER} ${i.version}. It is rewritten on every activation; edit nothing here.`, `node=\${TRACELIGHT_CLI_NODE:-${shQuote(i.node)}}`];
   if (i.launcher) lines.push(`if [ -z "\${PYOKKA_CODE:-}" ]; then PYOKKA_CODE=${shQuote(i.launcher)}; export PYOKKA_CODE; fi`);
   lines.push(`exec "$node" ${shQuote(i.entry)} "$@"`, '');
@@ -89,7 +58,7 @@ export function shimState(file: string): ShimState {
   if (st.isSymbolicLink()) return { kind: 'foreign', why: `a symlink to ${fs.readlinkSync(file)}` };
   if (!st.isFile()) return { kind: 'foreign', why: 'not a file' };
   const text = fs.readFileSync(file, 'utf8');
-  const ours = text.includes(SHIM_MARKER) || (IS_TRACELIGHT && path.basename(file) === 'tracelight' && text.includes(LEGACY_SHIM_MARKER));
+  const ours = text.includes(SHIM_MARKER);
   return ours ? { kind: 'ours', text } : { kind: 'foreign', why: 'a script Pyokka did not write' };
 }
 
@@ -168,13 +137,11 @@ export function installCliShim(context: vscode.ExtensionContext, runtimeDir: str
   const bin = path.join(os.homedir(), '.local', 'bin');
   const version = String(context.extension.packageJSON.version);
   const launcher = findLauncher(vscode.env.appRoot);
-  const jsEntry = jsRuntimeEntry(runtimeDir, path.join, path.dirname);
+  const entry = jsRuntimeEntry(runtimeDir, path.join, path.dirname);
   // target is what the shim runs, for the log line
-  // each extension writes its own command: Pyokka `pyokka`, Tracelight `tracelight`
-  const scripts: { file: string; target: string; text: () => Promise<string> }[] =
-    IS_TRACELIGHT
-      ? [{ file: path.join(bin, 'tracelight'), target: jsEntry, text: async () => jsShimScript({ entry: jsEntry, node: await resolveNode().then((i) => i.path, () => 'node'), launcher, version }) }]
-      : [{ file: path.join(bin, 'pyokka'), target: runtimeDir, text: async () => shimScript({ runtimeDir, python: await resolveInterpreter().then((i) => i.path, () => 'python3'), launcher, version }) }];
+  const scripts: { file: string; target: string; text: () => Promise<string> }[] = [
+    { file: path.join(bin, 'pyokka'), target: entry, text: async () => shimScript({ entry, node: await resolveNode().then((i) => i.path, () => 'node'), launcher, version }) },
+  ];
   const syncOne = async (file: string, target: string, script: () => Promise<string>): Promise<void> => {
     const allowCreate = setting<boolean>(AGENT_ACCESS_SETTING, false);
     if (!allowCreate && shimState(file).kind !== 'ours') return;
@@ -192,14 +159,6 @@ export function installCliShim(context: vscode.ExtensionContext, runtimeDir: str
   };
   const sync = async (): Promise<void> => {
     for (const s of scripts) await syncOne(s.file, s.target, s.text);
-    // Pyokka's old JS commands (`pyokka-js`, then `tracelight`, now the Tracelight extension's);
-    // drop our own old shims, never a foreign file. A `tracelight` that Tracelight rewrote is not ours any more.
-    if (!IS_TRACELIGHT) {
-      for (const name of ['pyokka-js', 'tracelight']) {
-        const old = path.join(bin, name);
-        if (shimState(old).kind === 'ours') fs.rmSync(old, { force: true });
-      }
-    }
   };
   const run = (): void => void sync().catch((err) => log.error('pyokka CLI shim failed', err));
   run();

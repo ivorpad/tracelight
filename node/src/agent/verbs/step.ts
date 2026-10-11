@@ -1,5 +1,5 @@
 /**
- * `step`: move from step N and show the context at the new step (Pyokka's `pyokka step`).
+ * `step`: move from step N and show the context at the new step.
  * Over a saved run the moves are the Time Machine's; `--count` is a live-only move at a debug pause.
  */
 import { AgentError } from '../source.ts';

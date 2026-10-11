@@ -1,6 +1,5 @@
 /**
- * The walkthrough: what happened, in order, one moment per line (docs/PROTOCOL.md, "Walkthrough"),
- * as Pyokka's `agent/walkthrough.py`.
+ * The walkthrough: what happened, in order, one moment per line (docs/PROTOCOL.md, "Walkthrough").
  *
  * Deterministic and instant: every moment comes from the recording (scope entries, decisions,
  * loops, logged values, prints, errors) with a templated sentence (`moments.ts`); a model only

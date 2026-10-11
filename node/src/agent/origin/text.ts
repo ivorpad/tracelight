@@ -1,4 +1,4 @@
-/** `origin` as text, as Pyokka's `origin/text.py`: the error, the value, one line per link newest first, the root and where the chain ends. */
+/** `origin` as text: the error, the value, one line per link newest first, the root and where the chain ends. */
 import { pyText } from '../checkpoint.ts';
 import { cutLine } from '../recording.ts';
 import { loc, type Args } from '../render.ts';

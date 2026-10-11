@@ -219,8 +219,8 @@ export function renderDebugState(result: Msg, source: RunSource, args: Args): st
 
 /** `/abs/node /abs/app.ts --port 8000   (cwd /abs)`: the interpreter only when the launch names one */
 function launchLine(launch: Msg): string {
-  const interp = launch.node || launch.python;
-  const target = launch.module ? `-m ${launch.module}` : String(launch.program || '');
+  const interp = launch.node;
+  const target = String(launch.program || '');
   const head = interp ? `${interp} ${target}` : target;
   const command = [head, ...(launch.args || []).map(String)].join(' ');
   return launch.cwd ? `${command}   (cwd ${launch.cwd})` : command;

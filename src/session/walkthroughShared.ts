@@ -1,7 +1,7 @@
 /**
  * Walkthrough shapes and the helpers both builders share (docs/PROTOCOL.md, "Walkthrough"):
  * user-file detection, package names, display paths, durations, text cuts. Pure; identical
- * rules in `python/pyokka_runtime/agent/walkthrough.py`.
+ * rules in `node/src/agent/walkthrough.ts`.
  */
 import * as path from 'node:path';
 import type { ErrorEvent, LocalsEvent, LogEvent } from '../shared/protocol';

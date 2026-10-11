@@ -7,9 +7,8 @@ import { EventEmitter } from 'node:events';
 import { Session } from './session';
 import type { RunMode } from './types';
 import type { RecordFromSpec, RunMode as ProtocolRunMode } from '../shared/protocol';
-import { namedInterpreter, resolveInterpreter, resolveNode, showInterpreterError, type Interpreter } from '../runtime/interpreter';
+import { resolveNode, showInterpreterError, type Interpreter } from '../runtime/interpreter';
 import { brandLanguage, isRunnable, runtimeLanguage } from '../runtime/language';
-import { IS_TRACELIGHT } from '../brand';
 import { RecentFilesStore } from './recentFilesStore';
 import { setting } from '../config/settings';
 import { setContext } from '../util/context';
@@ -186,11 +185,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   async start(doc: vscode.TextDocument, opts: StartOptions = {}): Promise<Session | undefined> {
     const language = runtimeLanguage(doc);
     if (!language || language !== brandLanguage()) {
-      void vscode.window.showInformationMessage(
-        IS_TRACELIGHT
-          ? 'Tracelight runs JavaScript and TypeScript files. Open a .js or .ts file or create one with "Tracelight: New File".'
-          : 'Pyokka runs Python files. Open a .py file or create one with "Pyokka: New Python File".',
-      );
+      void vscode.window.showInformationMessage('Tracelight runs JavaScript and TypeScript files. Open a .js or .ts file or create one with "Tracelight: New File".');
       return undefined;
     }
     const existing = this.get(doc);
@@ -207,14 +202,14 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     if (!(await this.trustAllowed())) return undefined;
     let interpreter: Interpreter;
     try {
-      interpreter = language === 'javascript' ? await resolveNode(doc.uri) : opts.interpreter ? await namedInterpreter(opts.interpreter) : await resolveInterpreter(doc.uri);
+      interpreter = await resolveNode(doc.uri);
     } catch (err) {
       void showInterpreterError(err);
       return undefined;
     }
     const workspaceRoot = this.workspaceRootFor(doc, opts.projectRoot);
-    const extraPythonPath = this.forFileSitePackages(doc);
-    const session = new Session({ document: doc, interpreter, runtimeDir: this.runtimeDir, workspaceRoot, runMode: opts.runMode, autoLog: opts.autoLog, mode: opts.mode, extraPythonPath });
+    const extraModulePaths = this.forFileModulePaths(doc);
+    const session = new Session({ document: doc, interpreter, runtimeDir: this.runtimeDir, workspaceRoot, runMode: opts.runMode, autoLog: opts.autoLog, mode: opts.mode, extraModulePaths });
     if (opts.debug) session.debugCtl.activate({ stopOnEntry: opts.stopOnEntry, ...(opts.recordFrom ? { recordFrom: opts.recordFrom } : {}) });
     this.sessions.set(session.key, session);
     this.lastActive = session;
@@ -242,16 +237,16 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     return session;
   }
 
-  /** `~/.pyokka/data/<id>/site-packages` for "install only for this Pyokka file". */
-  forFileSitePackages(doc: vscode.TextDocument): string[] {
+  /** `~/.pyokka/data/<id>/npm` for "install only for this Pyokka file". */
+  forFileModulePaths(doc: vscode.TextDocument): string[] {
     const dir = this.forFileDataDir(doc);
     return existsSync(dir) ? [dir] : [];
   }
 
   forFileDataDir(doc: vscode.TextDocument): string {
     const id = shortHash(doc.uri.scheme === 'file' ? doc.uri.fsPath : doc.uri.toString());
-    // JS/TS packages go to a folder of their own (`npm install --prefix`), found through NODE_PATH
-    return path.join(pyokkaHome(), 'data', id, runtimeLanguage(doc) === 'javascript' ? 'npm' : 'site-packages');
+    // packages go to a folder of their own (`npm install --prefix`), found through NODE_PATH
+    return path.join(pyokkaHome(), 'data', id, 'npm');
   }
 
   async toggle(doc: vscode.TextDocument): Promise<void> {

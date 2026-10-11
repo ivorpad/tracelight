@@ -3,7 +3,7 @@
  *
  *   tracelight serve                      the NDJSON runner a host spawns (docs/PROTOCOL.md)
  *   tracelight run FILE [--save run.json] [--json] [--timeout MS] [--max-steps N] [--auto-log] [--record-locals | --no-locals] [--http record|replay] [-- ARGS]
- *                                        (a saved run records local variables unless --no-locals, as `pyokka run --save`)
+ *                                        (a saved run records local variables unless --no-locals)
  *                                        run once; print the logs, output and errors; save the run
  *   tracelight instrument FILE [--json]   print the instrumented JavaScript (or the range tables)
  *   tracelight bindings FILE              the `bindings` table of FILE
@@ -12,10 +12,9 @@
  *   tracelight mcp                        the agent tools as an MCP server on stdin/stdout (src/mcp/server.ts)
  *   tracelight version
  *
- * A saved run has Pyokka's shape (`{meta, events}`, docs/PROTOCOL.md "Saved run"), so the agent
- * verbs that read one (`pyokka story`, `step`, `var`, `why`, ...) read a Tracelight run too; the
- * same verbs in this runtime (`agent/commands.ts`, the registry `agent/verbs.ts` lists) answer
- * with the same shapes and text.
+ * A saved run is `{meta, events}` (docs/PROTOCOL.md "Saved run"); the agent verbs that read one
+ * (`agent/commands.ts`, the registry `agent/verbs.ts` lists) answer with the shapes and text the
+ * extension and the skill read.
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -144,7 +143,7 @@ function display(path: string, root: string): string {
   return r && !r.startsWith('..') ? r : path;
 }
 
-/** run `a.file` once and, with `a.save`, write the saved run; the MCP server's `pyokka_run` too */
+/** run `a.file` once and, with `a.save`, write the saved run; the MCP server's `tracelight_run` too */
 export async function recordRun(a: RunArgs): Promise<{ meta: Msg; events: Msg[]; finished: Msg; files: Msg[]; request: Msg }> {
   const path = resolve(a.file);
   const content = readFileSync(path, 'utf8');
@@ -197,8 +196,8 @@ export async function recordRun(a: RunArgs): Promise<{ meta: Msg; events: Msg[];
   };
   if (keep) meta.keep = keep;
   if (a.save) {
-    // the agent verbs (`pyokka var`, `why`) parse sources with Python's parser: a saved run carries the JS table
-    // every event is redacted before it is written (docs/PROTOCOL.md, "Redaction"), as Pyokka's save
+    // a saved run carries each file's statement bindings, which the agent verbs (`var`, `why`) read
+    // every event is redacted before it is written (docs/PROTOCOL.md, "Redaction")
     for (const e of events) redactValue(e);
     for (const e of events) {
       if (e.type !== 'file.instrumented') continue;

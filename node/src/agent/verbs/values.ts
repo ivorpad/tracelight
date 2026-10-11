@@ -1,4 +1,4 @@
-/** `values`: every value logged on a line, by hit (Pyokka's `pyokka values`). */
+/** `values`: every value logged on a line, by hit. */
 import { parseLine, registerVerb } from '../commands.ts';
 import { renderValues } from '../render.ts';
 

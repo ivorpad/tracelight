@@ -1,5 +1,5 @@
 /**
- * Secret redaction for everything the agent verbs print, as Pyokka's `redact.py`.
+ * Secret redaction for everything the agent verbs print.
  *
  * The rules are the contract in docs/PROTOCOL.md ("Redaction"); test/unit/fixtures/redact.json
  * pins them. Whole tokens of the common shapes (`sk-…`, `AKIA…`, `ghp_…`, `xox[abp]-…`, JWTs,

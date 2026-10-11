@@ -1,6 +1,6 @@
 /**
  * The agent verbs over a run (`tracelight story`, `step`, `var`, ...): the registry, argument
- * parsing, dispatch and `--json`, as Pyokka's `agent/commands.py`.
+ * parsing, dispatch and `--json`.
  *
  * Every verb is a module that calls `registerVerb` and is listed in `verbs.ts`; nothing here
  * names a verb. The text form of every result comes from the verb's `render` (bounded listings an
@@ -75,7 +75,7 @@ export function runArg(p: ArgumentParser): void {
 export function liveArg(p: ArgumentParser, noRun = true): void {
   if (noRun) p.setDefaults({ run: null });
   p.addArgument('--json', { action: 'store_true', help: 'print the raw JSON shape' });
-  p.addArgument('--live', { action: 'store_true', help: 'the open VS Code session instead of a saved run (setting pyokka.agentAccess)' });
+  p.addArgument('--live', { action: 'store_true', help: 'the open VS Code session instead of a saved run (setting tracelight.agentAccess)' });
   p.addArgument('--session', { metavar: 'NAME|PATH', help: 'with --live: the session\'s file name or descriptor path, when more than one is open' });
 }
 
@@ -151,7 +151,7 @@ export async function openSource(verb: Verb, args: Args): Promise<RunSource> {
     if (!liveOpener) throw new AgentError(`--live is not available in ${NAME} yet`, `save a run with \`${NAME} run FILE --save run.json\` and pass it instead`);
     return liveOpener(args);
   }
-  if (args.run === null || args.run === undefined) throw new AgentError(`${args.command} needs a saved run, or --live for the open VS Code session`, `save one with \`${NAME} run FILE --save run.json\`, or turn on pyokka.agentAccess and add --live`);
+  if (args.run === null || args.run === undefined) throw new AgentError(`${args.command} needs a saved run, or --live for the open VS Code session`, `save one with \`${NAME} run FILE --save run.json\`, or turn on tracelight.agentAccess and add --live`);
   return new SavedRun(String(args.run));
 }
 

@@ -2,7 +2,7 @@
  * `history`: the data behind a code-history page, generated from a run, as Pyokka's
  * `agent/codehistory.py`.
  *
- * The page (`skills/pyokka/templates/code-history.html.hbs`) is numbered source on the left and
+ * The page (`skills/tracelight/templates/code-history.html.hbs`) is numbered source on the left and
  * chronological checkpoints on the right. Everything on it that is a fact comes from here, and
  * every checkpoint carries in `verify` the command that prints those same values again: the
  * selectors below are the same `RunSource` methods `context`, `var` and `why` call, so a value
@@ -12,7 +12,7 @@
  * through `--prose` or by editing. `mergeProse` refuses a prose file that tries to set a
  * generated field: a page whose numbers were typed is the thing this verb exists to prevent.
  *
- * `lang` is the page's human language (`en`, `es`), as in Pyokka; the renderer picks the syntax
+ * `lang` is the page's human language (`en`, `es`); the renderer picks the syntax
  * highlighting from each file's extension, not from `lang`.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';

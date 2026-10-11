@@ -1,7 +1,7 @@
 /**
  * Narration backend, host side (no vscode here): the prompt, the command that answers it,
  * strict parsing of the answer, the per-run gloss cache. Mirrors
- * `python/pyokka_runtime/agent/narrate.py`; the prompt template is the runtime's
+ * `node/src/agent/narrate.ts`; the prompt template is the runtime's
  * `narrate_prompt.md`. A model only ever adds `gloss`; anything unparseable keeps `null`.
  */
 import { fenceLanguage } from '../runtime/language';

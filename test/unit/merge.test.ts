@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { mergeConfigSources, readPyokkaKeyFromPackageJson, readPyokkaTableFromToml, toRunConfig, parseEnvParams, splitArgs, DEFAULT_RUN_CONFIG } from '../../src/config/merge';
+import { mergeConfigSources, readPyokkaKeyFromPackageJson, toRunConfig, parseEnvParams, splitArgs, DEFAULT_RUN_CONFIG } from '../../src/config/merge';
 
 describe('config merge order', () => {
   it('later sources win, nested objects merge', () => {
     const settings = { logLimit: 5, logLimits: { inline: { depth: 2, elements: 10 } } };
     const home = { logLimit: 50, autoLog: true };
-    const pyproject = { logLimits: { inline: { depth: 9 } }, runTimeout: 1000 };
+    const pkg = { logLimits: { inline: { depth: 9 } }, runTimeout: 1000 };
     const dotfile = { autoLog: false };
-    const merged = mergeConfigSources(settings, home, undefined, pyproject, dotfile);
+    const merged = mergeConfigSources(settings, home, pkg, dotfile);
     expect(merged).toEqual({ logLimit: 50, autoLog: false, logLimits: { inline: { depth: 9, elements: 10 } }, runTimeout: 1000 });
     const run = toRunConfig(merged);
     expect(run.logLimit).toBe(50);
@@ -45,29 +45,6 @@ describe('config merge order', () => {
     expect(toRunConfig({ httpObserve: false }).httpObserve).toBe(false);
     expect(toRunConfig({ httpObserve: 'no' }).httpObserve).toBe(true);
     expect(toRunConfig({ http: 'replay', httpObserve: false })).toMatchObject({ http: 'replay', httpObserve: false });
-  });
-});
-
-describe('pyproject [tool.pyokka]', () => {
-  it('reads scalars, arrays, inline tables and sub-tables', () => {
-    const toml = `
-[project]
-name = "demo"
-
-[tool.pyokka]  # comment
-logLimit = 42
-autoLog = true
-plugins = ["x", 'y']
-hints = { ignoreCoverage = "skip" }
-
-[tool.pyokka.logLimits.inline]
-depth = 3
-
-[tool.other]
-logLimit = 1
-`;
-    expect(readPyokkaTableFromToml(toml)).toEqual({ logLimit: 42, autoLog: true, plugins: ['x', 'y'], hints: { ignoreCoverage: 'skip' }, logLimits: { inline: { depth: 3 } } });
-    expect(readPyokkaTableFromToml('[project]\nname = "x"\n')).toBeUndefined();
   });
 });
 

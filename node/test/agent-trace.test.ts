@@ -1,4 +1,4 @@
-/** The agent's Time Machine model and redaction against the shared fixtures the extension and Pyokka pin. */
+/** The agent's Time Machine model and redaction against the fixtures the extension's tests pin too. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

@@ -1,7 +1,7 @@
 /**
  * "Pyokka: Clear Library Cache": empty the runtime's cache of instrumented library files.
  *
- * Mirrors `python/pyokka_runtime/cache.py` (`pyokka cache --clear`): the directory is
+ * Mirrors `node/src/cache.ts` (`pyokka cache --clear`): the directory is
  * `PYOKKA_CACHE_DIR` when the run child would see it set (empty = the cache is off), else
  * `~/.pyokka/cache`; the entries are the `*.bin` files at its top level, the runtime's `.tmp-*.bin`
  * leftovers included. Nothing else is touched, so a `PYOKKA_CACHE_DIR` that points at a shared

@@ -1,4 +1,4 @@
-/** `state`: what the run is, file, steps, exit code, staleness (Pyokka's `pyokka state`). */
+/** `state`: what the run is, file, steps, exit code, staleness. */
 import { registerVerb } from '../commands.ts';
 import { renderState } from '../render.ts';
 

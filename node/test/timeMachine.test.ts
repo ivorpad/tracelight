@@ -342,7 +342,7 @@ await Promise.all([task(1), task(2), task(3), task(4)]);
   }
 });
 
-test('recording stays cheap: well under Pyokka per step (3.7 µs/step on fib(22), bench/record.ts)', async () => {
+test('recording stays cheap: 3.7 µs/step on fib(22) (bench/record.ts)', async () => {
   const src = `
 function fib(n) {
   if (n < 2) return n;

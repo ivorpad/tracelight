@@ -1,7 +1,7 @@
 /**
  * The walkthrough over a live session's state: what happened, in order, one moment per line
  * (docs/PROTOCOL.md, "Walkthrough"). Pure: the same builder as
- * `python/pyokka_runtime/agent/walkthrough.py` over the trace, file table, log entries, locals and
+ * `node/src/agent/walkthrough.ts` over the trace, file table, log entries, locals and
  * errors; `test/unit/walkthrough.test.ts` checks both against one fixture run.
  */
 import { MomentBuilder } from './moments';

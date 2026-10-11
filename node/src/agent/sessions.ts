@@ -1,10 +1,10 @@
 /**
- * Which live session a command drives, as Pyokka's `agent/sessions.py` and `home.py`.
+ * Which live session a command drives.
  *
- * The VS Code extension (`src/agent/bridge.ts`, setting `pyokka.agentAccess`) describes every
+ * The VS Code extension (`src/agent/bridge.ts`, setting `tracelight.agentAccess`) describes every
  * session it serves in the directory `../home.ts` `sessionsDir` names (`$TRACELIGHT_SESSIONS_DIR`,
- * else the extension's `$PYOKKA_SESSIONS_DIR`, else `$PYOKKA_HOME/sessions`), so a terminal finds
- * the same sessions the Python CLI finds. A file may have two descriptors, the run-all session's (`kind: "run"`) and the
+ * else `$TRACELIGHT_HOME/sessions`), so a terminal finds the sessions of a window that sees the
+ * same variables. A file may have two descriptors, the run-all session's (`kind: "run"`) and the
  * Debugger's (`kind: "debug"`); `preferKind` says which a verb wants, `pickSession` applies it.
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -18,7 +18,7 @@ type Msg = Record<string, any>;
 export { sessionsDir };
 
 export const NO_SESSION = 'no live session';
-export const NO_SESSION_HINT = `open the file in VS Code with pyokka.agentAccess on, or use a saved run (\`${NAME} run FILE --save run.json\`)`;
+export const NO_SESSION_HINT = `open the file in VS Code with tracelight.agentAccess on, or use a saved run (\`${NAME} run FILE --save run.json\`)`;
 
 /** the verbs that drive a live program: they prefer a `kind: "debug"` descriptor */
 export const DEBUG_VERBS = new Set(['debug', 'continue', 'pause', 'stop', 'restart', 'break', 'watches', 'locals', 'exec']);

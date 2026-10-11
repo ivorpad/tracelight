@@ -1,8 +1,7 @@
 /**
- * The HTTP recording file, as Pyokka's _http_store.py: where it lives, how a request is keyed, how
- * bytes and headers are stored. The format is the same file (docs/PROTOCOL.md, "HTTP record and
- * replay"), with `node` in the header where Pyokka writes `python`, so a recording made by either
- * runtime for the same path is read by the other.
+ * The HTTP recording file: where it lives, how a request is keyed, how
+ * bytes and headers are stored (docs/PROTOCOL.md, "HTTP record and replay"); the header names the
+ * Node that recorded it.
  *
  * Bodies are stored decoded (`content-encoding` undone: gzip, deflate, br, and zstd where this
  * Node has it), credentials and secret-named headers are dropped, and every stored text goes
@@ -52,14 +51,9 @@ export interface Entry {
 /**
  * `<root>/.tracelight/replay`, or `<root>/.tracelight-replay` when `.tracelight` is the
  * Quokka-style config file: the directory the Tracelight extension offers to add to .gitignore.
- * A workspace that recorded before Tracelight had its own extension keeps `.pyokka/replay`
- * (or `.pyokka-replay`) while the new directory does not exist.
  */
 export function recordingDir(workspaceRoot: string): string {
-  const own = dirFor(workspaceRoot, NAME);
-  if (fs.existsSync(own)) return own;
-  const legacy = dirFor(workspaceRoot, 'pyokka');
-  return fs.existsSync(legacy) ? legacy : own;
+  return dirFor(workspaceRoot, NAME);
 }
 
 function dirFor(workspaceRoot: string, name: string): string {
@@ -131,7 +125,7 @@ export function recordingInfo(file: string): { exists: boolean; recordedAt: stri
   for (const o of objs as any[]) {
     if (!o || typeof o !== 'object') continue;
     if ('n' in o) entries++;
-    else if (o.pyokka === 'http' && recordedAt === null) recordedAt = o.recorded ?? null;
+    else if (o.tracelight === 'http' && recordedAt === null) recordedAt = o.recorded ?? null;
   }
   return { exists: true, recordedAt, entries };
 }
@@ -308,7 +302,7 @@ export function prepareResponse(headers: Iterable<[string, string]>, chunks: Buf
 }
 
 export function header(file: string): Record<string, unknown> {
-  return { pyokka: 'http', version: FILE_VERSION, file, recorded: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), node: process.versions.node };
+  return { tracelight: 'http', version: FILE_VERSION, file, recorded: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), node: process.versions.node };
 }
 
 /** The URL of a row: query values stripped (the names stay), no fragment. */

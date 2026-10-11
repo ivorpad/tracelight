@@ -1,7 +1,7 @@
 /**
- * `--live`: the verbs over the bridge of an open VS Code session, as Pyokka's `agent/live.py`.
+ * `--live`: the verbs over the bridge of an open VS Code session.
  *
- * The extension (`src/agent/bridge.ts`, setting `pyokka.agentAccess`) listens on one Unix socket
+ * The extension (`src/agent/bridge.ts`, setting `tracelight.agentAccess`) listens on one Unix socket
  * per session and describes it in a descriptor (`sessions.ts` says where). `LiveRun` sends the
  * token line, then one request per command, and hands the reply to the same renderer as a saved
  * run: the bridge already answers with the context-slice shape. What the bridge does not serve
@@ -36,7 +36,7 @@ export { stopReason };
 export const CONNECT_TIMEOUT_S = 5;
 export const WATCH_VALUES = 6;
 /** what a debug session answers for the verbs that read a recording */
-export const RECORDING_HINT = `start the debug session with recording (\`${NAME} debug FILE --record\`, or "Pyokka: Debug Current File (Recording)"), or read a run-all session of the file`;
+export const RECORDING_HINT = `start the debug session with recording (\`${NAME} debug FILE --record\`, or "Tracelight: Debug Current File (Recording)"), or read a run-all session of the file`;
 /** the host's answer to a request type it does not know: `unknown request "recording"` */
 export const OLD_EXTENSION = /^unknown request ["']([^"']*)["']$/;
 
@@ -441,7 +441,7 @@ export function watchLine(event: Msg, source: Msg, oneLine: (text: unknown, limi
 
 // -- opening a live source (Pyokka's `open_source`, the live half) ------------------------------------------
 
-/** the live-only verbs: no saved-run form (Pyokka's `DEBUG_COMMANDS`) */
+/** the live-only verbs: no saved-run form */
 export const DEBUG_COMMANDS = new Set([...DEBUG_VERBS, 'record']);
 
 export const NO_DEBUG_HINT = `start one with \`${NAME} debug FILE --at NAME\`; it opens the session and prints the first stop`;

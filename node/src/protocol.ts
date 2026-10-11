@@ -1,6 +1,6 @@
 /**
  * Wire constants and event builders shared by the runner and the run child.
- * The contract is Pyokka's docs/PROTOCOL.md; docs/tracelight/PROTOCOL-JS.md lists where Tracelight differs.
+ * The contract is docs/PROTOCOL.md.
  */
 
 export const RUNTIME_VERSION = '0.1.0';
@@ -78,7 +78,7 @@ function strings(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).map(String) : [];
 }
 
-/** The run request's `config`, with Pyokka's defaults for anything missing. */
+/** The run request's `config`, with the protocol's defaults for anything missing. */
 export function runConfig(raw: Obj | undefined): RunConfig {
   const c = raw ?? {};
   const ll = c.logLimits ?? {};

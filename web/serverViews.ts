@@ -1,9 +1,9 @@
 /**
  * The bridge's half of the views that need the machine: Narrate (one model call through `claude`,
- * `codex` or TRACELIGHT_EXPLAIN_COMMAND, as the extension's narrator does) and the tour
- * (`python -m pyokka_runtime tour run.json --json` over the run saved as a `run.json`, the same
- * command an agent runs). Both read the run the bridge keeps (runState.ts) and answer once per run;
- * the page draws the results with the extension's own builders.
+ * `codex` or TRACELIGHT_EXPLAIN_COMMAND, as the extension's narrator does) and the tour (the
+ * runtime's `tour run.json --json` over the run saved as a `run.json`, the same command an agent
+ * runs). Both read the run the bridge keeps (runState.ts) and answer once per run; the page draws
+ * the results with the extension's own builders.
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -16,11 +16,11 @@ import { decodeSteps } from '../src/shared/protocol';
 import type { TourDoc } from '../src/session/tourTypes';
 import { runInputs, workspaceRootOf, type RunData } from './runState';
 import type { BridgeNarration, BridgeTour } from './bridgeProtocol';
+import { runtimeRoot } from './runtimeRoot';
 
 export interface ViewsOptions {
+  /** dist/, next to the runtime (`runtimeRoot`) */
   distDir: string;
-  /** the interpreter that runs `pyokka tour` (also for a JS run: the tour code is Python) */
-  python: string;
   /** TRACELIGHT_EXPLAIN_COMMAND: a command that reads the prompt on stdin */
   explainCommand?: string;
   /** tests replace the model and the tour command */
@@ -28,11 +28,6 @@ export interface ViewsOptions {
   tourCli?: typeof runTourCli;
 }
 
-/** Where `pyokka_runtime` is: the build's copy, else the checkout's. */
-export function runtimeDir(distDir: string): string {
-  const candidates = [path.join(distDir, 'python'), path.join(distDir, '..', 'python')];
-  return candidates.find((d) => fs.existsSync(path.join(d, 'pyokka_runtime', '__main__.py'))) ?? candidates[0]!;
-}
 
 /** The lines of a file of the run: the text it ran for the main file, the disk for the others. */
 export function readRunSource(run: RunData, mainPath: string, fileId: number): string[] | undefined {
@@ -103,7 +98,7 @@ export class ServerViews {
     if (!w.moments.length) return this.sendNarration({ runId: run.runId, narrating: false, error: 'the run has no moments to narrate' });
     this.sendNarration({ runId: run.runId, narrating: true });
     try {
-      const template = fs.readFileSync(path.join(runtimeDir(this.opts.distDir), 'pyokka_runtime', 'agent', 'narrate_prompt.md'), 'utf8');
+      const template = fs.readFileSync(path.join(runtimeRoot(this.opts.distDir), 'src', 'agent', 'narrate_prompt.md'), 'utf8');
       const answer = await this.ask(buildPrompt(template, w, collectSources(inputs, w.moments)));
       const glosses = parseGlosses(answer, w.moments.map((m) => m.id));
       if (this.current().run?.runId === run.runId) this.sendNarration({ runId: run.runId, narrating: false, glosses });
@@ -121,7 +116,7 @@ export class ServerViews {
   /* ---------- the tour ---------- */
 
   private cli(): TourCliOptions {
-    return { python: this.opts.python, runtimeDir: runtimeDir(this.opts.distDir) };
+    return { node: { exe: process.execPath, entry: path.join(runtimeRoot(this.opts.distDir), 'bin', 'tracelight.mjs') } };
   }
 
   private publicTour(t: BridgeTour & { dir?: string; runFile?: string }): BridgeTour {

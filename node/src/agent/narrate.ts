@@ -1,6 +1,6 @@
 /**
  * Narration: one batched model call adds a sentence of gloss per walkthrough moment (never
- * automatic), as Pyokka's `agent/narrate.py`.
+ * automatic).
  *
  * The prompt is `narrate_prompt.md` (beside this file: Pyokka's template, worded for a
  * JavaScript / TypeScript program) filled with the walkthrough JSON (values redacted) and the
@@ -106,7 +106,7 @@ export function resolveBackend(command: string | null = null, which: (name: stri
   if (command && command.trim()) return { name: 'custom', argv: shlexSplit(command) };
   if (which('claude')) return { name: 'claude', argv: ['claude', ...CLAUDE_ARGS] };
   if (which('codex')) {
-    const out = join(mkdtempSync(join(tmpdir(), 'pyokka-narrate-')), 'last-message.md');
+    const out = join(mkdtempSync(join(tmpdir(), 'tracelight-narrate-')), 'last-message.md');
     return { name: 'codex', argv: ['codex', ...CODEX_ARGS, out, '-'], outputFile: out };
   }
   return null;
@@ -115,14 +115,14 @@ export function resolveBackend(command: string | null = null, which: (name: stri
 /** The model's answer text (`claude`'s `result` field, `codex`'s last message, a custom command's stdout). */
 export function runBackend(backend: Backend, prompt: string, opts: { timeoutS?: number } = {}): string {
   const timeout = opts.timeoutS ?? TIMEOUT_S;
-  const cwd = backend.cwd || (backend.name !== 'custom' ? mkdtempSync(join(tmpdir(), 'pyokka-narrate-')) : undefined);
+  const cwd = backend.cwd || (backend.name !== 'custom' ? mkdtempSync(join(tmpdir(), 'tracelight-narrate-')) : undefined);
   const [cmd, ...args] = backend.argv;
   if (!cmd) throw new NarrationError('empty narration command', 'pass --command a command that reads the prompt on stdin');
   const proc = spawnSync(cmd, args, { input: prompt, encoding: 'utf8', timeout: timeout * 1000, cwd, maxBuffer: 64 * 1024 * 1024 });
   // a command that exits without reading all of its stdin is not an error (Python's `communicate` ignores the broken pipe)
   if (proc.error && (proc.error as NodeJS.ErrnoException).code !== 'EPIPE') {
     const code = (proc.error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') throw new NarrationError(`${cmd} is not on the PATH`, 'install it, or set pyokka.explain.command / --command to a command that reads the prompt on stdin');
+    if (code === 'ENOENT') throw new NarrationError(`${cmd} is not on the PATH`, 'install it, or set tracelight.explain.command / --command to a command that reads the prompt on stdin');
     if (code === 'ETIMEDOUT') throw new NarrationError(`${cmd} took longer than ${Math.trunc(timeout)} s`, 'try again, or a faster model in --command');
     throw new NarrationError(`${cmd} failed: ${proc.error.message}`, 'run the command by hand to see why');
   }

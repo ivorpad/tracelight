@@ -26,8 +26,6 @@ type Msg = Record<string, any>;
 
 const BIN = resolve(import.meta.dirname, '../bin/tracelight.mjs');
 const FIXTURE = resolve(import.meta.dirname, '../../test/unit/fixtures/tour-rrf.json');
-const PY = resolve(import.meta.dirname, '../../python');
-const havePython = spawnSync('python3', ['-c', 'import sys; assert sys.version_info >= (3, 12)']).status === 0;
 
 const TEXT_TS = `// Splits text into lowercase words.
 export function words(text: string): string[] {
@@ -431,18 +429,7 @@ test('cli: --prose end to end on the JavaScript run', async () => {
   assert.deepEqual(j.violations, [`${summary}.text: number 9999 is not in this stop's values, statement or quote`, `${summary}.text: number 0.0164 is not in this stop's values, statement or quote`]);
 });
 
-test('the data-only parts agree with Pyokka reading the same run', { skip: !havePython && 'python3 >= 3.12 not found' }, () => {
-  const r = spawnSync('python3', ['-m', 'pyokka_runtime', 'tour', bigPath, '--json'], { cwd: PY, encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr);
-  const py = JSON.parse(r.stdout);
-  const doc = tour('big');
-  assert.deepEqual(doc.run, py.run);
-  assert.equal(doc.goal.step, py.goal.step);
-  assert.equal(doc.goal.text, py.goal.text);
-  assert.deepEqual(doc.budget.tokens, py.budget.tokens);
-});
-
-// -- --prose on a hand-made tour (test_tour_prose.py) ------------------------------------------------------------
+// -- --prose on a hand-made tour ------------------------------------------------------------
 
 const PROMPT_TEXT = 'You are a careful assistant. '.repeat(40) + 'The base model uses 8 heads with d_k = 64 per head. ' + 'Filler text. '.repeat(20);
 const REPLY = "{'answer': 'The base Transformer uses 8 attention heads', 'tokens': 1234567, 'cost': 0.50}";

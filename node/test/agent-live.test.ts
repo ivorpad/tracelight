@@ -1,14 +1,11 @@
 /**
- * `--live` and the Debugger's verbs over a fake bridge socket (the TypeScript twin of Pyokka's
- * `tests/test_agent_live.py` `FakeBridge`): discovery, the token handshake, every verb's request
- * and text, `watch`, `shell`, the relaunch memory, `break --remove`, and the cold start's URI and
- * routes. The last test is differential: Pyokka's own CLI and this one, each against a fresh
- * Python `FakeBridge`, print the same text for the same commands (skipped without python3 >= 3.12).
+ * `--live` and the Debugger's verbs over a fake bridge socket: discovery, the token handshake,
+ * every verb's request and text, `watch`, `shell`, the relaunch memory, `break --remove`, and the
+ * cold start's URI and routes.
  */
 import { afterEach, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
@@ -179,7 +176,7 @@ class FakeBridge {
       return { ok: true, stopped: true, runId: 'r-1', finished: { exitCode: null, stepCount: 12, durationMs: 40 } };
     }
     if (t === 'continue' || t === 'pause') {
-      if (this.paused() === null && !(this.debug && this.debug.active)) return { ok: false, error: 'no debug run in progress', hint: '`pyokka debug --live` starts one' };
+      if (this.paused() === null && !(this.debug && this.debug.active)) return { ok: false, error: 'no debug run in progress', hint: '`tracelight debug --live` starts one' };
       if (t === 'pause') return this.stop(7, 'pause');
       if (this.finishNext) return this.finish();
       if (this.breakpoints.length) {
@@ -203,7 +200,7 @@ class FakeBridge {
       return { ok: true, watches: this.watches.map((w) => ({ ...w })) };
     }
     if (t === 'locals') {
-      if (this.paused() === null) return { ok: false, error: 'the program is not paused', hint: '`pyokka debug --live` starts it paused; `break` and `pause` stop it' };
+      if (this.paused() === null) return { ok: false, error: 'the program is not paused', hint: '`tracelight debug --live` starts it paused; `break` and `pause` stop it' };
       const out: Msg[] = LOCALS.map((v) => ({ ...v }));
       if (req.valueBag) for (const v of out) v.valueBag = { data: { id: `v:${v.name}`, type: 'any', value: v.text } };
       return { ok: true, locals: out };
@@ -321,7 +318,7 @@ test('no session says what to do', async () => {
   const r = await cli('state', '--live');
   assert.equal(r.code, 2);
   assert.match(r.err, /error: no live session/);
-  assert.match(r.err, /pyokka\.agentAccess/);
+  assert.match(r.err, /tracelight\.agentAccess/);
   assert.match(r.err, /saved run/);
   const j = await cli('context', '--live', '--line', 'demo.py:11', '--json');
   assert.equal(JSON.parse(j.out).error, 'no live session');
@@ -641,15 +638,15 @@ test('the shell with --json prints one line per result and implies --live', asyn
 test('the memory sits beside the sessions directory and answers the nearest directory', () => {
   const home = realpathSync(work);
   assert.equal(resolve(memoryPath(), '..'), resolve(sessions, '..'));
-  remember({ program: join(home, 'demo.py') }, 'rrf', [], home);
-  remember({ module: 'pytest' }, null, [], join(home, 'pkg'));
+  remember({ program: join(home, 'demo.mjs') }, 'rrf', [], home);
+  remember({ program: join(home, 'pkg', 'server.ts') }, null, [], join(home, 'pkg'));
   assert.equal(recall(home)!.at, 'rrf');
-  assert.deepEqual(recall(join(home, 'pkg'))!.launch, { module: 'pytest' });
+  assert.deepEqual(recall(join(home, 'pkg'))!.launch, { program: join(home, 'pkg', 'server.ts') });
   mkdirSync(join(home, 'sub'));
   assert.equal(recall(join(home, 'sub'))!.at, 'rrf');
   assert.equal(recall(resolve(home, '..')), null);
   assert.deepEqual(readdirSync(sessions).filter((n) => !n.startsWith(String(process.pid))), []);
-  assert.equal(commandLine({ module: 'pytest', args: ['--assert=plain', '-x'] }, 'app.py:3'), `${NAME} debug --module pytest --at app.py:3 --args --assert=plain -x`);
+  assert.equal(commandLine({ program: join(process.cwd(), 'app.ts'), args: ['--port', '8000'] }, 'app.ts:3'), `${NAME} debug app.ts --at app.ts:3 --args --port 8000`);
 });
 
 function fakeOpen(calls: unknown[], kind = 'debug', route = 'debug') {
@@ -720,14 +717,14 @@ test('the URI, --at, and the launch', () => {
   assert.deepEqual(parseAt('  rrf  '), { function: 'rrf' });
   assert.deepEqual(parseAt('Ranker.rank'), { function: 'Ranker.rank' });
   for (const junk of ['app.ts:0', 'app.ts:x', '9lives', '']) assert.throws(() => parseAt(junk), (e: AgentError) => e.message.includes(AT_UNREADABLE));
-  assert.throws(() => buildLaunch({ module: 'app.server' }), (e: AgentError) => /--module/.test(e.message) && /debug app\.ts/.test(e.hint!));
+  assert.throws(() => buildLaunch({}), (e: AgentError) => /debug needs a file/.test(e.message) && /debug app\.ts/.test(e.hint!));
   assert.equal(buildLaunch({ program: APP, recordFrom: 'rrf' }).record, true);
 });
 
-test('debug FILE: --module is refused, --env wants K=V, and --at names a file that exists', async () => {
+test('debug FILE: --module is not a flag, --env wants K=V, and --at names a file that exists', async () => {
   const mod = await cli('debug', '--module', 'app.server');
   assert.equal(mod.code, 2);
-  assert.match(mod.err, /--module runs a Python module/);
+  assert.match(mod.err, /unrecognized arguments: --module|--module/);
   assert.match((await cli('debug', 'app.ts', '--env', 'PORT')).err, /--env wants K=V, got 'PORT'/);
   assert.match((await cli('debug', 'app.ts', '--at', '9lives')).err, /--at wants FILE:LINE or a function name/);
   assert.match((await cli('debug', 'app.ts', '--at', 'sub/app.ts:3')).err, /--at names no file: sub\/app\.ts/);
@@ -826,65 +823,4 @@ test('exec and state text forms', () => {
   assert.ok(lines[0]!.startsWith('debug  app.ts') && lines[0]!.includes('[this]'));
   assert.ok(lines[1]!.startsWith('run    app.ts') && lines[1]!.includes('finished, 1240 steps'));
   for (const want of ['app.ts  paused at app.ts:42 (breakpoint)', '  launch: /usr/bin/node /ws/app.ts --port 8000   (cwd /ws)', '  record: off', '  library code: on', '  exceptions: uncaught', '    listening on 8000']) assert.ok(lines.includes(want), want);
-});
-
-// -- differential: Pyokka's CLI and this one against the same fake bridge -----------------------------------
-
-const PY = resolve(import.meta.dirname, '../../python');
-const BIN = resolve(import.meta.dirname, '../bin/tracelight.mjs');
-const havePython = spawnSync('python3', ['-c', 'import sys; assert sys.version_info >= (3, 12)']).status === 0 && existsSync(join(PY, 'tests', 'test_agent_live.py'));
-
-/** a Python `FakeBridge` in its own process, its descriptor in `dir`; resolves once it listens */
-function pythonBridge(dir: string): Promise<() => void> {
-  const code = [
-    'import json, os, sys, types',
-    '# the test module imports pytest for its fixtures only',
-    'stub = types.ModuleType("pytest"); stub.fixture = lambda *a, **k: (a[0] if a and callable(a[0]) else (lambda f: f)); sys.modules.setdefault("pytest", stub)',
-    'from tests.test_agent_live import FakeBridge',
-    'b = FakeBridge()',
-    `open(os.path.join(${JSON.stringify(dir)}, "%d-1.json" % os.getpid()), "w").write(json.dumps(b.descriptor()))`,
-    'print("ready", flush=True)',
-    'sys.stdin.read()',
-    'b.close()',
-  ].join('\n');
-  const child = spawn('python3', ['-c', code], { cwd: PY, env: { ...process.env, PYTHONPATH: PY }, stdio: ['pipe', 'pipe', 'inherit'] });
-  return new Promise((res, rej) => {
-    child.stdout.once('data', () => res(() => child.stdin.end()));
-    child.once('exit', (code) => rej(new Error(`the Python fake bridge exited with ${code}`)));
-  });
-}
-
-function exec(cmd: string, args: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<Out> {
-  return new Promise((done) => execFile(cmd, args, { cwd, env, encoding: 'utf8' }, (error, out, err) => done({ code: error ? Number(error.code ?? 1) : 0, out, err })));
-}
-
-const SCENARIOS = [
-  ['state --live', 'state --live --json', 'debug --live', 'continue --live', 'break --live demo.py:11 --when x', 'continue --live', 'restart --live', 'locals --live', 'pause --live --json', 'stop --live', 'stop --live', 'continue --live'],
-  ['debug --live --stop-on-entry', 'step --live --over', 'context --live', 'context --live --scope --json', 'state --live', 'break --live demo.py', 'break --live --remove demo.py:11', 'break --live --remove x.y z', 'continue --live --to demo.py', 'watch --live', 'debug', 'continue --until x --to y:1 --live', 'watches --live --break-when nope'],
-  ['context --live --line demo.py:11', 'step --live --into', 'step --live --to 400', 'values --live --line demo.py:7', 'var --live rect1', 'eval --live x', 'expand --live v:1 --path a', 'steps --live --from 38', 'story --live', 'find --live Kaboom', 'watches --live --add total', 'watches --live --add y --break-when true', 'watches --live --list', 'break --live --on-exception raised', 'exec --live x'],
-];
-
-test('pyokka and tracelight print the same for the same bridge replies', { skip: !havePython && 'python3 >= 3.12 not found' }, async () => {
-  const run = async (py: boolean, scenario: string[]) => {
-    const dir = mkdtempSync(join(tmpdir(), 'live-diff-'));
-    const cwd = mkdtempSync(join(tmpdir(), 'live-cwd-'));
-    const stop = await pythonBridge(dir);
-    const env = { ...process.env, TRACELIGHT_SESSIONS_DIR: dir, PYOKKA_SESSIONS_DIR: dir, PYTHONPATH: PY, COLUMNS: '80', [`${ENV}NO_FOCUS`]: '1', PYOKKA_NO_FOCUS: '1' };
-    const outs: Out[] = [];
-    try {
-      for (const command of scenario) {
-        const words = command.split(' ');
-        outs.push(py ? await exec('python3', ['-m', 'pyokka_runtime', ...words], env, cwd) : await exec(process.execPath, ['--disable-warning=ExperimentalWarning', BIN, ...words], env, cwd));
-      }
-    } finally {
-      stop();
-    }
-    // the hints' example files name the language: agent.ts / demo.ts here, agent.py / demo.py there
-    const norm = (t: string) => t.replaceAll(NAME, 'pyokka').replace(/\b(agent|demo)\.ts\b/g, '$1.py').replaceAll(dir, 'DIR').replace(/\d+-1\.json/g, 'P-1.json').replace(/"pid": \d+|pid \d+/g, 'pid N');
-    // a usage error: its last line (the usage above it is indented by the program name's length)
-    const usage = (err: string) => (err.startsWith('usage:') ? err.trimEnd().split('\n').pop()! + '\n' : err);
-    return outs.map((o) => ({ code: o.code, out: norm(o.out), err: usage(norm(o.err)) }));
-  };
-  const results = await Promise.all(SCENARIOS.map((scenario) => Promise.all([run(true, scenario), run(false, scenario)])));
-  SCENARIOS.forEach((scenario, k) => scenario.forEach((command, i) => assert.deepEqual(results[k]![1][i], results[k]![0][i], command)));
 });

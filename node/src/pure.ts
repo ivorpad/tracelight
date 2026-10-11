@@ -1,5 +1,5 @@
 /**
- * What a hover, a watch or a completion may run, as Pyokka's pure.py: expressions that cannot
+ * What a hover, a watch or a completion may run: expressions that cannot
  * change the program.
  *
  * The rule is V8's own side-effect analysis: `Runtime.evaluate` / `Debugger.evaluateOnCallFrame`
@@ -99,7 +99,7 @@ const PLAIN = new Set([
 
 function parseExpression(expression: string): any {
   const wrapped = `(${expression}\n)`;
-  const res = parseSync('pyokka-evaluate.js', wrapped, { sourceType: 'script' });
+  const res = parseSync('tracelight-evaluate.js', wrapped, { sourceType: 'script' });
   if (res.errors.length) throw new EvalException('SyntaxError', `SyntaxError: ${res.errors[0]!.message}`);
   const body = res.program.body;
   if (body.length !== 1 || body[0].type !== 'ExpressionStatement') throw new EvalException('SyntaxError', 'SyntaxError: not one expression');
@@ -230,7 +230,7 @@ function exceptionOf(res: any): EvalException {
  * Evaluate a pure expression at `target`; the RemoteObject of its value. Throws `RefusedError`
  * when neither V8 nor the second path allows it, `EvalException` when it raised.
  */
-export async function evaluatePure(post: Post, target: Target, expression: string, objectGroup = 'pyokka'): Promise<Remote> {
+export async function evaluatePure(post: Post, target: Target, expression: string, objectGroup = 'tracelight'): Promise<Remote> {
   const expr = expression.trim();
   if (!expr) throw new EvalException('SyntaxError', 'SyntaxError: empty expression');
   // a statement list or a declaration is no expression; an assignment to a name the expression
@@ -257,7 +257,7 @@ export async function evaluatePure(post: Post, target: Target, expression: strin
  * module-level binding context-allocated). Inner scopes first; a name bound twice keeps the inner
  * binding; a binding still in its temporal dead zone has no value and is left out.
  */
-export async function probeScope(post: Post, probeExpression = 'globalThis.__tk?.probe', objectGroup = 'pyokka'): Promise<ScopeBinding[]> {
+export async function probeScope(post: Post, probeExpression = 'globalThis.__tk?.probe', objectGroup = 'tracelight'): Promise<ScopeBinding[]> {
   const probe = await post('Runtime.evaluate', { expression: probeExpression, objectGroup, silent: true });
   const objectId = probe.result?.objectId;
   if (!objectId || probe.result.type !== 'function') throw new Error('no run data');

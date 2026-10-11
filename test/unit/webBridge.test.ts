@@ -20,26 +20,22 @@ describe('web bridge helpers', () => {
     expect(splitCommand("deno run 'x y.ts'")).toEqual(['deno', 'run', 'x y.ts']);
   });
 
-  it('runs the Python runtime from dist/python, and any other command as given', () => {
-    const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'pkw-'));
-    fs.mkdirSync(path.join(dist, 'python', 'pyokka_runtime'), { recursive: true });
-    fs.writeFileSync(path.join(dist, 'python', 'pyokka_runtime', '__main__.py'), '');
-    const py = runtimeCommand({ runtime: 'python', python: 'python3.12', distDir: dist, file: '/w/a.py' });
-    expect(py).toEqual({ command: 'python3.12', args: ['-m', 'pyokka_runtime', 'serve'], cwd: path.join(dist, 'python'), env: { PYTHONPATH: path.join(dist, 'python') } });
-    const js = runtimeCommand({ runtime: 'node /r/runtime.js serve', python: 'python3', distDir: dist, file: '/w/a.ts' });
+  it('runs any other command as given', () => {
+    const js = runtimeCommand({ runtime: 'node /r/runtime.js serve', distDir: '/nowhere', file: '/w/a.ts' });
     expect(js).toEqual({ command: 'node', args: ['/r/runtime.js', 'serve'], cwd: '/w', env: {} });
   });
 
-  it('runs the JS runtime for --runtime js from the checkout, and says what is missing', () => {
+  it('runs the JS runtime for --runtime js from the build, else the checkout, and says what is missing', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pkw-'));
     const dist = path.join(root, 'dist');
     fs.mkdirSync(path.join(root, 'node', 'bin'), { recursive: true });
-    expect(() => runtimeCommand({ runtime: 'js', python: 'python3', distDir: dist, file: '/w/a.ts' })).toThrow(/tracelight\.mjs/);
-    fs.writeFileSync(path.join(root, 'node', 'bin', 'pyokka-js.mjs'), '');
-    expect(runtimeCommand({ runtime: 'js', python: 'python3', distDir: dist, file: '/w/a.ts' })).toEqual({ command: process.execPath, args: [path.join(root, 'node', 'bin', 'pyokka-js.mjs'), 'serve'], cwd: '/w', env: {} });
-    // the renamed entry wins once it exists
+    expect(() => runtimeCommand({ runtime: 'js', distDir: dist, file: '/w/a.ts' })).toThrow(/tracelight\.mjs/);
     fs.writeFileSync(path.join(root, 'node', 'bin', 'tracelight.mjs'), '');
-    expect(runtimeCommand({ runtime: 'js', python: 'python3', distDir: dist, file: '/w/a.ts' }).args[0]).toBe(path.join(root, 'node', 'bin', 'tracelight.mjs'));
+    expect(runtimeCommand({ runtime: 'js', distDir: dist, file: '/w/a.ts' })).toEqual({ command: process.execPath, args: [path.join(root, 'node', 'bin', 'tracelight.mjs'), 'serve'], cwd: '/w', env: {} });
+    // the build's copy wins once it exists
+    fs.mkdirSync(path.join(dist, 'node', 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(dist, 'node', 'bin', 'tracelight.mjs'), '');
+    expect(runtimeCommand({ runtime: 'js', distDir: dist, file: '/w/a.ts' }).args[0]).toBe(path.join(dist, 'node', 'bin', 'tracelight.mjs'));
   });
 
   it('labels the runtime by its own language', () => {
@@ -141,7 +137,7 @@ describe('ServerViews', () => {
     const run = finishedRun();
     const sent: unknown[] = [];
     let prompt = '';
-    const views = new ServerViews({ distDir: path.join(__dirname, '..', '..', 'dist'), python: 'python3', ask: async (p) => ((prompt = p), JSON.stringify({ m0: 'the module starts' })) }, () => ({ run, mainPath: '/w/main.py' }), (m) => sent.push(m));
+    const views = new ServerViews({ distDir: path.join(__dirname, '..', '..', 'dist'), ask: async (p) => ((prompt = p), JSON.stringify({ m0: 'the module starts' })) }, () => ({ run, mainPath: '/w/main.py' }), (m) => sent.push(m));
     expect(views.canNarrate()).toBe(true);
     await views.narrate();
     expect(prompt.length).toBeGreaterThan(0);
@@ -159,7 +155,7 @@ describe('ServerViews', () => {
       saved = JSON.parse(fs.readFileSync(argv[1]!, 'utf8'));
       return { tour: 1, run: { file: '/w/main.py', steps: 1, exitCode: 0, durationMs: 1, http: 0, llm: 0 }, goal: { kind: 'end', step: 0, text: '' }, small: true, budget: { tokens: 0, estimate: 0, found: 0, kept: 0, dropped: 0 }, chapters: [], candidates: [] };
     };
-    const views = new ServerViews({ distDir: '/nowhere', python: 'python3', tourCli: tourCli as never }, () => ({ run, mainPath: '/w/main.py' }), (m) => sent.push(m as never));
+    const views = new ServerViews({ distDir: '/nowhere', tourCli: tourCli as never }, () => ({ run, mainPath: '/w/main.py' }), (m) => sent.push(m as never));
     await views.computeTour();
     expect(saved?.meta.file).toBe('/w/main.py');
     expect(saved?.events.map((e) => e.type)).toEqual(['file.instrumented', 'locals', 'trace', 'run.finished']);
@@ -179,7 +175,7 @@ describe('BridgeServer', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pkw-'));
     const file = path.join(dir, 'scratch.py');
     fs.writeFileSync(file, 'print("ok")\n');
-    server = new BridgeServer({ file, port: 0, host: '127.0.0.1', runtime: `"${process.execPath}" "${fake}"`, python: 'python3', watch: false, open: false, distDir: dir, stateDir: dir });
+    server = new BridgeServer({ file, port: 0, host: '127.0.0.1', runtime: `"${process.execPath}" "${fake}"`, watch: false, open: false, distDir: dir, stateDir: dir });
     await server.start();
     const port = Number(new URL(server.url).port);
     return { url: server.url, port, file };

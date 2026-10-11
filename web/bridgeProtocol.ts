@@ -25,7 +25,7 @@ export interface BridgeFile {
 }
 
 export interface RuntimeInfo {
-  /** what the bridge spawned, for the header: `python3 -m pyokka_runtime serve` */
+  /** what the bridge spawned, for the header: `node node/bin/tracelight.mjs serve` */
   command: string;
   /** the `ready` reply's fields; null until the handshake completed */
   ready: { pythonVersion?: string; executable?: string; platform?: string; capabilities: string[]; runtimeVersion?: string; language?: string; nodeVersion?: string } | null;

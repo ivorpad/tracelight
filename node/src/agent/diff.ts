@@ -69,7 +69,7 @@ export class Side {
     side.main = String(state.file || source.file || '');
     side.root = String(source.workspaceRoot || dirname(side.main));
     if (source instanceof SavedRun) {
-      // a VS Code session records locals only with pyokka.timeMachine.recordLocals on, `run --save` unless --no-locals
+      // a VS Code session records locals only with tracelight.timeMachine.recordLocals on, `run --save` unless --no-locals
       const config = source.meta.config ?? {};
       side.recordedLocals = config && typeof config === 'object' && 'recordLocals' in config ? !!config.recordLocals : source.localsEntries.length > 0;
       side.savedTexts(source);
@@ -248,7 +248,7 @@ export function comparable(facts: Msg[], withLocals: boolean): Msg[] {
 }
 
 function localsNote(side: Side): string {
-  const where = side.label === '--live' ? "the session's pyokka.timeMachine.recordLocals (Record Variable Changes) is off" : 'it was saved with --no-locals';
+  const where = side.label === '--live' ? "the session's tracelight.timeMachine.recordLocals (Record Variable Changes) is off" : 'it was saved with --no-locals';
   return `${side.tag} recorded no locals (${where}), so assigned values and call arguments are left out; record both with locals to compare them`;
 }
 

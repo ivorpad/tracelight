@@ -4,7 +4,7 @@
  */
 export type TokenClass = 'str' | 'num' | 'kw' | 'name' | 'type' | 'punct' | 'plain' | 'ellipsis' | 'secret';
 
-/** what the runtime puts in place of a masked secret (python/pyokka_runtime/secrets.py) */
+/** what the runtime puts in place of a masked secret (node/src/secrets.ts) */
 export const SECRET_MASK = '••••••••';
 
 export interface Token {

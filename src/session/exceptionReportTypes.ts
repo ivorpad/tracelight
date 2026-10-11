@@ -1,7 +1,7 @@
 /**
  * The exceptions report: every exception a run raised, where it was raised, where it was caught, how
  * often (docs/PROTOCOL.md, "Exceptions report"). Built by `exceptionReport.ts` (host) and
- * `python/pyokka_runtime/agent/exceptions.py` (saved runs) with identical output;
+ * `node/src/agent/exceptions.ts` (saved runs) with identical output;
  * `test/unit/fixtures/exceptions.json` pins both over the fixture run `exceptions-run.json`.
  */
 import type { WalkthroughInputs } from './walkthroughShared';

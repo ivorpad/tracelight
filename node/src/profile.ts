@@ -1,6 +1,5 @@
 /**
- * `mode: "profile"`: the runtime's own frames out of the `.cpuprofile`, as Pyokka's `profile.py`
- * drops `pyokka_runtime`'s. A frame of the runtime (`node/src`, its `node_modules`, `node/bin`) is
+ * `mode: "profile"`: the runtime's own frames out of the `.cpuprofile`. A frame of the runtime (`node/src`, its `node_modules`, `node/bin`) is
  * removed and its callees move up to its caller; Node's own frames (`node:fs`, natives) called from
  * the runtime go with it. The samples of removed frames are removed and their time with them, so
  * no user function gains the runtime's time.

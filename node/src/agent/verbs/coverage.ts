@@ -1,4 +1,4 @@
-/** `coverage`: which statements ran, per file; `--file F` lists that file line by line with hit counts (Pyokka's `pyokka coverage`). */
+/** `coverage`: which statements ran, per file; `--file F` lists that file line by line with hit counts. */
 import { registerVerb } from '../commands.ts';
 import { coverageReport, renderCoverage } from '../coverage.ts';
 

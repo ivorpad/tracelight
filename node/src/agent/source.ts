@@ -1,5 +1,5 @@
 /**
- * Where a run comes from, as Pyokka's `agent/source.py`: `RunSource` is the seam, `SavedRun`
+ * Where a run comes from: `RunSource` is the seam, `SavedRun`
  * reads `run.json` (written by `tracelight run --save`, Pyokka's `{meta, events}` shape).
  *
  * The command layer (`commands.ts`) only ever sees the JSON shapes of docs/PROTOCOL.md ("Context

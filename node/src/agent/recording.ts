@@ -1,5 +1,5 @@
 /**
- * What a recording left out, said where an agent reads it, as Pyokka's `agent/recording.py`.
+ * What a recording left out, said where an agent reads it.
  *
  * Two losses are reported. A trace cut at the step cap (`maxTraceSteps`, `run --max-steps`): the
  * final `trace` event carries `truncated`, `cap`, `stepsRun` and `spentBy`; every verb over that

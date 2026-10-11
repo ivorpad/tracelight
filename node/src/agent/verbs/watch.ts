@@ -1,6 +1,5 @@
 /**
- * `watch`: one line per stop while the user steps in VS Code, until Ctrl-C (Pyokka's `pyokka
- * watch`). It follows a live session (`source.watch`); a saved run does not move, so it is refused.
+ * `watch`: one line per stop while the user steps in VS Code, until Ctrl-C ( * watch`). It follows a live session (`source.watch`); a saved run does not move, so it is refused.
  */
 import { NAME } from '../../protocol.ts';
 import { pyDumps, registerVerb } from '../commands.ts';

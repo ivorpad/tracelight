@@ -1,4 +1,4 @@
-/** The root of a chain: where the value took the form that failed, as Pyokka's `origin/root.py` (`docs/design/origin.md`, "The root"). */
+/** The root of a chain: where the value took the form that failed (`docs/design/origin.md`, "The root"). */
 import { Entries, TypedList, parse, typeOf } from '../reprs.ts';
 import { containerNoun, hasKey, keyRepr, typePhrase, type Need } from './need.ts';
 import type { OriginBuilder } from './walk.ts';

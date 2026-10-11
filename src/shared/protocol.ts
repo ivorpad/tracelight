@@ -99,7 +99,7 @@ export interface RunRequest {
   runId: string;
   /** the program; exactly one of `file` and `module`. `content` absent means "read it from disk" */
   file?: { path: string; displayName: string; content?: string };
-  /** a dotted module name run like `python -m` (a debug launch); mutually exclusive with `file` */
+  /** a module to run instead of `file` (a debug launch); the runtime refuses it, Node has no module launch */
   module?: string;
   workspaceRoot: string;
   cwd: string;

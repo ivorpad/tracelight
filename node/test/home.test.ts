@@ -11,6 +11,4 @@ test('Tracelight keeps its home and the Tracelight extension\'s sessions under i
   assert.equal(sessionsDir({}), join(homedir(), '.tracelight', 'sessions'));
   assert.equal(sessionsDir({ TRACELIGHT_HOME: '/tl' }), '/tl/sessions');
   assert.equal(sessionsDir({ TRACELIGHT_HOME: '/tl', TRACELIGHT_SESSIONS_DIR: '/t' }), '/t');
-  // Pyokka's directories belong to the Python extension now
-  assert.equal(sessionsDir({ PYOKKA_HOME: '/x', PYOKKA_SESSIONS_DIR: '/p' }), join(homedir(), '.tracelight', 'sessions'));
 });

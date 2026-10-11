@@ -1,7 +1,7 @@
 /**
  * Provenance: the tree of what produced one value (docs/PROTOCOL.md, "Provenance"). Pure: the
  * walkthrough's inputs plus the statement bindings and the log entries by range id; nothing
- * here touches vscode. The Python twin is `python/pyokka_runtime/agent/provenance.py`; keep the
+ * here touches vscode. The runtime's twin is `node/src/agent/provenance.ts`; keep the
  * rules identical (`test/unit/fixtures/provenance.json` pins both to one program).
  *
  * The root is the value a name had after a step (the change `var` lists there), else the value

@@ -53,8 +53,7 @@ export async function selectAction({ mgr, panel, startView, liveValues, recent, 
   }
   items.push({ label: '$(history) View Recent Files', run: () => recent.show() });
   if (s) items.push({ label: '$(settings-gear) Edit session settings', run: () => vscode.commands.executeCommand('pyokka.editSessionSettings') });
-  if (s?.interpreter.language === 'javascript') items.push({ label: '$(server-process) Select Node.js', run: () => vscode.commands.executeCommand('pyokka.selectNode') });
-  else items.push({ label: '$(python) Select Python interpreter', run: () => vscode.commands.executeCommand('pyokka.selectInterpreter') });
+  items.push({ label: '$(server-process) Select Node.js', run: () => vscode.commands.executeCommand('pyokka.selectNode') });
   items.push({ label: '$(list-ordered) Show logs', run: () => log.show() });
   const pick = await vscode.window.showQuickPick(items, { title: s ? `Pyokka · ${s.displayName} (${s.status}, ${s.runMode})` : 'Pyokka', placeHolder: 'Pyokka actions' });
   if (pick) await pick.run();

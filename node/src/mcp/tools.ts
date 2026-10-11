@@ -1,8 +1,6 @@
 /**
- * The MCP tools' definitions for `tracelight mcp` (`server.ts`): the same six tools, inputs and
- * descriptions as `pyokka mcp` (python/pyokka_runtime/agent/mcp_tools.py), so an agent that knows
- * one knows the other. The actions' descriptions are the agent commands' own help text, read from
- * the Python parser that runs them; `pyokka_run` describes a JavaScript / TypeScript run.
+ * The MCP tools' definitions for `tracelight mcp` (`server.ts`): six tools, one per family of agent
+ * commands. The actions' descriptions are the agent commands' own help text (`commandHelps`).
  */
 
 export const MAP_ACTIONS = ['state', 'walkthrough', 'story', 'steps', 'find', 'graph', 'exceptions', 'http', 'tour', 'diff'] as const;
@@ -16,8 +14,8 @@ type Schema = Record<string, any>;
 
 function sourceProps(): Schema {
   return {
-    run: { type: 'string', description: 'path of a saved run.json (from pyokka_run); omit with live' },
-    live: { type: 'boolean', description: 'read the open VS Code session instead of a saved run (setting pyokka.agentAccess)' },
+    run: { type: 'string', description: 'path of a saved run.json (from tracelight_run); omit with live' },
+    live: { type: 'boolean', description: 'read the open VS Code session instead of a saved run (setting tracelight.agentAccess)' },
     session: { type: 'string', description: "with live: the session's file name, when more than one window session is open" },
     json: { type: 'boolean', description: 'the raw JSON shape instead of the text form' },
   };
@@ -33,29 +31,26 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
   const readOnly = { readOnlyHint: true, openWorldHint: false };
   return [
     {
-      name: 'pyokka_run',
+      name: 'tracelight_run',
       title: 'Record a run',
-      description: "Run a JavaScript or TypeScript file (or a Python file, through pyokka) under the tracer and save the recording (run.json) that every other tool reads. Prints the runtime, the step count and the exit code; a program that throws is still recorded. Returns the run path to pass as `run`.",
+      description: "Run a JavaScript or TypeScript file under the tracer and save the recording (run.json) that every other tool reads. Prints the runtime, the step count and the exit code; a program that throws is still recorded. Returns the run path to pass as `run`.",
       inputSchema: {
         type: 'object',
         properties: {
-          file: { type: 'string', description: 'the file to run: .js, .mjs, .cjs, .ts, .mts, .cts (or .py)' },
-          save: { type: 'string', description: 'where to write the run.json (default: .pyokka/runs/<file name>.json next to the file)' },
+          file: { type: 'string', description: 'the file to run: .js, .mjs, .cjs, .jsx, .ts, .mts, .cts or .tsx' },
+          save: { type: 'string', description: 'where to write the run.json (default: .tracelight/runs/<file name>.json next to the file)' },
           args: { type: 'array', items: { type: 'string' }, description: 'arguments for the program (process.argv.slice(2))' },
           no_locals: { type: 'boolean', description: 'do not record locals at every step (var, why and origin need them)' },
           http: { type: 'string', enum: ['off', 'record', 'replay'], description: 'record every HTTP exchange next to the file, or replay from that recording without the network' },
           timeout_ms: { type: 'integer', description: 'stop the program after this many milliseconds (default 30,000)' },
           max_steps: { type: 'integer', description: 'record at most this many steps (default 999,999); a cut run says so' },
-          python: { type: 'string', description: 'a .py file: interpreter or venv directory (see pyokka run)' },
-          library_code: { type: 'boolean', description: 'a .py file: instrument third-party packages too' },
-          keep: { type: 'boolean', description: 'a .py file: keep the runner alive for pyokka_value eval/expand' },
         },
         required: ['file'],
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     {
-      name: 'pyokka_map',
+      name: 'tracelight_map',
       title: 'Map a run',
       description: 'What a recorded or live run did, with step numbers to step to. Start with walkthrough.\n' + actionList(MAP_ACTIONS, helps),
       inputSchema: {
@@ -82,7 +77,7 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
       annotations: readOnly,
     },
     {
-      name: 'pyokka_step',
+      name: 'tracelight_step',
       title: 'Time Machine',
       description: 'The Time Machine: the code, values, call stack and available moves at one step of a run, or after a move from it. Without move or to, the context at `step` (or at the first step of `line`). Moves: into a call (lands in the callee with its arguments), over, out, back, back-over, back-out; `to` jumps. Live at a debug pause, into/over/out run the program to the next stop and `count` takes several steps.',
       inputSchema: {
@@ -100,7 +95,7 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     {
-      name: 'pyokka_value',
+      name: 'tracelight_value',
       title: 'Read values',
       description: 'Values of a run and where they came from.\n' + actionList(VALUE_ACTIONS, helps),
       inputSchema: {
@@ -125,16 +120,16 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
       annotations: readOnly,
     },
     {
-      name: 'pyokka_coverage',
+      name: 'tracelight_coverage',
       title: 'Coverage',
       description: (helps.coverage || 'which statements ran: per file the lines that ran, the ones that never did and the partial ones') + '. Lines are statement lines; a line marked partial ran only in part (a branch arm or a short-circuit that never ran), raised is where an exception came from.',
       inputSchema: { type: 'object', properties: { ...src, file: { type: 'string', description: 'also list this file line by line with hit counts' } } },
       annotations: readOnly,
     },
     {
-      name: 'pyokka_debug',
+      name: 'tracelight_debug',
       title: 'Live debugger',
-      description: "Drive Pyokka's debugger in VS Code (the extension must be installed; the window opens on start). Every action that runs the program returns the next stop the way pyokka_step prints one.\n" + actionList(DEBUG_ACTIONS, helps, DEBUG_COMMAND),
+      description: "Drive Tracelight's debugger in VS Code (the extension must be installed; the window opens on start). Every action that runs the program returns the next stop the way tracelight_step prints one.\n" + actionList(DEBUG_ACTIONS, helps, DEBUG_COMMAND),
       inputSchema: {
         type: 'object',
         properties: {
@@ -142,13 +137,12 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
           session: src.session,
           json: src.json,
           file: { type: 'string', description: "start: the file to debug (omit to debug the open session's file)" },
-          module: { type: 'string', description: 'start: a dotted module to run like python -m (Python only)' },
           args: { type: 'array', items: { type: 'string' }, description: 'start: arguments for the program' },
           cwd: { type: 'string', description: "start: working directory (default: the file's directory)" },
           env: { type: 'object', additionalProperties: { type: 'string' }, description: 'start: environment variables for the program' },
-          python: { type: 'string', description: "start: interpreter (default: the window's)" },
+          node: { type: 'string', description: "start: the node binary (default: the window's)" },
           at: { type: 'array', items: { type: 'string' }, description: 'start, break: stop at these FILE:LINEs or function names (rrf, Ranker.rank)' },
-          record: { type: 'boolean', description: 'start: also record the run, so pyokka_step back moves and why work at every pause' },
+          record: { type: 'boolean', description: 'start: also record the run, so tracelight_step back moves and why work at every pause' },
           record_from: { type: 'string', description: 'start: run at full speed to this NAME or FILE:LINE, then record from there' },
           library_code: { type: 'boolean', description: 'start: step into and pause inside third-party packages too' },
           stop_on_entry: { type: 'boolean', description: 'start, restart: pause before the first statement' },

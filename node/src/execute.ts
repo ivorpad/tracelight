@@ -1,5 +1,5 @@
 /**
- * What plugin code may reach while a run is going, as Pyokka's `pyokka_runtime.execute`:
+ * What plugin code may reach while a run is going:
  * `current` is the running execution from `beforeEach` to `after` (null in the runner process),
  * and `runnerError(message)` emits a `runner.error` for it (nothing outside a run).
  *

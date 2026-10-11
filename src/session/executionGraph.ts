@@ -2,7 +2,7 @@
  * The execution graph: the diagram of a run as a projection of the walkthrough (docs/PROTOCOL.md,
  * "Execution graph"). Pure: one node per module, user function, library package (or unrolled
  * library function), decision statement and simple statement a step ran; call, tool and data
- * edges; the moment and scope maps. `python/pyokka_runtime/agent/graph.py` is the same builder
+ * edges; the moment and scope maps. `node/src/agent/graph.ts` is the same builder
  * over a saved run; `test/unit/fixtures/execution-graph.json` and
  * `execution-graph-statements.json` pin both to identical JSON.
  */

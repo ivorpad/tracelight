@@ -1,28 +1,21 @@
 /**
- * `tracelight mcp`: the agent tools as an MCP server on stdin/stdout, a port of `pyokka mcp`
- * (python/pyokka_runtime/agent/mcp.py) with the same six tools and the same arguments.
+ * `tracelight mcp`: the agent tools as an MCP server on stdin/stdout.
  *
  * Stdlib JSON-RPC 2.0, one message per line (the MCP stdio transport), no SDK.
  *
- * - `pyokka_run` records a JavaScript / TypeScript file in this process (`tracelight run FILE --save`);
- *   a `.py` file goes to `pyokka run --save`.
- * - The other five turn a call into the words of the one-shot agent command and run it with the
- *   `pyokka` CLI, which reads a saved JavaScript run as it reads a Python one (docs/tracelight). The
- *   tool answers exactly what the command prints: its text, its `error:` and hint (as `isError`),
- *   or the `--json` shape with `json: true`.
- *
- * The `pyokka` CLI is `$TRACELIGHT_PYOKKA` (a command line), else `pyokka` on PATH, else
- * `python3 -m pyokka_runtime` from this checkout's python/ directory.
+ * - `tracelight_run` records a JavaScript / TypeScript file in this process (`tracelight run FILE --save`).
+ * - The other five turn a call into the words of the one-shot agent command and run that verb in
+ *   this process (`dispatchVerb`). The tool answers exactly what the command prints: its text, its
+ *   `error:` and hint (as `isError`), or the `--json` shape with `json: true`.
  *
  * stdout is the wire: replies go out on fd 1 and `console.log` is pointed at stderr, so a stray
  * print lands in the client's log instead of corrupting the stream.
  */
-import { spawnSync } from 'node:child_process';
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
-import { basename, delimiter, dirname, extname, join, resolve } from 'node:path';
+import { basename, dirname, extname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { ENV, NAME, RUNTIME_VERSION } from '../protocol.ts';
-import { dispatchVerb, getVerb, liveAvailable, verbNames, type Io } from '../agent/commands.ts';
+import { NAME, RUNTIME_VERSION } from '../protocol.ts';
+import { dispatchVerb, getVerb, verbNames, type Io } from '../agent/commands.ts';
 import '../agent/verbs.ts';
 import { DEBUG_ACTIONS, DEBUG_COMMAND, MAP_ACTIONS, MOVES, VALUE_ACTIONS, toolDefinitions } from './tools.ts';
 
@@ -31,17 +24,20 @@ type Msg = Record<string, any>;
 
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 
-export const INSTRUCTIONS = `Pyokka records a JavaScript or TypeScript program (or a Python one) and answers questions from the recording, so you read what the program did instead of guessing from the source. Every value comes from the run.
+export const INSTRUCTIONS = `Tracelight records a JavaScript or TypeScript program and answers questions from the recording, so you read what the program did instead of guessing from the source. Every value comes from the run.
 
-1. pyokka_run {file} records it and prints the run.json path (default .pyokka/runs/<name>.json next to the file).
-2. pyokka_map {action: "walkthrough", run} is the map: calls with arguments and results, branches, loops, logs, exceptions, each with a step number.
-3. pyokka_step {run, step, move: "into"} is the Time Machine: code, values, stack and moves at a step; move back and forward freely.
-4. pyokka_value {action: "why", run, step, name} explains where a value came from; "var" lists every change of a name; "origin" follows a bad value from an exception back to its root.
-5. pyokka_coverage {run} lists the lines that never ran.
-For a program running now in VS Code (setting pyokka.agentAccess), pass live: true instead of run; pyokka_debug {action: "start", file, at: ["func"]} starts the debugger and returns the first stop, then "continue", "locals", pyokka_step with a move.
+1. tracelight_run {file} records it and prints the run.json path (default .tracelight/runs/<name>.json next to the file).
+2. tracelight_map {action: "walkthrough", run} is the map: calls with arguments and results, branches, loops, logs, exceptions, each with a step number.
+3. tracelight_step {run, step, move: "into"} is the Time Machine: code, values, stack and moves at a step; move back and forward freely.
+4. tracelight_value {action: "why", run, step, name} explains where a value came from; "var" lists every change of a name; "origin" follows a bad value from an exception back to its root.
+5. tracelight_coverage {run} lists the lines that never ran.
+For a program running now in VS Code (setting tracelight.agentAccess), pass live: true instead of run; tracelight_debug {action: "start", file, at: ["func"]} starts the debugger and returns the first stop, then "continue", "locals", tracelight_step with a move.
 The text results are the form to read; json: true gives the raw shape.`;
 
 const JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', '.tsx']);
+
+/** what a Python file or run gets: Tracelight records JavaScript and TypeScript only */
+export const NOT_JAVASCRIPT_HINT = 'Tracelight runs JavaScript and TypeScript; Pyokka records Python (`pyokka run FILE`, or its MCP server `pyokka mcp`)';
 
 /** A call the tool cannot turn into a command: an `isError` result, like a command's error. */
 export class ToolError extends Error {
@@ -72,7 +68,7 @@ function sourceWords(a: Args, positional = true): [string[], string[]] {
     opts.push('--live');
     if (a.session) opts.push(`--session=${a.session}`);
   } else if (a.run && positional) pos.push(String(a.run));
-  else if (positional) throw new ToolError('give `run` (a run.json from pyokka_run) or `live: true`', 'record one with pyokka_run {file}; live reads the open VS Code session (setting pyokka.agentAccess)');
+  else if (positional) throw new ToolError('give `run` (a run.json from tracelight_run) or `live: true`', 'record one with tracelight_run {file}; live reads the open VS Code session (setting tracelight.agentAccess)');
   return [opts, pos];
 }
 
@@ -99,7 +95,7 @@ function oneOf(value: string, list: readonly string[], what = 'action'): void {
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
 
 export function wordsMap(a: Args): string[] {
-  const action = need(a, 'action', 'pyokka_map', '{"action": "walkthrough", "run": "run.json"}');
+  const action = need(a, 'action', 'tracelight_map', '{"action": "walkthrough", "run": "run.json"}');
   oneOf(action, MAP_ACTIONS);
   if (action === 'diff') {
     const before = need(a, 'before', 'diff', '{"action": "diff", "before": "before.json", "after": "after.json"}');
@@ -171,7 +167,7 @@ export function wordsStep(a: Args): string[] {
 }
 
 export function wordsValue(a: Args): string[] {
-  const action = need(a, 'action', 'pyokka_value', '{"action": "var", "run": "run.json", "name": "total"}');
+  const action = need(a, 'action', 'tracelight_value', '{"action": "var", "run": "run.json", "name": "total"}');
   oneOf(action, VALUE_ACTIONS);
   const [opts, pos] = sourceWords(a);
   const words = [action, ...opts];
@@ -183,7 +179,7 @@ export function wordsValue(a: Args): string[] {
   }
   if (action === 'why' || action === 'origin') {
     opt(words, a, 'depth', '--depth');
-    if (empty(a.step) && !opts.includes('--live')) throw new ToolError(`${action} needs \`step\``, 'pyokka_value var lists the steps where a name changed; pyokka_map exceptions lists the steps that raised');
+    if (empty(a.step) && !opts.includes('--live')) throw new ToolError(`${action} needs \`step\``, 'tracelight_value var lists the steps where a name changed; tracelight_map exceptions lists the steps that raised');
     return [...words, '--', ...pos, ...(empty(a.step) ? [] : [String(int(a.step))]), ...(a.name ? [String(a.name)] : [])];
   }
   if (action === 'values') {
@@ -210,13 +206,13 @@ export function wordsCoverage(a: Args): string[] {
 }
 
 export function wordsDebug(a: Args): string[] {
-  const action = need(a, 'action', 'pyokka_debug', '{"action": "start", "file": "app.ts", "at": ["main"]}');
+  const action = need(a, 'action', 'tracelight_debug', '{"action": "start", "file": "app.ts", "at": ["main"]}');
   oneOf(action, DEBUG_ACTIONS);
   const words = [DEBUG_COMMAND[action] ?? action, '--live'];
   opt(words, a, 'json', '--json');
   opt(words, a, 'session', '--session');
   if (action === 'start') {
-    for (const flag of ['module', 'cwd', 'python', 'record_from']) opt(words, a, flag, '--' + flag.replace('_', '-'));
+    for (const flag of ['cwd', 'node', 'record_from']) opt(words, a, flag, '--' + flag.replace('_', '-'));
     for (const flag of ['record', 'library_code', 'stop_on_entry', 'no_focus']) opt(words, a, flag, '--' + flag.replace('_', '-'));
     for (const [k, v] of Object.entries(a.env ?? {})) words.push(`--env=${k}=${v}`);
     for (const at of strings(a.at)) words.push(`--at=${at}`);
@@ -246,45 +242,12 @@ export function wordsDebug(a: Args): string[] {
   if (action === 'locals') opt(words, a, 'frame', '--frame');
   if (action === 'exec') {
     opt(words, a, 'frame', '--frame');
-    return [...words, '--', String(need(a, 'source', 'exec', '{"action": "exec", "source": "rank = 3"}'))];
+    return [...words, '--', String(need(a, 'source', 'exec', '{"action": "exec", "source": "count = 3"}'))];
   }
   return words;
 }
 
 // -- running a call ---------------------------------------------------------------------------
-
-export interface PyokkaCli {
-  command: string;
-  args: string[];
-  env: NodeJS.ProcessEnv;
-}
-
-function onPath(name: string): boolean {
-  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
-    try {
-      if (dir && statSync(join(dir, name)).isFile()) return true;
-    } catch {
-      // not here
-    }
-  }
-  return false;
-}
-
-/** How to run the `pyokka` agent CLI. */
-export function pyokkaCli(): PyokkaCli {
-  const custom = process.env[`${ENV}PYOKKA`]?.trim();
-  if (custom) {
-    const [command, ...args] = custom.split(/\s+/);
-    return { command: command!, args, env: process.env };
-  }
-  const checkout = resolve(import.meta.dirname, '../../../python');
-  if (existsSync(join(checkout, 'pyokka_runtime', '__main__.py'))) {
-    const pythonPath = [checkout, process.env.PYTHONPATH].filter(Boolean).join(delimiter);
-    return { command: process.env.PYOKKA_PYTHON || 'python3', args: ['-m', 'pyokka_runtime'], env: { ...process.env, PYTHONPATH: pythonPath } };
-  }
-  if (onPath('pyokka')) return { command: 'pyokka', args: [], env: process.env };
-  return { command: 'python3', args: ['-m', 'pyokka_runtime'], env: process.env };
-}
 
 /** Whether a saved run was written by this runtime (`meta.language`, the first key of the file). */
 export function isTracelightRun(path: string): boolean {
@@ -302,17 +265,25 @@ export function isTracelightRun(path: string): boolean {
 }
 
 /**
- * Whether this runtime answers `words` itself: its agent CLI has the verb, and the source is a
- * Tracelight run or a live session it can reach. A Python run, and a verb not ported yet, go to
- * the `pyokka` CLI.
+ * Whether this runtime answers `words`: its agent CLI has the verb, and the source is the live
+ * session (the verb itself says when there is none) or a saved run this runtime wrote.
  */
 export function nativeFor(words: string[]): boolean {
-  const verb = getVerb(words[0]!);
-  if (!verb) return false;
-  if (words.includes('--live')) return verb.common === 'live' || !!verb.open || liveAvailable();
+  if (!getVerb(words[0]!)) return false;
+  if (words.includes('--live')) return true;
   const sep = words.indexOf('--');
   const run = sep >= 0 ? words[sep + 1] : undefined;
   return run !== undefined && isTracelightRun(run);
+}
+
+/** Why `words` cannot be answered here (`nativeFor` said no), as a ToolError. */
+function refusal(words: string[]): ToolError {
+  if (!getVerb(words[0]!)) return new ToolError(`${NAME} has no \`${words[0]}\` command`, `${NAME} -h lists the commands`);
+  const sep = words.indexOf('--');
+  const run = sep >= 0 ? words[sep + 1] : undefined;
+  if (run === undefined) return new ToolError('give `run` (a run.json from tracelight_run) or `live: true`');
+  if (!existsSync(run)) return new ToolError(`no run ${run}`, 'record one with tracelight_run {file}');
+  return new ToolError(`${run} is not a recording of a JavaScript or TypeScript run`, NOT_JAVASCRIPT_HINT);
 }
 
 /** Run one agent command in this process, as `tracelight VERB ...` would print it: `[text, isError]`. */
@@ -325,68 +296,27 @@ export async function runNative(words: string[]): Promise<[string, boolean]> {
   return [(out + (err ? '\n' + err : '')).trimEnd() + '\n', false];
 }
 
-/** Run one agent command the way the CLI would: `[text, isError]`. */
-export function runWords(words: string[], cli: PyokkaCli = pyokkaCli()): [string, boolean] {
-  const r = spawnSync(cli.command, [...cli.args, ...words], { env: cli.env, encoding: 'utf8', maxBuffer: 64 << 20 });
-  if (r.error) throw new ToolError(`cannot run the pyokka CLI (${[cli.command, ...cli.args].join(' ')}): ${r.error.message}`, `install pyokka (pip install pyokka-runtime) or set ${ENV}PYOKKA to its command`);
-  const text = r.stdout ?? '';
-  const extra = r.stderr ?? '';
-  if (r.status !== 0) {
-    const out = (text + extra).trim();
-    const command = /invalid choice: '([\w-]+)'/.exec(out)?.[1];
-    if (command) return [`error: this pyokka CLI has no \`${command}\` command; update pyokka (\`coverage\` comes with Pyokka's own MCP server)`, true];
-    if (/invalid choice|unrecognized arguments|the following arguments are required/.test(out)) {
-      return [`error: the pyokka CLI cannot read: ${words.join(' ')}\n${out.split('\n').pop()}`, true];
-    }
-    return [out || `error: the command failed (exit ${r.status})`, true];
-  }
-  return [(text + (extra ? '\n' + extra : '')).trimEnd() + '\n', false];
-}
-
-let helpCache: Record<string, string> | null = null;
-
-/** Each agent command's one-line help: this runtime's own verbs, the rest from the parser the Python CLI uses. */
-export function commandHelps(cli: PyokkaCli = pyokkaCli()): Record<string, string> {
-  if (helpCache) return helpCache;
-  const code = 'import json\nfrom pyokka_runtime.agent.shell import build_parser\nsub = build_parser()._subparsers._group_actions[0]\nprint(json.dumps({a.dest: a.help or "" for a in sub._choices_actions}))';
-  const python = cli.args[0] === '-m' ? cli.command : process.env.PYOKKA_PYTHON || 'python3';
-  const r = spawnSync(python, ['-c', code], { env: cli.env, encoding: 'utf8' });
-  let fromPython: Record<string, string> = {};
-  try {
-    if (r.status === 0) fromPython = JSON.parse(r.stdout);
-  } catch {
-    // no Python CLI: this runtime's verbs only
-  }
-  helpCache = { ...fromPython, ...Object.fromEntries(verbNames().map((n) => [n, getVerb(n)!.help])) };
-  return helpCache;
+/** Each agent command's one-line help, from this runtime's verbs. */
+export function commandHelps(): Record<string, string> {
+  return Object.fromEntries(verbNames().map((n) => [n, getVerb(n)!.help]));
 }
 
 export function defaultSave(file: string): string {
   const path = resolve(file);
   const stem = basename(path, extname(path)) || 'run';
-  return join(dirname(path), '.pyokka', 'runs', stem + '.json');
+  return join(dirname(path), '.tracelight', 'runs', stem + '.json');
 }
 
 export async function callRun(a: Args): Promise<[string, boolean]> {
-  const file = String(need(a, 'file', 'pyokka_run', '{"file": "app.ts"}'));
+  const file = String(need(a, 'file', 'tracelight_run', '{"file": "app.ts"}'));
   const path = resolve(file);
   if (!existsSync(path) || !statSync(path).isFile()) throw new ToolError(`no file ${path}`, `give the path of a JavaScript or TypeScript file, relative to ${process.cwd()} or absolute`);
   const save = resolve(String(a.save || defaultSave(file)));
   if (!empty(a.max_steps) && int(a.max_steps) < 1) throw new ToolError(`max_steps must be 1 or more, got ${a.max_steps}`);
   const http = String(a.http || 'off');
   oneOf(http, ['off', 'record', 'replay'], 'http mode');
-  if (extname(path) === '.py') {
-    const words = ['run', path, '--save', save];
-    if (a.no_locals) words.push('--no-locals');
-    if (http !== 'off') words.push('--http', http);
-    for (const [key, flag] of [['python', '--python'], ['timeout_ms', '--timeout'], ['max_steps', '--max-steps']] as const) if (!empty(a[key])) words.push(flag, String(a[key]));
-    for (const [key, flag] of [['library_code', '--library-code'], ['keep', '--keep']] as const) if (a[key]) words.push(flag);
-    if (Array.isArray(a.args) && a.args.length) words.push('--', ...strings(a.args));
-    const [text, isError] = runWords(words);
-    if (isError) return [text, true];
-    return [text.trimEnd() + `\nnext: pyokka_map {"action": "walkthrough", "run": ${JSON.stringify(save)}}\n`, false];
-  }
-  if (!JS_EXTENSIONS.has(extname(path))) throw new ToolError(`cannot run ${basename(path)}`, 'pyokka_run takes .js, .mjs, .cjs, .ts, .mts, .cts or .py');
+  if (extname(path) === '.py') throw new ToolError(`cannot run ${basename(path)}: it is Python`, NOT_JAVASCRIPT_HINT);
+  if (!JS_EXTENSIONS.has(extname(path))) throw new ToolError(`cannot run ${basename(path)}`, 'tracelight_run takes .js, .mjs, .cjs, .jsx, .ts, .mts, .cts or .tsx');
   const { recordRun } = await import('../cli.ts');
   const { meta, events, finished } = await recordRun({
     file: path, save, json: false, autoLog: false, argv: strings(a.args),
@@ -401,16 +331,16 @@ export async function callRun(a: Args): Promise<[string, boolean]> {
   const h = finished.http;
   lines.push(`${finished.stepCount} steps, exit ${finished.exitCode ?? 'killed'}${finished.timedOut ? ' (timed out)' : ''}${h && h.requests ? `, ${h.requests} HTTP request(s) ${h.mode === 'off' ? 'seen' : h.mode === 'record' ? 'recorded' : 'replayed'}` : ''}`);
   lines.push(`run: ${save}`);
-  lines.push(`next: pyokka_map {"action": "walkthrough", "run": ${JSON.stringify(save)}}`);
+  lines.push(`next: tracelight_map {"action": "walkthrough", "run": ${JSON.stringify(save)}}`);
   return [lines.join('\n') + '\n', false];
 }
 
 const TOOLS: Record<string, (a: Args) => string[]> = {
-  pyokka_map: wordsMap,
-  pyokka_step: wordsStep,
-  pyokka_value: wordsValue,
-  pyokka_coverage: wordsCoverage,
-  pyokka_debug: wordsDebug,
+  tracelight_map: wordsMap,
+  tracelight_step: wordsStep,
+  tracelight_value: wordsValue,
+  tracelight_coverage: wordsCoverage,
+  tracelight_debug: wordsDebug,
 };
 
 /** A `tools/call` result: the command's text, `isError` when it failed. */
@@ -418,12 +348,13 @@ export async function callTool(name: string, args: Args): Promise<Msg> {
   let text: string;
   let isError: boolean;
   try {
-    if (name === 'pyokka_run') [text, isError] = await callRun(args);
+    if (name === 'tracelight_run') [text, isError] = await callRun(args);
     else if (TOOLS[name]) {
       const words = TOOLS[name]!(args);
-      [text, isError] = nativeFor(words) ? await runNative(words) : runWords(words);
+      if (!nativeFor(words)) throw refusal(words);
+      [text, isError] = await runNative(words);
     }
-    else throw new ToolError(`unknown tool ${name}`, 'tools: pyokka_run, ' + Object.keys(TOOLS).join(', '));
+    else throw new ToolError(`unknown tool ${name}`, 'tools: tracelight_run, ' + Object.keys(TOOLS).join(', '));
   } catch (e) {
     if (e instanceof ToolError) text = `error: ${e.message}${e.hint ? '\n' + e.hint : ''}`;
     else if (e instanceof TypeError) text = `error: bad argument: ${e.message}`;
@@ -472,7 +403,7 @@ export async function handle(msg: any): Promise<Msg | null> {
       if (!params || typeof params !== 'object' || typeof params.name !== 'string') return rpcError(id, -32602, 'tools/call needs params.name');
       const args = params.arguments ?? {};
       if (!args || typeof args !== 'object' || Array.isArray(args)) return rpcError(id, -32602, 'tools/call params.arguments must be an object');
-      if (params.name !== 'pyokka_run' && !TOOLS[params.name]) return rpcError(id, -32602, `unknown tool ${params.name}`);
+      if (params.name !== 'tracelight_run' && !TOOLS[params.name]) return rpcError(id, -32602, `unknown tool ${params.name}`);
       return { jsonrpc: '2.0', id, result: await callTool(params.name, args) };
     }
     case 'resources/list':

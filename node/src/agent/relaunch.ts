@@ -1,6 +1,6 @@
 /**
- * The last `debug` launch per directory, so a debugger verb with no session starts it again
- * (Pyokka's `agent/relaunch.py`). `debug FILE` records the launch in `last-debug.json` beside the
+ * The last `debug` launch per directory, so a debugger verb with no session starts it again.
+ * `debug FILE` records the launch in `last-debug.json` beside the
  * sessions directory, keyed by the directory it was run from; `break`, `continue` and `restart`
  * with no debug session start that launch again and print its first stop. Re-running a program
  * repeats its side effects, so the reply says what it re-ran, and `--no-start` refuses instead.
@@ -70,8 +70,7 @@ export function recall(cwd?: string): Msg | null {
 /** the `debug` command that would start `launch`, for the reply to name what it re-ran */
 export function commandLine(launch: Msg, at: string | null | undefined, also: string[] | null = []): string {
   const parts = [`${NAME} debug`];
-  if (launch.module) parts.push(`--module ${launch.module}`);
-  else if (launch.program) parts.push(relative(process.cwd(), String(launch.program)) || '.');
+  if (launch.program) parts.push(relative(process.cwd(), String(launch.program)) || '.');
   for (const one of [at, ...(also || [])]) if (one) parts.push(`--at ${one}`);
   if (launch.recordFrom) parts.push(`--record-from ${launch.recordFrom}`);
   else if (launch.record) parts.push('--record');

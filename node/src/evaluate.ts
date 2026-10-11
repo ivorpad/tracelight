@@ -23,7 +23,7 @@ function post(): Post {
   return (method, params) => new Promise((resolve, reject) => s.post(method as any, (params ?? {}) as any, (err: Error | null, res: any) => (err ? reject(err) : resolve(res))));
 }
 
-const GROUP = 'pyokka-finished';
+const GROUP = 'tracelight-finished';
 
 async function release(p: Post): Promise<void> {
   await p('Runtime.releaseObjectGroup', { objectGroup: GROUP }).catch(() => {});
@@ -60,14 +60,14 @@ export interface Shadowed extends Described {
 const CONSOLE = new Set(['log', 'info', 'debug', 'warn', 'error', 'trace']);
 
 /**
- * What one edited statement would show, from the finished run's state (Pyokka's `shadow`):
+ * What one edited statement would show, from the finished run's state:
  * `console.log(a, b)` (rendered as the run renders a console call, kind `log`), a bare
  * expression, or `x = expr` / `const x = expr` (kind `value`, `context` the target). Every
  * expression goes through the pure rule, so nothing in the namespace changes.
  */
 export async function shadowFinished(source: string, describe: (value: unknown, name: string) => Described): Promise<Shadowed> {
   const text = source.trim();
-  const parsed = parseSync('pyokka-shadow.ts', text, { sourceType: 'module', lang: 'ts' } as any);
+  const parsed = parseSync('tracelight-shadow.ts', text, { sourceType: 'module', lang: 'ts' } as any);
   if (parsed.errors.length) throw new SyntaxError(parsed.errors[0]!.message);
   const body = parsed.program.body as any[];
   if (body.length !== 1) throw new Error('one statement at a time');

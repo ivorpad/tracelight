@@ -3,10 +3,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { RunConfig } from '../shared/protocol';
 import { pyokkaHome, readJsonFile } from '../util/paths';
-import { mergeConfigSources, readPyokkaKeyFromPackageJson, readPyokkaTableFromToml, toRunConfig, parseEnvParams, splitArgs, type ConfigObject } from './merge';
+import { mergeConfigSources, readPyokkaKeyFromPackageJson, toRunConfig, parseEnvParams, splitArgs, type ConfigObject } from './merge';
 import { readEnvFile } from './dotenv';
 import { looksLikeProject } from './project';
-import { runtimeLanguage } from '../runtime/language';
 
 export type RunModeSetting = 'auto' | 'onSave' | 'onDemand';
 
@@ -69,13 +68,12 @@ export interface ResolvedSessionConfig {
 }
 
 /**
- * Settings -> ~/.pyokka/config.json -> pyproject.toml [tool.pyokka] -> package.json "pyokka" ->
- * .pyokka, later wins. `workspaceRoot` is searched for the three files (also the file's own directory).
+ * Settings -> ~/.pyokka/config.json -> package.json "pyokka" -> .pyokka, later wins.
+ * `workspaceRoot` is searched for the two files (also the file's own directory).
  */
 export function resolveSessionConfig(resource: vscode.Uri | undefined, workspaceRoot: string | undefined, fileDir?: string): ResolvedSessionConfig {
   const home = readJsonFile<ConfigObject>(path.join(pyokkaHome(), 'config.json'), {});
   const dirs = [workspaceRoot, fileDir].filter((d): d is string => !!d);
-  let pyproject: ConfigObject | undefined;
   let pkg: ConfigObject | undefined;
   let dotfile: ConfigObject | undefined;
   for (const dir of dirs) {
@@ -87,32 +85,21 @@ export function resolveSessionConfig(resource: vscode.Uri | undefined, workspace
         pkg = undefined;
       }
     }
-    const pp = path.join(dir, 'pyproject.toml');
-    if (!pyproject && fs.existsSync(pp)) {
-      try {
-        pyproject = readPyokkaTableFromToml(fs.readFileSync(pp, 'utf8'));
-      } catch {
-        pyproject = undefined;
-      }
-    }
     const df = path.join(dir, '.pyokka');
     if (!dotfile && fs.existsSync(df)) dotfile = readJsonFile<ConfigObject>(df, {});
   }
-  const merged = mergeConfigSources(settingsAsConfig(resource), home, pyproject, pkg, dotfile);
+  const merged = mergeConfigSources(settingsAsConfig(resource), home, pkg, dotfile);
   const run = toRunConfig(merged);
   const envObj = (merged['env'] ?? {}) as ConfigObject;
   const params = (envObj['params'] ?? {}) as ConfigObject;
-  // `python.envFile` (the Python extension's setting, default `${workspaceFolder}/.env`) is loaded
-  // first so that explicit `env` entries win over it
-  const envFileSetting = vscode.workspace.getConfiguration('python', resource).get<string>('envFile', '${workspaceFolder}/.env');
-  const env: Record<string, string> = readEnvFile(envFileSetting, workspaceRoot || fileDir);
+  // the workspace's `.env` is loaded first so that explicit `env` entries win over it
+  const env: Record<string, string> = readEnvFile('${workspaceFolder}/.env', workspaceRoot || fileDir);
   for (const [k, v] of Object.entries(envObj)) if (k !== 'params' && (typeof v === 'string' || typeof v === 'number')) env[k] = String(v);
   Object.assign(env, parseEnvParams(typeof params['env'] === 'string' ? params['env'] : undefined));
   const argv = Array.isArray(merged['args']) ? (merged['args'] as unknown[]).map(String) : splitArgs(typeof params['args'] === 'string' ? params['args'] : undefined);
   const runMode = merged['runMode'];
   // 'smart': scratch files run automatically, project files run on save; the default is 'onSave'
-  const language = resource && runtimeLanguage({ languageId: '', fileName: resource.fsPath ?? resource.path ?? '' }) === 'javascript' ? 'javascript' : 'python';
-  const smart = fileDir && looksLikeProject([fileDir, workspaceRoot], language) ? 'onSave' : 'auto';
+  const smart = fileDir && looksLikeProject([fileDir, workspaceRoot]) ? 'onSave' : 'auto';
   return {
     run,
     runMode: runMode === 'onSave' || runMode === 'onDemand' || runMode === 'auto' ? runMode : runMode === 'smart' ? smart : 'onSave',

@@ -1,4 +1,4 @@
-/** `walkthrough`: what happened, in order, one moment per line (Pyokka's `pyokka walkthrough`). */
+/** `walkthrough`: what happened, in order, one moment per line. */
 import { callSource, registerSavedMethod, type RunSource } from '../source.ts';
 import { registerVerb } from '../commands.ts';
 import { oneLine, type Args } from '../render.ts';

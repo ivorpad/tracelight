@@ -1,6 +1,6 @@
 /**
- * Client for one `python -m pyokka_runtime serve` process: NDJSON both ways, request/response
- * by `id`, typed run events, restart with backoff after a crash.
+ * Client for one runtime process (`node bin/tracelight.mjs serve`): NDJSON both ways,
+ * request/response by `id`, typed run events, restart with backoff after a crash.
  * vscode-free so it can be exercised with a fake runner in unit tests.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -15,14 +15,14 @@ export interface ReadyInfo {
   executable: string;
   platform: string;
   capabilities: string[];
-  /** pyokka_runtime.__version__ (absent from older runtimes) */
+  /** the runtime's version (absent from older runtimes) */
   runtimeVersion?: string;
-  /** the language a non-Python runtime serves (`javascript` for pyokka-js, which mirrors its Node version into `pythonVersion`) */
+  /** the language the runtime serves (`javascript`; the runtime mirrors its Node version into `pythonVersion`) */
   language?: string;
   nodeVersion?: string;
 }
 
-/** The capability a `record: false` debug session needs; an older runtime in `dist/python` lacks it. */
+/** The capability a `record: false` debug session needs; an older runtime in `dist/node` lacks it. */
 export const RECORD_CAPABILITY = 'record';
 
 /** The capability `exec` needs: a runtime that can run a statement in the paused frame. */
@@ -32,18 +32,18 @@ export const EXEC_CAPABILITY = 'exec';
 export const RECORD_FROM_CAPABILITY = 'recordFrom';
 
 /** What to tell the caller when the runtime cannot record from a pause. */
-export const RECORD_FROM_CAPABILITY_ERROR = 'the Pyokka runtime in dist/python is older than the extension: it cannot start recording at a pause. Reinstall the extension, or debug with --record.';
+export const RECORD_FROM_CAPABILITY_ERROR = 'the Pyokka runtime in dist/node is older than the extension: it cannot start recording at a pause. Reinstall the extension, or debug with --record.';
 
 /** What to tell the caller when the runtime cannot run code at the pause. */
-export const EXEC_CAPABILITY_ERROR = 'the Pyokka runtime in dist/python is older than the extension: it cannot run code at a pause. Reinstall the extension.';
+export const EXEC_CAPABILITY_ERROR = 'the Pyokka runtime in dist/node is older than the extension: it cannot run code at a pause. Reinstall the extension.';
 
 /** What to tell the user when the runtime cannot serve a Debugger session. */
-export const RECORD_CAPABILITY_ERROR = 'the Pyokka runtime in dist/python is older than the extension: it cannot run a debug session without recording. Reinstall the extension, or run the Debugger with "record": true.';
+export const RECORD_CAPABILITY_ERROR = 'the Pyokka runtime in dist/node is older than the extension: it cannot run a debug session without recording. Reinstall the extension, or run the Debugger with "record": true.';
 
 export interface RunnerClientOptions {
-  /** executable + args; defaults to `python -m pyokka_runtime serve` */
+  /** executable + args: `node`, [`bin/tracelight.mjs`, `serve`] */
   command: string;
-  args?: string[];
+  args: string[];
   cwd: string;
   env?: Record<string, string>;
   /** protocol version string sent in `hello` */
@@ -110,12 +110,12 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
       await new Promise((r) => setTimeout(r, delay));
     } else this.restartAttempts = 0;
     this.lastStart = Date.now();
-    const args = this.options.args ?? ['-m', 'pyokka_runtime', 'serve'];
+    const args = this.options.args;
     this.options.log?.(`spawn ${this.options.command} ${args.join(' ')} (cwd ${this.options.cwd})`);
     const proc = spawn(this.options.command, args, {
       cwd: this.options.cwd,
       // PYOKKA_HOME resolved here (`~` expanded) so the runtime and any CLI it starts use the window's directory
-      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8', PYOKKA_HOME: pyokkaHome(), ...(this.options.env ?? {}) },
+      env: { ...process.env, PYOKKA_HOME: pyokkaHome(), ...(this.options.env ?? {}) },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });

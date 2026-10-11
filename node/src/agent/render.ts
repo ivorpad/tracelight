@@ -1,5 +1,5 @@
 /**
- * Bounded text rendering of the contract shapes for the agent verbs, as Pyokka's `agent/render.py`.
+ * Bounded text rendering of the contract shapes for the agent verbs.
  *
  * One `renderX(result, source, args) -> string[]` per verb; `render` (called by `commands.ts`)
  * prints the stale lines first and redacts every line on the way out. `file:line` and step

@@ -1,5 +1,5 @@
 /**
- * The context slice and the `story` blocks over a `SavedRun`, as Pyokka's `agent/context.py`.
+ * The context slice and the `story` blocks over a `SavedRun`.
  *
  * Pure functions; `blockLines` mirrors `buildBlock` in `src/session/contextSlice.ts`: the lines a
  * block ran, its function header, and a single blank or comment line between two of them. An agent

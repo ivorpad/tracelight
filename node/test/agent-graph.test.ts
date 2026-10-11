@@ -1,9 +1,8 @@
 /**
  * `graph`: the execution graph over saved JavaScript runs (statement nodes, decisions, calls,
  * callbacks, data edges, `--all`, `--expand`, `--scope`, `--no-statements`, the cap, the text,
- * dot and `--json` forms, a live source), the JS cases of Pyokka's python/tests/test_graph.py.
- * Pyokka parses a JavaScript run's sources as Python, so there is no differential test here; the
- * shared fixtures (`test/unit/fixtures/execution-graph*.json`, Python runs) are conformance checks
+ * dot and `--json` forms, a live source). The shared fixtures
+ * (`test/unit/fixtures/execution-graph*.json`, which the extension's tests read too) are conformance checks
  * for what does not depend on parsing the source: the module, function and package nodes, their
  * calls, spans and rows, the cap's placeholder, the scope map and the statement-free call edges.
  */

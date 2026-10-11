@@ -1,4 +1,4 @@
-/** `steps`: list steps, number, file:line, function (Pyokka's `pyokka steps`). */
+/** `steps`: list steps, number, file:line, function. */
 import { parseLine, registerVerb } from '../commands.ts';
 import { renderSteps } from '../render.ts';
 

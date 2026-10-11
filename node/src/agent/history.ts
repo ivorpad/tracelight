@@ -1,5 +1,5 @@
 /**
- * Variable history over a `SavedRun`, as Pyokka's `agent/history.py`: every recorded change of one
+ * Variable history over a `SavedRun`: every recorded change of one
  * name, in step order (docs/PROTOCOL.md, "Variable history").
  *
  * Three sources, in order of trust: recorded locals (`locals` events, once the runtime records

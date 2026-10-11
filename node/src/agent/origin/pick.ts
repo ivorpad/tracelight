@@ -1,5 +1,5 @@
 /**
- * Which value at the failing statement the exception is about, as Pyokka's `origin/pick.py`: the
+ * Which value at the failing statement the exception is about: the
  * value of the type the error names (`undefined` whose `.price` was read), the value whose method
  * is not a function, the object without the key or the array too short to have the index (both
  * give `undefined` in JavaScript, which then fails one step later).

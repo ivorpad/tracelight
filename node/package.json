@@ -2,7 +2,7 @@
   "name": "tracelight-runtime",
   "version": "0.1.0",
   "private": true,
-  "description": "Tracelight: the Node.js/TypeScript runtime that speaks Pyokka's runner protocol.",
+  "description": "Tracelight: the Node.js and TypeScript runtime behind the Tracelight extension, its CLI and its MCP server.",
   "type": "module",
   "engines": {
     "node": ">=22.18"

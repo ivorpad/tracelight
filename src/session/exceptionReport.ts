@@ -1,7 +1,7 @@
 /**
  * The exceptions report over a run's `error` events (docs/PROTOCOL.md, "Exceptions report"): one row
  * per (kind, error type, raise site, handler), uncaught first, with how often each was raised and
- * whether the handler was broad. Pure: the same rules as `python/pyokka_runtime/agent/exceptions.py`;
+ * whether the handler was broad. Pure: the same rules as `node/src/agent/exceptions.ts`;
  * `test/unit/fixtures/exceptions.json` pins both over the fixture run `exceptions-run.json`.
  */
 import type { ErrorEvent } from '../shared/protocol';

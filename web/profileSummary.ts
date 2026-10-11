@@ -1,6 +1,5 @@
 /**
- * What Profile shows in the browser: a Chrome `.cpuprofile` (V8's own from the JS runtime, the flat
- * one python/pyokka_runtime/profile.py writes from cProfile) folded into one row per function with
+ * What Profile shows in the browser: a Chrome `.cpuprofile` (V8's own, from the runtime) folded into one row per function with
  * its self and total time, the table VS Code's profile editor opens on. The bridge also serves the
  * file itself (`/api/profile`) for Chrome DevTools or VS Code.
  */

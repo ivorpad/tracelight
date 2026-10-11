@@ -1,5 +1,5 @@
 /**
- * What a source file's statements *are*, for the walkthrough, as Pyokka's `agent/decisions.py`:
+ * What a source file's statements *are*, for the walkthrough:
  * decisions, loops, returns, qualified names, from the oxc AST. Nothing here reads a run. Shapes
  * (lines 1-based, as the range tables):
  *

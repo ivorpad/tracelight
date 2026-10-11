@@ -4,7 +4,7 @@
  * it changes on disk (save in VS Code or any editor), relays requests from the page, and lets an
  * agent drive the page over HTTP (`/api/state`, `/api/command`, the `ctl` subcommand).
  *
- *   node dist/web/server.js FILE [--port 4777] [--runtime python|js|"CMD ARGS"] [--python PATH] [--open] [--no-watch]
+ *   node dist/web/server.js FILE [--port 4777] [--runtime js|"CMD ARGS"] [--open] [--no-watch]
  *   node dist/web/server.js ctl state | goto N | step into|over|out|back|backOver|backOut | line N | say TEXT [--line N] | clear | run | eval EXPR
  *
  * Binds 127.0.0.1 only. A WebSocket or API call whose Origin or Host is not this server's is
@@ -23,6 +23,7 @@ import { summarizeProfile } from './profileSummary';
 import { upgrade, type WebSocketConnection } from './ws';
 import { applyEvent, emptyRun, type RunData } from './runState';
 import { ServerViews } from './serverViews';
+import { runtimeRoot } from './runtimeRoot';
 
 export const DEFAULT_PORT = 4777;
 /** the virtual file `file.read` answers with the bridge's log (Show Logs) */
@@ -33,12 +34,11 @@ export interface ServerOptions {
   file: string;
   port: number;
   host: string;
-  /** `python`, or a whole command line that speaks the protocol on stdio (`node path/to/runtime.js serve`) */
+  /** `js`, or a whole command line that speaks the protocol on stdio (`node path/to/runtime.js serve`) */
   runtime: string;
-  python: string;
   watch: boolean;
   open: boolean;
-  /** dist/: where the page, the panel bundle and the Python runtime were built to */
+  /** dist/: where the page, the panel bundle and the runtime (`dist/node`) were built to */
   distDir: string;
   /** a command that reads a prompt on stdin and answers (Narrate); else `claude`, else `codex` */
   explainCommand?: string;
@@ -62,17 +62,10 @@ export function splitCommand(line: string): string[] {
 }
 
 /** The command the bridge spawns for `--runtime`, and the directory it starts in. */
-export function runtimeCommand(opts: Pick<ServerOptions, 'runtime' | 'python' | 'distDir' | 'file'>): { command: string; args: string[]; cwd: string; env: Record<string, string> } {
-  if (opts.runtime === 'python') {
-    const candidates = [path.join(opts.distDir, 'python'), path.join(opts.distDir, '..', 'python')];
-    const dir = candidates.find((d) => fs.existsSync(path.join(d, 'pyokka_runtime', '__main__.py'))) ?? candidates[0]!;
-    return { command: opts.python, args: ['-m', 'pyokka_runtime', 'serve'], cwd: dir, env: { PYTHONPATH: dir } };
-  }
+export function runtimeCommand(opts: Pick<ServerOptions, 'runtime' | 'distDir' | 'file'>): { command: string; args: string[]; cwd: string; env: Record<string, string> } {
   if (opts.runtime === 'js') {
-    // the JS/TS runtime in node/ of the checkout the bridge was built from (`pyokka-js.mjs` until its rename lands)
-    const bin = path.join(opts.distDir, '..', 'node', 'bin');
-    const entry = ['tracelight.mjs', 'pyokka-js.mjs'].map((f) => path.join(bin, f)).find((f) => fs.existsSync(f));
-    if (!entry) throw new Error(`--runtime js needs ${path.join(bin, 'tracelight.mjs')}; build node/ or pass --runtime "CMD ARGS"`);
+    const entry = path.join(runtimeRoot(opts.distDir), 'bin', 'tracelight.mjs');
+    if (!fs.existsSync(entry)) throw new Error(`--runtime js needs ${entry}; build the runtime (npm ci --prefix node && npm run build) or pass --runtime "CMD ARGS"`);
     return { command: process.execPath, args: [entry, 'serve'], cwd: path.dirname(opts.file), env: {} };
   }
   const [command, ...args] = splitCommand(opts.runtime);
@@ -153,7 +146,7 @@ export class BridgeServer {
       this.broadcast({ type: 'runtime', runtime: this.runtimeInfo });
     });
     this.views = new ServerViews(
-      { distDir: opts.distDir, python: opts.python, explainCommand: opts.explainCommand },
+      { distDir: opts.distDir, explainCommand: opts.explainCommand },
       () => ({ run: this.runData, mainPath: this.file.path }),
       (m) => this.broadcast(m),
     );
@@ -719,7 +712,7 @@ function loadRecent(file: string | undefined): RecentFile[] {
 /* ---------- command line ---------- */
 
 const USAGE = `usage:
-  tracelight-web FILE [--port N] [--runtime python|"CMD ARGS"] [--python PATH] [--open] [--no-watch] [--verbose]
+  tracelight-web FILE [--port N] [--runtime js|"CMD ARGS"] [--open] [--no-watch] [--verbose]
   tracelight-web ctl [--port N] state | goto STEP | step into|over|out|back|backOver|backOut | line N
                  | say TEXT [--line N] [--step N] | clear | start | stop | run | eval EXPR
                  | var NAME | why NAME [--step N] | watch EXPR [--remove]
@@ -837,7 +830,6 @@ export async function main(argv: string[]): Promise<number> {
     port: Number(process.env['TRACELIGHT_PORT'] ?? DEFAULT_PORT),
     host: '127.0.0.1',
     runtime: process.env['TRACELIGHT_RUNTIME'] ?? '',
-    python: process.env['TRACELIGHT_PYTHON'] ?? 'python3',
     explainCommand: process.env['TRACELIGHT_EXPLAIN_COMMAND'],
     watch: true,
     open: false,
@@ -847,7 +839,6 @@ export async function main(argv: string[]): Promise<number> {
     const a = argv[i]!;
     if (a === '--port') opts.port = Number(argv[++i]);
     else if (a === '--runtime') opts.runtime = argv[++i] ?? '';
-    else if (a === '--python') opts.python = argv[++i] ?? opts.python;
     else if (a === '--open') opts.open = true;
     else if (a === '--no-watch') opts.watch = false;
     else if (a === '--verbose') verbose = true;
@@ -866,10 +857,9 @@ export async function main(argv: string[]): Promise<number> {
   }
   if (!opts.runtime) {
     const lang = languageFor(opts.file);
-    if (lang === 'python') opts.runtime = 'python';
-    else if (lang === 'javascript' || lang === 'typescript') opts.runtime = 'js';
+    if (lang === 'javascript' || lang === 'typescript') opts.runtime = 'js';
     else {
-      process.stderr.write(`no runtime for ${lang}: pass --runtime "CMD ARGS" (or set TRACELIGHT_RUNTIME) with a command that speaks docs/PROTOCOL.md on stdio\n`);
+      process.stderr.write(`Tracelight runs JavaScript and TypeScript; for ${path.basename(opts.file)} pass --runtime "CMD ARGS" (or set TRACELIGHT_RUNTIME) with a command that speaks docs/PROTOCOL.md on stdio\n`);
       return 2;
     }
   }

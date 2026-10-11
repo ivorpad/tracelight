@@ -1,6 +1,6 @@
 /**
  * `why`: why a value is what it is: the statement that made it, what it read with values, the
- * calls it made, five levels back (Pyokka's `pyokka why`). The tree is `provenance.ts`; the text
+ * calls it made, five levels back. The tree is `provenance.ts`; the text
  * is the twin of `src/shared/provenanceText.ts`.
  */
 import { pyText } from '../checkpoint.ts';

@@ -18,7 +18,6 @@ import { NarrationError } from '../agent/narrate';
 import { sessionRecording } from '../agent/bridgeSupport';
 import { pyokkaHome } from '../util/paths';
 import { log } from '../util/log';
-import { resolveInterpreter } from '../runtime/interpreter';
 import { jsRuntimeEntry } from '../runtime/language';
 
 export const TOUR_RESUME_KEY = 'pyokka.tour.resume';
@@ -51,9 +50,8 @@ export class TourHost implements vscode.Disposable {
     private readonly runtimeDir: string,
     private readonly narrator: Narrator,
     private readonly post: (session: Session, msg: HostToWebview) => void,
-    /** the Python command; a unit test passes a fake */
+    /** the tour command; a unit test passes a fake */
     private readonly run: typeof runTourCli = runTourCli,
-    private readonly resolvePython: (resource?: vscode.Uri) => Promise<{ path: string }> = resolveInterpreter,
     private readonly hasNodeTour: (exe: string, entry: string) => boolean = nodeHasTour,
   ) {}
 
@@ -142,24 +140,12 @@ export class TourHost implements vscode.Disposable {
     return entry.computing;
   }
 
-  /**
-   * Who builds the tour: `pyokka tour` in Python. A JS/TS session's tour comes from Tracelight's own
-   * `tour` verb with the session's Node; a Tracelight without that verb falls back to Python, since
-   * the saved-run format is the same: the workspace's Python interpreter, resolved as a Python file's would be.
-   */
+  /** Who builds the tour: the runtime's own `tour` verb, with the session's Node. */
   private async cli(session: Session) {
-    let python = session.interpreter.path;
-    const env = { PYOKKA_HOME: pyokkaHome() };
-    if (session.interpreter.language === 'javascript') {
-      const entry = jsRuntimeEntry(this.runtimeDir, path.join, path.dirname);
-      if (this.hasNodeTour(python, entry)) return { python, runtimeDir: this.runtimeDir, env, node: { exe: python, entry } };
-      try {
-        python = (await this.resolvePython(session.document.uri)).path;
-      } catch (err) {
-        throw new TourError(`this Tracelight runtime has no tour verb, so the tour of a JavaScript/TypeScript run is built by Pyokka's Python runtime, and no Python 3.12+ was found: ${err instanceof Error ? err.message : String(err)}`, 'update the extension, or install Python 3.12 or newer and pick it with Pyokka: Select Python Interpreter');
-      }
-    }
-    return { python, runtimeDir: this.runtimeDir, env };
+    const exe = session.interpreter.path;
+    const entry = jsRuntimeEntry(this.runtimeDir, path.join, path.dirname);
+    if (!this.hasNodeTour(exe, entry)) throw new TourError('this runtime has no tour verb', 'update the extension');
+    return { node: { exe, entry }, env: { PYOKKA_HOME: pyokkaHome() } };
   }
 
   /** The panel model of the session's current run; null before one. */

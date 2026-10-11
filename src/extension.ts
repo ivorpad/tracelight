@@ -2,8 +2,6 @@
  * Pyokka extension host entry: activation, wiring, every command.
  */
 import * as vscode from 'vscode';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import type { Range4 } from './shared/protocol';
 import type { PyokkaApi } from './api';
 import { SessionManager } from './session/sessionManager';
@@ -51,12 +49,11 @@ import { installCliShim } from './features/cliShim';
 import { GraphProvider } from './features/executionGraph';
 import { buildExceptionReport } from './session/exceptionReport';
 import { walkthroughInputs } from './agent/bridgeSupport';
-import { RUNNABLE_SELECTOR, runtimeLanguage } from './runtime/language';
+import { RUNNABLE_SELECTOR } from './runtime/language';
 import { editSessionSettings, selectAction, type QuickPickDeps } from './features/quickPicks';
-import { invalidateVersionCache, onDidChangePythonEnvironment, selectInterpreterCommand, selectNodeCommand } from './runtime/interpreter';
+import { selectNodeCommand } from './runtime/interpreter';
 import { setContext, resetContextCache } from './util/context';
 import { log } from './util/log';
-import { IS_TRACELIGHT } from './brand';
 
 declare const __PYOKKA_BUILD__: string;
 /** build timestamp, injected by esbuild */
@@ -65,14 +62,11 @@ export const PYOKKA_BUILD: string = typeof __PYOKKA_BUILD__ === 'string' ? __PYO
 let manager: SessionManager | undefined;
 
 /**
- * The runtime the sessions start, and their working directory: Pyokka's `dist/python` (holding
- * `pyokka_runtime`, else the checkout's `python/`), Tracelight's `dist/node` (the Node runtime;
- * `jsRuntimeEntry` finds `node/bin/tracelight.mjs` next to it).
+ * The runtime the sessions start, and their working directory: `dist/node`, the Node runtime that
+ * the build copies from `node/` (`jsRuntimeEntry` finds `bin/tracelight.mjs` in it).
  */
 function runtimeDirOf(context: vscode.ExtensionContext): string {
-  if (IS_TRACELIGHT) return context.asAbsolutePath('dist/node');
-  const distPython = context.asAbsolutePath('dist/python');
-  return fs.existsSync(path.join(distPython, 'pyokka_runtime')) ? distPython : context.asAbsolutePath('python');
+  return context.asAbsolutePath('dist/node');
 }
 let bridge: AgentBridge | undefined;
 
@@ -193,15 +187,6 @@ export function activate(context: vscode.ExtensionContext): PyokkaApi {
       void vscode.window.showInformationMessage('Pyokka: the Node.js path changed. Restart running JavaScript/TypeScript sessions to use it?', 'Restart').then((pick) => {
         if (pick) for (const s of js) void mgr.start(s.document, { restart: true, runMode: s.runMode, autoLog: s.autoLog });
       });
-    }),
-    onDidChangePythonEnvironment(() => {
-      invalidateVersionCache();
-      const py = mgr.all().filter((s) => s.interpreter.language !== 'javascript');
-      if (py.length) {
-        void vscode.window.showInformationMessage('Pyokka: the Python interpreter changed. Restart running sessions to use it?', 'Restart').then((pick) => {
-          if (pick) for (const s of py) void mgr.start(s.document, { restart: true, runMode: s.runMode, autoLog: s.autoLog });
-        });
-      }
     }),
   );
 
@@ -338,24 +323,8 @@ export function activate(context: vscode.ExtensionContext): PyokkaApi {
   reg('pyokka.selectWorkspaceFolder', () => mgr.selectWorkspaceFolder());
   reg('pyokka.showLogs', () => log.show());
   reg('pyokka.clearLibraryCache', () => clearLibraryCacheCommand(mgr));
-  const offerRestart = async (exe: string, language: 'python' | 'javascript'): Promise<void> => {
-    const affected = mgr.all().filter((s) => (s.interpreter.language ?? 'python') === language);
-    if (!affected.length) return;
-    const pick = await vscode.window.showInformationMessage(`Pyokka will use ${exe}. Restart running sessions?`, 'Restart');
-    if (pick) for (const s of affected) void mgr.start(s.document, { restart: true, runMode: s.runMode, autoLog: s.autoLog });
-  };
   // the pyokka.nodePath listener offers the restart once the picker wrote the setting
-  const selectNode = async (): Promise<void> => void (await selectNodeCommand());
-  reg('pyokka.selectNode', selectNode);
-  reg('pyokka.selectInterpreter', async () => {
-    // in a JS/TS editor the interpreter is Node
-    const doc = vscode.window.activeTextEditor?.document;
-    if (doc && runtimeLanguage(doc) === 'javascript') return selectNode();
-    const exe = await selectInterpreterCommand();
-    if (!exe) return;
-    invalidateVersionCache();
-    await offerRestart(exe, 'python');
-  });
+  reg('pyokka.selectNode', async () => void (await selectNodeCommand()));
 
   /* ---------- panel ---------- */
 
@@ -370,7 +339,6 @@ export function activate(context: vscode.ExtensionContext): PyokkaApi {
 
   reg('pyokka.createFile', () => snippets.createFile());
   reg('pyokka.newRecentOrSnippet', () => snippets.createFile());
-  reg('pyokka.newPythonFile', () => snippets.newPythonFile());
   reg('pyokka.newJavaScriptFile', () => snippets.newFile('javascript'));
   reg('pyokka.newTypeScriptFile', () => snippets.newFile('typescript'));
   reg('pyokka.createSnippetFromSelection', () => snippets.createSnippetFromSelection());

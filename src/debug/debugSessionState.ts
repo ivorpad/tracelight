@@ -5,7 +5,7 @@
  * vitest covers it (test/unit/debugLaunch.test.ts, debugUri.test.ts, stopSlice.test.ts).
  *
  * There is no descriptor picker here on purpose: choosing between a run socket and a debug socket
- * is the CLI's job and lives in python/pyokka_runtime/agent/live.py.
+ * is the CLI's job and lives in node/src/agent/live.ts.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -30,7 +30,7 @@ export const STOP_OUTPUT_TAIL = 4_000;
 export interface LaunchConfig {
   /** absolute path; exactly one of `program` / `module` */
   program?: string;
-  /** dotted name, run like `python -m` */
+  /** a module name; Node has no module launch, so the runtime refuses it */
   module?: string;
   args: string[];
   /** the workspace folder of the program, else its directory */
@@ -102,7 +102,7 @@ export function parseLaunch(raw: Record<string, unknown>, ctx: LaunchContext = {
   if (recordFrom && !parseAt(recordFrom)) throw new Error(`"recordFrom" is FILE:LINE or a function name, the \`--at\` grammar: got ${JSON.stringify(recordFrom)}`);
   // recording from a pause is a recording session: the run-all session holds the trace once it starts
   const record = raw['record'] === true || !!recordFrom;
-  if (!program && !module) throw new Error('a Pyokka launch needs "program" (the Python, JavaScript or TypeScript file to run) or "module" (a dotted Python module name run like `python -m`)');
+  if (!program && !module) throw new Error('a Pyokka launch needs "program", the JavaScript or TypeScript file to run');
   if (module && !MODULE_RE.test(module)) throw new Error(`"module" is a dotted module name, not a path: got ${JSON.stringify(module)}`);
   if (module && record) throw new Error('"record": true runs the file as a Pyokka run-all session, which has no module launch; use "record": false, or a "program" launch');
   const rawCwd = str(raw['cwd']);

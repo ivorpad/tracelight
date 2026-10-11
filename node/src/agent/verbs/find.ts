@@ -1,4 +1,4 @@
-/** `find`: search values, errors, output and the lines that ran (Pyokka's `pyokka find`). */
+/** `find`: search values, errors, output and the lines that ran. */
 import { registerVerb } from '../commands.ts';
 import { renderFind } from '../render.ts';
 

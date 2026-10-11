@@ -1,5 +1,5 @@
 /**
- * Where a breakpoint spec lands, as Pyokka's dbgbreakpoints.py: a file and a line, or the
+ * Where a breakpoint spec lands: a file and a line, or the
  * function a bare name means.
  *
  * A `path` and a `line` resolve to the statement on that line, a blank or comment line to the

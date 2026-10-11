@@ -1,6 +1,6 @@
 /**
  * Where a bad value was made (`origin`): a chain of steps from the failing statement back to its
- * source, as Pyokka's `agent/origin/__init__.py`.
+ * source.
  *
  * `why` stops at a function's parameter. `origin` keeps going across calls and containers:
  *

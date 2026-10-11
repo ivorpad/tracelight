@@ -1,7 +1,7 @@
 /**
  * The text form of a provenance tree (docs/PROTOCOL.md, "Provenance"): the lines `pyokka why`
  * prints and the Details pane shows. Pure and vscode-free, so the host and the webview share
- * it. The Python twin is `render_why` in `python/pyokka_runtime/agent/render.py`; keep the
+ * it. The runtime's twin is in `node/src/agent/render.ts`; keep the
  * rules identical.
  */
 import { PROVENANCE_NODES, type Provenance, type ProvenanceCall, type ProvenanceNode } from './protocol';
@@ -75,7 +75,7 @@ export function renderProvenance(p: Provenance, displayPath?: DisplayPath): stri
 
 /**
  * The closing sentence or two of a tree, built from its root and first level (docs/PROTOCOL.md,
- * "Provenance"). The Python twin is `conclusion` in `python/pyokka_runtime/agent/why_text.py`;
+ * "Provenance"). The runtime's twin is `conclusion` in `node/src/agent/why_text.ts`;
  * the fixture cases pin both to the same strings, so keep the rules and the wording identical.
  * Nothing here guesses: a clause names a value only when the tree recorded it, and a root without
  * a recorded value yields ''.

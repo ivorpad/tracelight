@@ -195,7 +195,7 @@ test('meta says which run and which source', async () => {
   assert.deepEqual(meta.truncated, []);
 });
 
-test('the page data has the shape and key order of Pyokka\'s', async () => {
+test('the page data has the shape and key order the page renderer reads', async () => {
   const data = await history(saved, '--at', '8');
   assert.deepEqual(Object.keys(data), ['lang', 'labels', 'title', 'eyebrow', 'heading', 'subtitle', 'summary', 'historyLabel', 'scope', 'footer', 'reportHref', 'reportLabel', 'meta', 'files', 'steps']);
   assert.deepEqual(Object.keys(data.steps[0]), ['id', 'kind', 'tag', 'step', 'title', 'text', 'note', 'file', 'start', 'end', 'focus', 'bright', 'values', 'reads', 'stack', 'output', 'call', 'hits', 'arm', 'reason', 'chain', 'exception', 'http', 'gloss', 'modified', 'verify', 'evidence']);

@@ -1,6 +1,6 @@
 /**
- * Pyokka snippets (~/.pyokka/pyokka.code-snippets), New File picker, New Python / JavaScript /
- * TypeScript File. A snippet opens in the language its `scope` names (or its code reads as).
+ * Pyokka snippets (~/.pyokka/pyokka.code-snippets), New File picker, New JavaScript / TypeScript
+ * File. A snippet opens in the language its `scope` names (or its code reads as).
  */
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import type { SessionManager } from '../session/sessionManager';
 import type { RecentFilesView } from './recentFiles';
 import { ensureDir, pyokkaHome, readJsonFile, writeJsonFile } from '../util/paths';
-import { brandLanguage, isRunnable, languageIdFor } from '../runtime/language';
+import { isRunnable, languageIdFor } from '../runtime/language';
 
 export interface PyokkaSnippet {
   name: string;
@@ -22,43 +22,40 @@ export interface PyokkaSnippet {
 const STARTER = `// Pyokka snippets: pick one with "Pyokka: New File" (Cmd/Ctrl+K L).
 // Same format as VS Code snippets; $TM_SELECTED_TEXT and $0 are supported.
 {
-  "Scratch with dataclass": {
-    "prefix": "pyokka-dataclass",
+  "Scratch with a class": {
+    "prefix": "pyokka-class",
+    "scope": "javascript,typescript",
     "body": [
-      "from dataclasses import dataclass",
+      "class Point {",
+      "  constructor(x, y) {",
+      "    this.x = x;",
+      "    this.y = y;",
+      "  }",
+      "}",
       "",
-      "@dataclass",
-      "class Point:",
-      "    x: float",
-      "    y: float",
-      "",
-      "p = Point(1, 2)",
-      "p  # ?",
+      "const p = new Point(1, 2);",
+      "p; // ?",
       "$0"
     ],
-    "description": "Dataclass playground"
+    "description": "Class playground"
   },
   "Snap": {
     "prefix": "pyokka-snap",
-    "body": ["\\"\\"\\"{{", "$0", "}}\\"\\"\\""],
+    "scope": "javascript,typescript",
+    "body": ["/*{{", "$0", "}}*/"],
     "description": "A Pyokka snap fence"
   }
 }
 `;
 
-export const NEW_FILE_STARTER = `# 🐍 Pyokka is running this file. Values appear next to your code as you type.
-# Try:  x = 42  then type  x  on its own line, or add  # ?  after any expression.
-
-`;
-
-export const NEW_JS_FILE_STARTER = `// Pyokka is running this file. Values appear next to your code as you type.
+export const NEW_FILE_STARTER = `// Pyokka is running this file. Values appear next to your code as you type.
 // Try:  const x = 42;  then type  x  on its own line, or add  // ?  after any expression.
 
 `;
 
 /** The starter text of a new untitled file in `language`. */
-export function starterFor(language: 'python' | 'javascript' | 'typescript'): string {
-  return language === 'python' ? NEW_FILE_STARTER : NEW_JS_FILE_STARTER;
+export function starterFor(_language: 'javascript' | 'typescript'): string {
+  return NEW_FILE_STARTER;
 }
 
 export function snippetsFile(): string {
@@ -118,22 +115,18 @@ export class SnippetsFeature {
     const raw = readJsonFile<Record<string, unknown>>(file, {});
     const body = editor.document.getText(editor.selection).replace(/\$/g, '\\$').split(/\r?\n/);
     const lang = editor.document.languageId;
-    raw[name] = { prefix: prefix || name, body, description: `Created from ${path.basename(editor.document.fileName)}`, ...(lang !== 'python' ? { scope: lang } : {}) };
+    raw[name] = { prefix: prefix || name, body, description: `Created from ${path.basename(editor.document.fileName)}`, scope: lang };
     writeJsonFile(file, raw);
     const pick = await vscode.window.showInformationMessage(`Pyokka snippet "${name}" saved.`, 'Open snippets file');
     if (pick) await this.editSnippets();
   }
 
-  async newPythonFile(): Promise<void> {
-    return this.newFile('python');
-  }
-
-  /** An empty file of the language this build runs: Python in Pyokka, JavaScript in Tracelight. */
+  /** An empty JavaScript file. */
   async newDefaultFile(): Promise<void> {
-    return this.newFile(brandLanguage() === 'javascript' ? 'javascript' : 'python');
+    return this.newFile('javascript');
   }
 
-  async newFile(language: 'python' | 'javascript' | 'typescript'): Promise<void> {
+  async newFile(language: 'javascript' | 'typescript'): Promise<void> {
     const doc = await vscode.workspace.openTextDocument({ language, content: starterFor(language) });
     const editor = await vscode.window.showTextDocument(doc, { preview: false });
     const last = doc.lineCount - 1;
@@ -145,13 +138,9 @@ export class SnippetsFeature {
   async createFile(): Promise<void> {
     type Item = vscode.QuickPickItem & { action: () => Promise<void> };
     const items: Item[] = [];
-    if (brandLanguage() === 'python') {
-      items.push({ label: '$(new-file) Empty Python file', description: 'Untitled, Pyokka started', action: () => this.newFile('python') });
-    } else {
-      items.push({ label: '$(new-file) Empty JavaScript file', description: 'Untitled, Pyokka started', action: () => this.newFile('javascript') });
-      items.push({ label: '$(new-file) Empty TypeScript file', description: 'Untitled, Pyokka started', action: () => this.newFile('typescript') });
-    }
-    // only the snippets of the language this build runs
+    items.push({ label: '$(new-file) Empty JavaScript file', description: 'Untitled, Pyokka started', action: () => this.newFile('javascript') });
+    items.push({ label: '$(new-file) Empty TypeScript file', description: 'Untitled, Pyokka started', action: () => this.newFile('typescript') });
+    // only the JavaScript and TypeScript snippets
     const snippets = loadSnippets().filter((s) => isRunnable({ languageId: languageIdFor({ scope: s.scope, content: snippetBodyToText(s.body) }), fileName: '' }));
     if (snippets.length) items.push({ label: 'Pyokka snippets', kind: vscode.QuickPickItemKind.Separator, action: async () => undefined });
     for (const s of snippets) {

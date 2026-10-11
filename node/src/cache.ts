@@ -1,5 +1,5 @@
 /**
- * The instrumentation cache for library files, as Pyokka's `~/.pyokka/cache/`: `~/.tracelight/cache/`
+ * The instrumentation cache for library files: `~/.tracelight/cache/`
  * (`$TRACELIGHT_HOME/cache` when that is set, `home.ts`; `TRACELIGHT_CACHE_DIR`
  * overrides both, an empty value disables the cache), keyed by runtime version, real path, mtime, size and the instrumentation options. The code is stored relocatable
  * (`instrument.ts` `relocatable`) and moved to the run's range base on load. Project files are

@@ -1,6 +1,6 @@
 /**
- * `var`: every recorded change of a variable, with the statement that made it and what it read
- * (Pyokka's `pyokka var`). The statements that assign a name come from the JavaScript AST
+ * `var`: every recorded change of a variable, with the statement that made it and what it read.
+ * The statements that assign a name come from the JavaScript AST
  * (`bindings.ts`), so a run without recorded locals still lists every assignment that ran.
  */
 import { registerVerb } from '../commands.ts';

@@ -30,7 +30,7 @@ export const BUILTIN: Record<string, string> = {
 };
 
 /**
- * `config.http` and `httpObserve` as Pyokka's protocol.py: the HTTP plugin loads for record and
+ * `config.http` and `httpObserve`: the HTTP plugin loads for record and
  * replay, and for "off" too unless `httpObserve` is false (then it only observes). A debug run
  * that records nothing has no HTTP view to fill, so it loads nothing.
  */

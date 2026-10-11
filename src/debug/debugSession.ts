@@ -13,8 +13,8 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { EventEmitter } from 'node:events';
 import type { Completions, ErrorEvent, RunEvent, RunFinishedEvent, OutputEvent, ValueBag, ValueNode } from '../shared/protocol';
-import { EXEC_CAPABILITY, EXEC_CAPABILITY_ERROR, RECORD_CAPABILITY, RECORD_CAPABILITY_ERROR, RunnerClient } from '../runtime/runnerClient';
-import { resolveInterpreter, resolveNode } from '../runtime/interpreter';
+import { EXEC_CAPABILITY, EXEC_CAPABILITY_ERROR, RECORD_CAPABILITY, RunnerClient } from '../runtime/runnerClient';
+import { resolveNode } from '../runtime/interpreter';
 import { jsRuntimeEntry, runtimeLanguage } from '../runtime/language';
 import { resolveSessionConfig } from '../config/settings';
 import { FileTable } from '../session/fileTable';
@@ -42,7 +42,7 @@ export interface DebugSessionEvents {
 export interface DebugSessionOptions {
   id: string;
   launch: LaunchConfig;
-  /** where the runner is started from (`dist/python`, or `python/` in the repo) */
+  /** where the runner is started from (`dist/node`, or `node/` in the repo) */
   runtimeDir: string;
   /** the workspace folder the launch belongs to; '' when none is open */
   workspaceRoot: string;
@@ -167,13 +167,13 @@ export class DebugSession extends EventEmitter<DebugSessionEvents> {
   }
 
   /**
-   * The launch with `python` filled in. `start` resolves the interpreter, so the descriptor, the
+   * The launch with `node` filled in. `start` resolves the Node binary, so the descriptor, the
    * `state` reply and the view can name what the program actually runs instead of a default that
-   * may be wrong (a venv, the Python extension's environment).
+   * may be wrong (an nvm Node, `pyokka.nodePath`).
    */
   get resolvedLaunch(): LaunchConfig {
     if (!this.interpreterPath) return this.launch;
-    return isJsLaunch(this.launch) ? { ...this.launch, node: this.interpreterPath } : { ...this.launch, python: this.interpreterPath };
+    return { ...this.launch, node: this.interpreterPath };
   }
 
   /* ---------- lifecycle ---------- */
@@ -186,12 +186,10 @@ export class DebugSession extends EventEmitter<DebugSessionEvents> {
   async start(opts: { stopOnEntry?: boolean } = {}): Promise<void> {
     if (this.disposed) throw new Error('the debug session has ended');
     const resource = vscode.Uri.file(this.launch.program ?? this.launch.cwd);
-    const js = isJsLaunch(this.launch);
-    // a .js/.ts program runs on Node with the Tracelight runtime, which speaks the same protocol
-    this.interpreterPath = js ? (this.launch.node ?? (await resolveNode(resource)).path) : (this.launch.python ?? (await resolveInterpreter(resource)).path);
+    this.interpreterPath = this.launch.node ?? (await resolveNode(resource)).path;
     const runner = new RunnerClient({
       command: this.interpreterPath,
-      ...(js ? { args: [jsRuntimeEntry(this.runtimeDir, path.join, path.dirname), 'serve'] } : {}),
+      args: [jsRuntimeEntry(this.runtimeDir, path.join, path.dirname), 'serve'],
       cwd: this.runtimeDir,
       version: '1',
       log: (line) => log.info(`[${this.displayName}] ${line}`),
@@ -211,7 +209,7 @@ export class DebugSession extends EventEmitter<DebugSessionEvents> {
     const ready = await runner.start();
     if (!this.launch.record && !ready.capabilities.includes(RECORD_CAPABILITY)) {
       runner.dispose();
-      throw js ? new NoRecordCapabilityError() : new Error(RECORD_CAPABILITY_ERROR);
+      throw new NoRecordCapabilityError();
     }
     await this.send(opts.stopOnEntry ?? this.launch.stopOnEntry);
   }

@@ -1,5 +1,5 @@
 /**
- * Time Machine navigation over recorded step quads, as Pyokka's `trace.py` (itself a port of the
+ * Time Machine navigation over recorded step quads (itself a port of the
  * extension's `src/timeMachine/traceModel.ts`).
  *
  * Steps are `[rid, scopeId, depth, flags]` quads (`decodeSteps`), scopes the `trace` event's

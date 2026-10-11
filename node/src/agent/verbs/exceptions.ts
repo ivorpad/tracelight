@@ -1,4 +1,4 @@
-/** `exceptions` and `http`: the run's exceptions report and HTTP table (Pyokka's `pyokka exceptions`, `pyokka http`). */
+/** `exceptions` and `http`: the run's exceptions report and HTTP table. */
 import { registerVerb } from '../commands.ts';
 import { exceptions, renderExceptions } from '../exceptions.ts';
 import { httpTable, renderHttp } from '../http.ts';

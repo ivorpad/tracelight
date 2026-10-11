@@ -2,7 +2,7 @@
 import { parseSync } from 'oxc-parser';
 
 export function showsValue(source: string): boolean {
-  const res = parseSync('pyokka-exec.js', source, { sourceType: 'script' });
+  const res = parseSync('tracelight-exec.js', source, { sourceType: 'script' });
   if (res.errors.length) return true;
   const last = res.program.body.at(-1);
   if (!last || last.type !== 'ExpressionStatement') return false;

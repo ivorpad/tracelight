@@ -1,6 +1,6 @@
 /**
  * The exceptions report: every exception a run raised, where, where it was caught, how often
- * (docs/PROTOCOL.md, "Exceptions report"), as Pyokka's `agent/exceptions.py`.
+ * (docs/PROTOCOL.md, "Exceptions report").
  *
  * One row per (kind, error type, raise site, handler) over the run's `error` events, the uncaught
  * one first, the broad handlers flagged. The runtime already aggregates repeats per site; the

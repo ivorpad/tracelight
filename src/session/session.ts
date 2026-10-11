@@ -70,7 +70,7 @@ export interface SessionOptions {
   runMode?: RunMode;
   autoLog?: boolean;
   mode?: ProtocolRunMode;
-  extraPythonPath?: string[];
+  extraModulePaths?: string[];
 }
 
 export interface SessionEvents {
@@ -131,7 +131,7 @@ export class Session extends EventEmitter<SessionEvents> {
   valuePeek: boolean;
   /** 'normal' or 'snaps' */
   mode: ProtocolRunMode;
-  extraPythonPath: string[];
+  extraModulePaths: string[];
   config: ResolvedSessionConfig;
   /**
    * The three launch attributes a recording debug session sets (docs/design/debugger-product.md,
@@ -175,7 +175,7 @@ export class Session extends EventEmitter<SessionEvents> {
     this.displayName = path.basename(opts.document.fileName) + (opts.document.isUntitled && !/\.(py|m?js|cjs|m?ts|cts|jsx|tsx)$/.test(opts.document.fileName) ? ext : '');
     this.filePath = opts.document.uri.scheme === 'file' ? opts.document.uri.fsPath : path.join(opts.workspaceRoot || os.tmpdir(), this.displayName);
     this.mode = opts.mode ?? 'normal';
-    this.extraPythonPath = opts.extraPythonPath ?? [];
+    this.extraModulePaths = opts.extraModulePaths ?? [];
     this.config = resolveSessionConfig(opts.document.uri, opts.workspaceRoot, opts.document.uri.scheme === 'file' ? path.dirname(opts.document.uri.fsPath) : undefined);
     this.runMode = opts.runMode ?? this.config.runMode;
     this.autoLog = opts.autoLog ?? this.config.run.autoLog;
@@ -193,8 +193,7 @@ export class Session extends EventEmitter<SessionEvents> {
     const env: Record<string, string> = { ...this.config.env };
     this.runner = new RunnerClient({
       command: opts.interpreter.path,
-      // a JavaScript / TypeScript document runs on Tracelight, the Node runtime next to the Python one
-      ...(opts.interpreter.language === 'javascript' ? { args: [jsRuntimeEntry(opts.runtimeDir, path.join, path.dirname), 'serve'] } : {}),
+      args: [jsRuntimeEntry(opts.runtimeDir, path.join, path.dirname), 'serve'],
       cwd: opts.runtimeDir,
       env,
       version: '1',
@@ -324,9 +323,8 @@ export class Session extends EventEmitter<SessionEvents> {
     const mode = opts.mode ?? this.mode;
     this.config = resolveSessionConfig(this.document.uri, this.workspaceRoot, this.document.uri.scheme === 'file' ? path.dirname(this.document.uri.fsPath) : undefined);
     const env: Record<string, string> = { ...this.config.env };
-    // the per-file install folders: on PYTHONPATH for Python, on NODE_PATH (their node_modules) for JS/TS
-    if (this.extraPythonPath.length && this.interpreter.language === 'javascript') env['NODE_PATH'] = [...this.extraPythonPath.map((d) => path.join(d, 'node_modules')), env['NODE_PATH'] ?? process.env['NODE_PATH'] ?? ''].filter(Boolean).join(path.delimiter);
-    else if (this.extraPythonPath.length) env['PYTHONPATH'] = [...this.extraPythonPath, env['PYTHONPATH'] ?? process.env['PYTHONPATH'] ?? ''].filter(Boolean).join(path.delimiter);
+    // the per-file install folders, on NODE_PATH (their node_modules)
+    if (this.extraModulePaths.length) env['NODE_PATH'] = [...this.extraModulePaths.map((d) => path.join(d, 'node_modules')), env['NODE_PATH'] ?? process.env['NODE_PATH'] ?? ''].filter(Boolean).join(path.delimiter);
     const debugExtras = this.debugCtl.requestExtras();
     const request = {
       runId,

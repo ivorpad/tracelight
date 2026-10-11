@@ -1,4 +1,4 @@
-/** `context`: the context slice at step N, or at the first step of `--line F:L` (Pyokka's `pyokka context`). */
+/** `context`: the context slice at step N, or at the first step of `--line F:L`. */
 import { AgentError } from '../source.ts';
 import { isLive, parseLine, registerVerb } from '../commands.ts';
 import { renderContext } from '../render.ts';

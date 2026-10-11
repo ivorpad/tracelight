@@ -1,5 +1,5 @@
 /**
- * Statement matching and hit comparison for `diff` (`diff.ts`), as Pyokka's `agent/diff_match.py`:
+ * Statement matching and hit comparison for `diff` (`diff.ts`):
  * pure functions over source text and facts.
  *
  * A file's statements come from the oxc AST instead of Python's `ast`: simple statements, compound

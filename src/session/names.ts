@@ -3,7 +3,7 @@
  * statement nodes (docs/PROTOCOL.md, "statement"). A character scanner, not a parser: string
  * literals are blanked (the `{…}` parts of an f-string stay), comments end their line, then the
  * identifiers outside attributes, keywords and keyword arguments are the reads and the names
- * left of a plain `=` at bracket depth 0 are the targets. `python/pyokka_runtime/agent/names.py`
+ * left of a plain `=` at bracket depth 0 are the targets. `node/src/agent/names.ts`
  * is the same scanner, step for step, so both builders label the same edges.
  */
 

@@ -1,6 +1,6 @@
 /**
  * `origin`: where a bad value was made: the chain of steps from the failing statement back across
- * calls and containers, its root marked (Pyokka's `pyokka origin`). The walk is `origin/`.
+ * calls and containers, its root marked. The walk is `origin/`.
  */
 import { pyRepr } from '../argparse.ts';
 import { isLive, registerVerb } from '../commands.ts';

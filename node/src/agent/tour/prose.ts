@@ -1,6 +1,6 @@
 /**
  * `tour RUN --prose tour.prose.json`: check a model's (or an agent's) prose against the tour, then
- * merge, as Pyokka's `agent/tour/prose.py`.
+ * merge.
  *
  * The prose (docs/TOUR.md, "tour.prose.json") picks candidate stops and writes titles and text;
  * everything else on the merged tour comes from the recording. `checkProse` lists every problem at

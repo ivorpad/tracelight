@@ -1,5 +1,5 @@
 /**
- * The Debugger's verbs, live only (Pyokka's `DEBUG_COMMANDS`): `debug`, `continue`, `pause`,
+ * The Debugger's verbs, live only: `debug`, `continue`, `pause`,
  * `stop`, `restart`, `break`, `watches`, `locals`, `record`, `exec`. They drive the session's
  * program at its frontier and print every stop the way `step` prints one; a saved run refuses
  * them. `debug FILE` is a cold start (`debug_start.ts`); `break`, `continue` and `restart` with no
@@ -23,7 +23,7 @@ export const LIVE_HINT = 'debugging needs a live session (`--live`)';
 export function debugLiveArg(p: ArgumentParser): void {
   p.setDefaults({ run: null });
   p.addArgument('--json', { action: 'store_true', help: 'print the raw JSON shape' });
-  p.addArgument('--live', { action: 'store_true', help: 'the open VS Code session (setting pyokka.agentAccess); these commands have no saved-run form' });
+  p.addArgument('--live', { action: 'store_true', help: 'the open VS Code session (setting tracelight.agentAccess); these commands have no saved-run form' });
   p.addArgument('--session', { metavar: 'NAME|PATH', help: 'the session\'s file name or descriptor path, when more than one is open' });
 }
 
@@ -35,9 +35,9 @@ function noStartArg(p: ArgumentParser): void {
   p.addArgument('--no-start', { dest: 'no_start', action: 'store_true', help: `with no debug session, fail instead of starting the last \`${NAME} debug\` launch from this directory again` });
 }
 
-/** `debug FILE` needs no flag: a file (or a refused --module) is always live */
+/** `debug FILE` needs no flag: a file is always live */
 function isLiveDebug(args: Args): boolean {
-  if (args.command === 'debug' && (args.program || args.module)) return true;
+  if (args.command === 'debug' && args.program) return true;
   return !!(args.live || args.session);
 }
 
@@ -55,7 +55,7 @@ function parseEnv(items: unknown[]): Record<string, string> {
 
 /** the launch `debug FILE` asks for; null when it names no file */
 export function debugLaunch(args: Args): Msg | null {
-  if (!(args.program || args.module)) return null;
+  if (!args.program) return null;
   splitAt(args);
   for (const one of [args.at, ...(args.also_at || [])]) if (one) parseAt(one); // anything else is an error before anything starts
   const record = !!args.record;
@@ -63,7 +63,6 @@ export function debugLaunch(args: Args): Msg | null {
   if (recordFrom) parseAt(recordFrom);
   return buildLaunch({
     program: args.program ?? null,
-    module: args.module ?? null,
     args: [...(args.args || [])],
     cwd: args.cwd ?? null,
     env: parseEnv(args.env || []),
@@ -103,7 +102,7 @@ async function openDebugStart(args: Args): Promise<RunSource> {
 export async function openDebugVerb(args: Args): Promise<RunSource> {
   if (args.command === 'debug' || args.command === 'break') splitAt(args);
   if (DEBUG_COMMANDS.has(args.command) && !isLiveDebug(args)) throw new AgentError(`${args.command} drives the open VS Code session, not a saved run`, LIVE_HINT);
-  if (args.command === 'debug' && (args.program || args.module)) return openDebugStart(args);
+  if (args.command === 'debug' && args.program) return openDebugStart(args);
   fixLivePositionals(args);
   if (args.run !== null && args.run !== undefined) throw new AgentError(`--live reads the open VS Code session, not ${args.run}`, 'drop --live to read the saved run, or drop the file');
   return openLive(args);
@@ -135,7 +134,7 @@ export async function runDebug(source: RunSource, args: Args): Promise<Msg> {
   return result;
 }
 
-/** a stop, or the verb's own text; the relaunch line first, then the stale lines (Pyokka's `dispatch` order) */
+/** a stop, or the verb's own text; the relaunch line first, then the stale lines */
 function rendered(own: NonNullable<Verb['render']>): NonNullable<Verb['render']> {
   return (result, source, args) => [
     ...(args._relaunched ? [`no debug session was running: started the last launch from this directory again, \`${args._relaunched}\``] : []),
@@ -175,10 +174,9 @@ live({
     debugLiveArg(p);
     entryArg(p);
     p.addArgument('program', { metavar: 'FILE', nargs: '?', help: 'the JavaScript or TypeScript file to run (implies --live); omit it to debug the open session\'s file' });
-    p.addArgument('--module', { metavar: 'M', help: 'Python only: there is no module launch for Node, so it is refused with a hint; give the entry file' });
     p.addArgument('--cwd', { metavar: 'DIR', help: 'working directory the program runs in (default: the file\'s directory)' });
     p.addArgument('--env', { action: 'append', default: [], metavar: 'K=V', help: 'an environment variable for the program (repeatable)' });
-    p.addArgument('--node', { metavar: 'PATH', help: `the node binary to run with (default: $${NODE_ENV}, else the window's pyokka.nodePath)` });
+    p.addArgument('--node', { metavar: 'PATH', help: `the node binary to run with (default: $${NODE_ENV}, else the window's tracelight.nodePath)` });
     p.addArgument('--at', { action: 'append', metavar: 'FILE:LINE|NAME', help: 'stop here: a line, or a function name whose entry pauses; repeat it for one stop per stage (`continue` goes from one to the next). Every one is set before the program starts and shows in the Breakpoints view' });
     p.addArgument('--record', { action: 'store_true', help: 'also record the run, so the Time Machine, the Code Story and `why` open over it at every pause (slower)' });
     p.addArgument('--record-from', { dest: 'record_from', metavar: 'NAME|FILE:LINE', help: 'run at the debugger\'s speed up to here, pause, and record from this pause on: the Time Machine, `why`, `var` and `history` cover what runs after it. It is also an --at' });

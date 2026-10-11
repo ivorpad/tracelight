@@ -1,5 +1,5 @@
 /**
- * `history`: the data behind a code-history page (Pyokka's `pyokka history`): the source each
+ * `history`: the data behind a code-history page: the source each
  * checkpoint needs, the values as of it, and the command that reproduces them. The document is
  * `codehistory.ts`; this module is the arguments and the text form (`render_history`).
  */

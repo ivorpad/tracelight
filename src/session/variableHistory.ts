@@ -2,7 +2,7 @@
  * Variable history: every recorded change of one name, in step order (docs/PROTOCOL.md,
  * "Variable history"). Pure: takes the run's trace, file table, log entries, recorded locals
  * and the statement bindings fetched from the runner; nothing here touches vscode. The Python
- * twin is `python/pyokka_runtime/agent/history.py`; keep the rules identical.
+ * twin is `node/src/agent/history.ts`; keep the rules identical.
  *
  * Three sources, in order of trust: recorded locals (`recordLocals`), logged values whose
  * context is the name (`# ?`, Auto Log, identifier statements), and the statements that

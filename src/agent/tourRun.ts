@@ -1,10 +1,10 @@
 /**
  * The tour of a session's run, host side (no vscode here). The host writes the session's recording
- * (`recordingDoc`, the bridge's `recording` reply) to a temporary `run.json` and runs
- * `python -m pyokka_runtime tour RUN --json` with the session's interpreter, the same command an
- * agent runs, so the chapters and candidates come from the Python tour code and nowhere else.
- * Narrate Tour's answer goes back through `tour RUN --prose PROSE --json` (5.2), which validates
- * it against the recording and merges it.
+ * (`recordingDoc`, the bridge's `recording` reply) to a temporary `run.json` and runs the runtime's
+ * own `tour RUN --json` verb with the session's Node, the same command an agent runs, so the
+ * chapters and candidates come from the runtime's tour code and nowhere else. Narrate Tour's answer
+ * goes back through `tour RUN --prose PROSE --json`, which validates it against the recording and
+ * merges it.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -27,13 +27,10 @@ export class TourError extends Error {
 }
 
 export interface TourCliOptions {
-  python: string;
-  /** the directory holding `pyokka_runtime` (the extension's `dist/python`) */
-  runtimeDir: string;
+  /** the runtime's `tour` verb: `node ENTRY tour …` */
+  node: { exe: string; entry: string };
   env?: Record<string, string>;
   timeoutMs?: number;
-  /** a JS/TS run: Tracelight's own `tour` verb (`node ENTRY tour …`) instead of Python */
-  node?: { exe: string; entry: string };
 }
 
 export interface TourArgs {
@@ -43,7 +40,7 @@ export interface TourArgs {
   prose?: string;
 }
 
-/** The argv after `-m pyokka_runtime`. Goal and budget go to the build and to the merge alike, or the ids would not match. */
+/** The argv after the runtime's entry. Goal and budget go to the build and to the merge alike, or the ids would not match. */
 export function tourArgv(runFile: string, a: TourArgs = {}): string[] {
   const argv = ['tour', runFile];
   if (a.goal) argv.push('--goal', a.goal);
@@ -67,7 +64,7 @@ export function nodeHasTour(exe: string, entry: string): boolean {
 /** Read the command's answer: the tour on stdout, `{ok: false, error, hint, violations?}` on a refusal. */
 export function parseTourOutput(code: number | null, stdout: string, stderr: string): TourDoc {
   if (/unrecognized arguments: --prose/.test(stderr)) {
-    throw new TourError('this runtime cannot merge a narration yet', '`pyokka tour --prose` (Pyokka 5.2) validates and merges the answer; update Pyokka');
+    throw new TourError('this runtime cannot merge a narration yet', '`pyokka tour --prose` validates and merges the answer; update the extension');
   }
   let doc: unknown;
   try {
@@ -87,13 +84,13 @@ export function parseTourOutput(code: number | null, stdout: string, stderr: str
   return doc as TourDoc;
 }
 
-/** Run `python -m pyokka_runtime <argv>` in the runtime directory; resolves with the tour. */
+/** Run the runtime's `<argv>` (`node ENTRY tour …`) next to the entry; resolves with the tour. */
 export function runTourCli(o: TourCliOptions, argv: string[]): Promise<TourDoc> {
   return new Promise((resolve, reject) => {
-    const [exe, args, cwd] = o.node ? [o.node.exe, [o.node.entry, ...argv], path.dirname(o.node.entry)] : [o.python, ['-m', 'pyokka_runtime', ...argv], o.runtimeDir];
-    const child = spawn(exe, args, {
-      cwd,
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8', ...(o.env ?? {}) },
+    const exe = o.node.exe;
+    const child = spawn(exe, [o.node.entry, ...argv], {
+      cwd: path.dirname(o.node.entry),
+      env: { ...process.env, ...(o.env ?? {}) },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -114,7 +111,7 @@ export function runTourCli(o: TourCliOptions, argv: string[]): Promise<TourDoc> 
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (c: string) => (stdout += c));
     child.stderr.on('data', (c: string) => (stderr += c));
-    child.on('error', (err) => finish(() => reject(new TourError(`${exe} could not start: ${err.message}`, o.node ? 'check Node.js (Pyokka: Select Node.js)' : 'check the Python interpreter (Pyokka: Select Python Interpreter)'))));
+    child.on('error', (err) => finish(() => reject(new TourError(`${exe} could not start: ${err.message}`, 'check Node.js (Pyokka: Select Node.js)'))));
     child.on('close', (code) => {
       finish(() => {
         try {
