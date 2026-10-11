@@ -1,0 +1,312 @@
+{
+ "lang": "en",
+ "labels": {},
+ "title": "Why the total is 15",
+ "eyebrow": "CODE HISTORY",
+ "heading": "The negative row is skipped, so the total counts two rows, not three",
+ "subtitle": "Example. Replace every field with a run of your own; this is a shape, not evidence about your program.",
+ "summary": "totalOf receives three rows and adds two of them: the branch on line 9 sends -2 to continue.",
+ "historyLabel": "3 RECORDED STEPS, 1 LIVE PAUSE",
+ "scope": "One saved run of main.js, plus one live pause added by hand to show the kind.",
+ "footer": "Regenerate with tracelight history, then re-apply the same prose file.",
+ "reportHref": "",
+ "reportLabel": "",
+ "meta": {
+  "mode": "saved run",
+  "run": "run.json",
+  "file": "main.js",
+  "sourceSha256": "e23470fd3ef776",
+  "runSha256": "d4f02f11e92f9f",
+  "python": "22.22.0",
+  "runtimeVersion": "0.1.0",
+  "exitCode": 0,
+  "stepCount": 21,
+  "recordedAt": "2026-10-10T13:27:04+00:00",
+  "truncated": []
+ },
+ "files": {
+  "main.js": [
+   "",
+   "",
+   "",
+   "}",
+   "",
+   "function totalOf(rows) {",
+   "  let total = 0;",
+   "  for (const row of rows) {",
+   "    if (row < 0) {",
+   "      continue;",
+   "    }",
+   "    total += scale(row);",
+   "  }",
+   "  return total;"
+  ]
+ },
+ "steps": [
+  {
+   "id": "step-6",
+   "kind": "recorded step",
+   "tag": "RECORDED STEP",
+   "step": 6,
+   "title": "The branch that decides what counts",
+   "text": "Line 9 runs once per row and sends the negative one straight to continue.",
+   "note": "Two arms on one line: the page says so rather than arguing from the pass it happens to show.",
+   "file": "main.js",
+   "start": 4,
+   "end": 14,
+   "focus": 9,
+   "bright": [
+    6,
+    7,
+    8,
+    9,
+    12
+   ],
+   "values": "rows = [ 1, -2, 4 ]   #3\ntotal = 0   #4\nrow = 1",
+   "reads": [],
+   "stack": [
+    "totalOf main.js:9   #6",
+    "<module> main.js:18   #1"
+   ],
+   "output": "",
+   "call": null,
+   "hits": 3,
+   "arm": "if (row < 0) took false x2, true x1",
+   "reason": "",
+   "chain": [],
+   "exception": null,
+   "http": null,
+   "gloss": null,
+   "modified": false,
+   "verify": "tracelight context run.json 6 --json",
+   "evidence": []
+  },
+  {
+   "id": "step-7",
+   "kind": "recorded step",
+   "tag": "RECORDED STEP",
+   "step": 7,
+   "title": "scale is called with the row, not with the total",
+   "text": "The call site carries the callee's arguments and its result without stepping into it.",
+   "note": "",
+   "file": "main.js",
+   "start": 4,
+   "end": 14,
+   "focus": 12,
+   "bright": [
+    6,
+    7,
+    8,
+    9,
+    12
+   ],
+   "values": "rows = [ 1, -2, 4 ]   #3\ntotal = 0   #4\nrow = 1   #6",
+   "reads": [],
+   "stack": [
+    "totalOf main.js:12   #7",
+    "<module> main.js:18   #1"
+   ],
+   "output": "",
+   "call": {
+    "name": "scale",
+    "in": [
+     "value = 1",
+     "factor = 3"
+    ],
+    "out": "return = 3"
+   },
+   "hits": 2,
+   "arm": null,
+   "reason": "",
+   "chain": [],
+   "exception": null,
+   "http": null,
+   "gloss": null,
+   "modified": false,
+   "verify": "tracelight context run.json 7 --json",
+   "evidence": []
+  },
+  {
+   "id": "why-20-total",
+   "kind": "recorded step",
+   "tag": "WHY TOTAL",
+   "step": 16,
+   "title": "Where 15 came from",
+   "text": "The chain walks back from total to the rows array that totalOf received.",
+   "note": "Each row is one assignment the run recorded, indented under the value that read it. scale = ? is the function itself, which the recording does not keep as a value.",
+   "file": "main.js",
+   "start": 4,
+   "end": 14,
+   "focus": 12,
+   "bright": [
+    6,
+    8,
+    9,
+    12
+   ],
+   "values": "total = 15",
+   "reads": [],
+   "stack": [
+    "totalOf main.js:12   #16",
+    "<module> main.js:18   #1"
+   ],
+   "output": "",
+   "call": {
+    "name": "scale",
+    "in": [
+     "value = 4",
+     "factor = 3"
+    ],
+    "out": "return = 12"
+   },
+   "hits": 2,
+   "arm": null,
+   "reason": "",
+   "chain": [
+    {
+     "depth": 0,
+     "via": "root",
+     "name": "total",
+     "text": "15",
+     "statement": "total += scale(row);",
+     "location": "main.js:12",
+     "step": 16
+    },
+    {
+     "depth": 1,
+     "via": "reads",
+     "name": "total",
+     "text": "3",
+     "statement": "total += scale(row);",
+     "location": "main.js:12",
+     "step": 7
+    },
+    {
+     "depth": 2,
+     "via": "reads",
+     "name": "total",
+     "text": "0",
+     "statement": "let total = 0;",
+     "location": "main.js:7",
+     "step": 3
+    },
+    {
+     "depth": 2,
+     "via": "reads",
+     "name": "scale",
+     "text": "?",
+     "statement": "",
+     "location": "",
+     "step": null
+    },
+    {
+     "depth": 2,
+     "via": "reads",
+     "name": "row",
+     "text": "1",
+     "statement": "for (const row of rows) {",
+     "location": "main.js:8",
+     "step": 5
+    },
+    {
+     "depth": 3,
+     "via": "reads",
+     "name": "rows",
+     "text": "[ 1, -2, 4 ]",
+     "statement": "function totalOf(rows) {",
+     "location": "main.js:6",
+     "step": 2
+    },
+    {
+     "depth": 2,
+     "via": "calls",
+     "name": "scale",
+     "text": "value = 1, factor = 3",
+     "statement": "",
+     "location": "main.js:1",
+     "step": 8
+    },
+    {
+     "depth": 1,
+     "via": "reads",
+     "name": "scale",
+     "text": "?",
+     "statement": "",
+     "location": "",
+     "step": null
+    },
+    {
+     "depth": 1,
+     "via": "reads",
+     "name": "row",
+     "text": "4",
+     "statement": "for (const row of rows) {",
+     "location": "main.js:8",
+     "step": 14
+    },
+    {
+     "depth": 2,
+     "via": "reads",
+     "name": "rows",
+     "text": "[ 1, -2, 4 ]",
+     "statement": "function totalOf(rows) {",
+     "location": "main.js:6",
+     "step": 2
+    },
+    {
+     "depth": 1,
+     "via": "calls",
+     "name": "scale",
+     "text": "value = 4, factor = 3",
+     "statement": "",
+     "location": "main.js:1",
+     "step": 17
+    }
+   ],
+   "exception": null,
+   "http": null,
+   "gloss": null,
+   "modified": false,
+   "verify": "tracelight why run.json 20 total --json",
+   "evidence": []
+  },
+  {
+   "id": "pause-1",
+   "kind": "live pause",
+   "tag": "LIVE PAUSE",
+   "step": null,
+   "title": "The same line, stopped in a live debug session",
+   "text": "A live pause is a different claim: the frame is live and nothing behind it was recorded.",
+   "note": "No provenance chain here, because a debug session without --record records nothing to walk back through. Written by hand for this example.",
+   "file": "main.js",
+   "start": 4,
+   "end": 14,
+   "focus": 9,
+   "bright": [
+    6,
+    7,
+    8,
+    9,
+    12
+   ],
+   "values": "row = -2\ntotal = 3",
+   "reads": [],
+   "stack": [
+    "totalOf main.js:9",
+    "<module> main.js:18"
+   ],
+   "output": "",
+   "call": null,
+   "hits": null,
+   "arm": null,
+   "reason": "breakpoint",
+   "chain": [],
+   "exception": null,
+   "http": null,
+   "gloss": null,
+   "modified": false,
+   "verify": "tracelight context --live --json",
+   "evidence": []
+  }
+ ]
+}

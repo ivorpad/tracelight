@@ -1,0 +1,13 @@
+{
+  "scopeName": "source.pyokka-snap-js",
+  "fileTypes": [],
+  "injectionSelector": "L:source.js, L:source.ts, L:source.tsx, L:source.js.jsx",
+  "patterns": [{ "include": "#snap-output" }],
+  "repository": {
+    "snap-output": {
+      "patterns": [
+        { "match": "^\\s*//»\\s?(.*)$", "captures": { "1": { "name": "string.quoted.other.pyokka-snap-output" } }, "name": "comment.line.pyokka-snap-output" }
+      ]
+    }
+  }
+}

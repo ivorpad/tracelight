@@ -1,0 +1,22 @@
+{
+  "name": "tracelight-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tracelight: the Node.js/TypeScript runtime that speaks Pyokka's runner protocol.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "tracelight": "./bin/tracelight.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@mswjs/interceptors": "^0.45.7",
+    "magic-string": "^1.4.3",
+    "oxc-parser": "^0.153.0"
+  }
+}
