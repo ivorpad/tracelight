@@ -9,21 +9,18 @@ import { cliFor, languageOf, plainRun } from '../hooks/state'
 import { CONTEXT_64, EXCEPTIONS_CAUGHT } from './fixtures'
 import { BAND, engine, newWorld } from './world'
 
-// The band on a JavaScript / TypeScript session: it speaks `tracelight` instead of `tracelight`,
-// runs the program with node and says the language in its prompts.
+// The band on a JavaScript / TypeScript session: it speaks `tracelight`, runs the program with
+// node and says the language in its prompts.
 
 const TS_CONTEXT = JSON.parse(JSON.stringify(CONTEXT_64).replaceAll('/work/invoices.py', '/work/invoices.ts'))
 
-test('a JS/TS file picks tracelight, node and its language; a Python file keeps tracelight', () => {
+test('a JS/TS file picks tracelight, node and its language', () => {
   expect(cliFor('/w/a.ts')).toEqual(['tracelight'])
   expect(cliFor('/w/a.mjs')).toEqual(['tracelight'])
   expect(cliFor('/w/a.tsx')).toEqual(['tracelight'])
-  expect(cliFor('/w/a.py')).toEqual(['tracelight'])
   expect(plainRun('/w/a.js')).toEqual(['node', '/w/a.js'])
-  expect(plainRun('/w/a.py')).toEqual(['python3', '/w/a.py'])
   expect(languageOf('/w/a.cts')).toBe('TypeScript')
   expect(languageOf('/w/a.jsx')).toBe('JavaScript')
-  expect(languageOf('/w/a.py')).toBe('Python')
 })
 
 test('a tracelight command makes the band read the session with tracelight', async ($, on) => {

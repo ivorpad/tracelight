@@ -9,7 +9,7 @@ import { narrationPrompt } from './narration'
 import { baseName, descriptorsIn, errorMessage, jsonOf, NEEDS_RECORDING, statementLines, stepOutcome, toFindings, toOrigin, toSpot } from './parse'
 import type { RawContext, RawFinding, RawOrigin } from './parse'
 import { fixedText, originAnswer, planPath, planText } from './plans'
-import { cliFor, findingAt, FIXER, FOLLOW_MS, IDLE_MS, memory, NARRATOR, plainRun, POLL_MS, TRACELIGHT_COMMAND, TRACELIGHT, TRACELIGHT } from './state'
+import { cliFor, findingAt, FIXER, FOLLOW_MS, IDLE_MS, memory, NARRATOR, plainRun, POLL_MS, TRACELIGHT_COMMAND, TRACELIGHT } from './state'
 import { scratchDir, WINDOW_AFTER, WINDOW_BEFORE } from './state'
 import { bugsView, errorView, explainView } from './views'
 
@@ -332,7 +332,7 @@ async function undoFix($: EngineInterface): Promise<void> {
   await rerun($, proposal.path)
 }
 
-// ---- keys: a band button, `/pk <key>` and the `band` tool all end in `press`
+// ---- keys: a band button, `/tl <key>` and the `band` tool all end in `press`
 
 async function look($: EngineInterface): Promise<Look> {
   const shown = await read($, snapshot)
@@ -390,11 +390,11 @@ async function press($: EngineInterface, typed: string): Promise<string | undefi
   } else if (/^\d+$/.test(key)) {
     await jump($, Number(key))
   } else if (key === 'w') {
-    if (!l.here) return 'No finding on this step: /pk x lists them'
+    if (!l.here) return 'No finding on this step: /tl x lists them'
     if (originHere(l)) await update($, whereFrom, () => null)
     else await loadOrigin($, l.here)
   } else if (key === 'f') {
-    if (!l.here || !l.spot) return 'No finding on this step: /pk x lists them'
+    if (!l.here || !l.spot) return 'No finding on this step: /tl x lists them'
     // the plan aims at the root of the chain, so the chain is read first when the band has none
     const chain = originHere(l) ?? (await loadOrigin($, l.here))
     await proposeFix($, l.here, l.spot, chain?.links.length ? chain.links : undefined)
@@ -426,7 +426,7 @@ async function press($: EngineInterface, typed: string): Promise<string | undefi
     const last = Math.max(0, (l.found?.findings.length ?? 1) - 1)
     await update($, bugIndex, () => (key === 'j' ? Math.min(last, l.index + 1) : Math.max(0, l.index - 1)))
   } else {
-    return `/pk ${KEY_HELP}`
+    return `/tl ${KEY_HELP}`
   }
   return undefined
 }
@@ -452,12 +452,12 @@ async function useTool($: EngineInterface, input: ToolInput): Promise<string> {
   if (paused?.pause) {
     if (action === 'step' || (key !== undefined && key !== 'e')) {
       await update($, notice, () => NEEDS_RECORDING)
-      return `The session is a debug pause without a recording, so "${action}" has nothing to read. ${NEEDS_RECORDING.replace('Press r', 'The person can press r (or /pk r)')}`
+      return `The session is a debug pause without a recording, so "${action}" has nothing to read. ${NEEDS_RECORDING.replace('Press r', 'The person can press r (or /tl r)')}`
     }
     if (key) await press($, key)
     return `The band shows ${paused.file}:${paused.line} in ${paused.function}, paused (${paused.pause.reason}) without a recording.` +
       (paused.pause.exception ? ` The program stopped on ${paused.pause.exception.type}: ${paused.pause.exception.message}.` : '') +
-      ' /pk n, i and o step the program; /pk r records it again from this line.'
+      ' /tl n, i and o step the program; /tl r records it again from this line.'
   }
   if (key === 'f') {
     if (await press($, 'f')) return 'No bug was found on the current step. Call action "bugs" to list them.'
@@ -494,7 +494,7 @@ export const register: Register = on => {
     })
     $.command.register({ name: 'tracelight-band', description: 'Show or hide the Tracelight band and refresh it' })
     $.command.register({
-      name: 'pk',
+      name: 'tl',
       description: 'Drive the Tracelight band from the prompt: n next, b back, i into, o out, w where from, f plan a fix, a apply, u undo, x bugs, e explain, r record again, p prose',
     })
     await $.tool.register(TOOL_SPEC)
@@ -511,11 +511,11 @@ export const register: Register = on => {
     return { text: hidden ? 'Tracelight band on' : 'Tracelight band off' }
   })
 
-  // `/pk <key>` does what the band's key does, from the prompt (the band's own keys answer
+  // `/tl <key>` does what the band's key does, from the prompt (the band's own keys answer
   // only while it holds the focus).
-  on('command.run', { command: 'pk' }, async ($, e) => {
+  on('command.run', { command: 'tl' }, async ($, e) => {
     const key = (e.args ?? '').trim().split(/\s+/)[0] ?? ''
-    if (key === '') return { text: `/pk ${KEY_HELP}` }
+    if (key === '') return { text: `/tl ${KEY_HELP}` }
     await stamp($)
     const said = await press($, key)
     return said ? { text: said } : {}
@@ -531,10 +531,8 @@ export const register: Register = on => {
       const named = e.command.match(/--session\s+(\S+)/)?.[1]
       // `tracelight debug FILE` names the program it starts: follow it by name, so the band reads
       // its pause rather than a session it followed before
-      const started = e.command.match(/\b(?:tracelight|tracelight)\s+debug\s+([^\s-]\S*\.(?:py|[mc]?[jt]sx?))(?=\s|$)/)?.[1]
-      // the agent's own command says which CLI the session speaks
-      const cli = e.command.match(/(?:^|[\s;&|/])(tracelight|tracelight)\s/)?.[1]
-      if (cli) memory.cli = cli === 'tracelight' ? TRACELIGHT : TRACELIGHT
+      const started = e.command.match(/\btracelight\s+debug\s+([^\s-]\S*\.(?:py|[mc]?[jt]sx?))(?=\s|$)/)?.[1]
+      memory.cli = TRACELIGHT
       if (named) memory.session = named
       else if (started) memory.session = baseName(started)
       await stamp($)

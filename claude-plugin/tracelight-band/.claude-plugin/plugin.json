@@ -1,7 +1,7 @@
 {
   "name": "tracelight-band",
   "version": "0.1.0",
-  "description": "Shows where the Tracelight Time Machine is (file:line #step, function, stack, values) above the prompt while an agent drives tracelight --live (or tracelight --live for JavaScript and TypeScript)",
+  "description": "Shows where the Tracelight Time Machine is (file:line #step, function, stack, values) above the prompt while an agent drives tracelight --live",
   "author": {
     "name": "Ivor Padilla"
   },

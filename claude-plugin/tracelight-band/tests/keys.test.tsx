@@ -2,9 +2,9 @@ import { expect, test } from 'claude-code/testing'
 
 import { CONTEXT_29, CONTEXT_64, INVOICES_SOURCE, ORIGIN_UNKNOWN } from './fixtures'
 import { TOOL_SPEC } from '../hooks/keys'
-import { BAND, engine, newWorld, pk, PROGRAM, steps } from './world'
+import { BAND, engine, newWorld, tl, PROGRAM, steps } from './world'
 
-// `/pk <key>`, the band's buttons and the model's `band` tool all end in the same `press`.
+// `/tl <key>`, the band's buttons and the model's `band` tool all end in the same `press`.
 
 const BAND_TOOL = 'mcp__tracelight-band__band'
 const mountBand = () => ({ plugin: 'tracelight-band', surface: 'terminal', component: 'AbovePrompt', props: BAND }) as const
@@ -15,25 +15,25 @@ const FIX_REPLY = JSON.stringify({
   edits: [{ start: 16, end: 16, replacement: `    text = raw.strip('"').replace(",", "")` }],
 })
 
-test('/pk moves the Time Machine: n b i o and a step number', async ($, on) => {
+test('/tl moves the Time Machine: n b i o and a step number', async ($, on) => {
   const w = newWorld()
   engine(on, w)
-  for (const key of ['n', 'b', 'i', 'o', '29']) await $.command.run(pk(key))
+  for (const key of ['n', 'b', 'i', 'o', '29']) await $.command.run(tl(key))
   expect(steps(w)).toEqual(['--over --live', '--back --live', '--into --live', '--out --live', '--to 29 --live'])
 })
 
-test('/pk with no key or an unknown one answers with the keys', async ($, on) => {
+test('/tl with no key or an unknown one answers with the keys', async ($, on) => {
   engine(on, newWorld())
-  expect((await $.command.run(pk('')))?.text).toStartWith('/pk n next · b back')
-  expect((await $.command.run(pk('zz')))?.text).toContain('f plan a fix')
+  expect((await $.command.run(tl('')))?.text).toStartWith('/tl n next · b back')
+  expect((await $.command.run(tl('zz')))?.text).toContain('f plan a fix')
 })
 
-test('/pk f on a step with no finding says where the findings are', async ($, on) => {
+test('/tl f on a step with no finding says where the findings are', async ($, on) => {
   const w = newWorld()
   w.context = CONTEXT_29
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 29' })
-  expect((await $.command.run(pk('f')))?.text).toBe('No finding on this step: /pk x lists them')
+  expect((await $.command.run(tl('f')))?.text).toBe('No finding on this step: /tl x lists them')
 })
 
 test('the band buttons press the same keys', async ($, on) => {
@@ -54,7 +54,7 @@ test('narration: the small model explains each new step, and p turns it off', as
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: /^The function subtotal adds qty/ })).toBeDefined()
-  await $.command.run(pk('p'))
+  await $.command.run(tl('p'))
   expect(await ui.find({ type: 'Text', text: /^The function subtotal adds qty/ })).toBeUndefined()
   expect(await ui.find({ type: 'Button', text: 'prose off' })).toBeDefined()
   await ui.unmount()
@@ -88,7 +88,7 @@ test('w: where from, under the finding: newest first, the root marked, inferred 
   const w = newWorld()
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64 --session invoices.py' })
-  await $.command.run(pk('w'))
+  await $.command.run(tl('w'))
   expect(w.runs).toContainEqual(['tracelight', 'origin', '--json', '64', '--live', '--session', 'invoices.py'])
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: 'where from, newest first:' })).toBeDefined()
@@ -124,7 +124,7 @@ test('w: a chain with no root says root: not known, and why', async ($, on) => {
   w.origin = ORIGIN_UNKNOWN
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
-  await $.command.run(pk('w'))
+  await $.command.run(tl('w'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.findAll({ type: 'Button', text: /^[▶ ] #\d+ / })).toHaveLength(3)
   expect(await ui.find({ type: 'Button', text: /◀ root/ })).toBeUndefined()
@@ -137,7 +137,7 @@ test('w: a tracelight without origin says so in the band', async ($, on) => {
   w.origin = "tracelight: error: argument command: invalid choice: 'origin'"
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
-  await $.command.run(pk('w'))
+  await $.command.run(tl('w'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: "where from: tracelight: error: argument command: invalid choice: 'origin'" })).toBeDefined()
   await ui.unmount()
@@ -148,7 +148,7 @@ test('w on a step with no finding says where the findings are', async ($, on) =>
   w.context = CONTEXT_29
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 29' })
-  expect((await $.command.run(pk('w')))?.text).toBe('No finding on this step: /pk x lists them')
+  expect((await $.command.run(tl('w')))?.text).toBe('No finding on this step: /tl x lists them')
 })
 
 test('tool: origin returns the chain and the root to the model, and the band shows it', async ($, on) => {
@@ -162,9 +162,9 @@ test('tool: origin returns the chain and the root to the model, and the band sho
   await ui.unmount()
 })
 
-test('tool: the agent can plan a fix but not apply one; applying stays /pk a', async () => {
+test('tool: the agent can plan a fix but not apply one; applying stays /tl a', async () => {
   expect(TOOL_SPEC.inputSchema.properties.action.enum).toEqual(['show', 'hide', 'step', 'explain', 'bugs', 'origin', 'fix'])
-  expect(TOOL_SPEC.description).toContain('`/pk a`')
+  expect(TOOL_SPEC.description).toContain('`/tl a`')
 })
 
 test('tool: fix with no finding on the step says how to list them', async ($, on) => {
@@ -213,7 +213,7 @@ test('fix: plan, check on a copy, apply, the fresh run marks the plan fixed, und
   expect(fixed).toContain('(80 steps) no longer shows this finding.')
   expect(w.toasts).toContain('invoices-swallowed-exception-invoices-py-34.md: fixed')
 
-  await $.command.run(pk('u'))
+  await $.command.run(tl('u'))
   expect(w.files.get(PROGRAM)).toBe(INVOICES_SOURCE)
   await ui.unmount()
 })
@@ -222,7 +222,7 @@ test('fix: a model with no answer leaves a failed box with try again', async ($,
   const w = newWorld()
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
-  await $.command.run(pk('f'))
+  await $.command.run(tl('f'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: 'fix failed: Error: no answer: empty-reply' })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: 'try again' })).toBeDefined()
@@ -238,7 +238,7 @@ test('errors read as words everywhere: the origin chain and the bug scan never s
   w.origin = OLD_EXTENSION
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
-  await $.command.run(pk('w'))
+  await $.command.run(tl('w'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: /^where from: The VS Code extension is older than this CLI \(no recording request\)/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /\{"ok"/ })).toBeUndefined()

@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { CRASH_SOURCE, PAUSED_CRASH, PAUSED_OVER, PAUSED_SUBTOTAL } from './fixtures'
 import { NEEDS_RECORDING } from '../hooks/parse'
-import { BAND, engine, newWorld, pk, steps } from './world'
+import { BAND, engine, newWorld, tl, steps } from './world'
 
 // The band at a `tracelight debug FILE` pause with nothing recorded (`recording: false`,
 // docs/design/live-pause-context.md). The fixtures are what test/e2e/debug-band.test.js read
@@ -48,7 +48,7 @@ test('n, i and o step the program, and the band reads the next pause', async ($,
   w.afterStep = PAUSED_OVER
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight context --live' })
-  for (const key of ['n', 'i', 'o']) await $.command.run(pk(key))
+  for (const key of ['n', 'i', 'o']) await $.command.run(tl(key))
   expect(steps(w)).toEqual(['--over --json --live', '--into --json --live', '--out --json --live'])
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: /'unit_price': '1,299\.00'/ })).toBeDefined()
@@ -60,7 +60,7 @@ test('b, a step number, x, w and f say in one line that they need a recording', 
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight context --live' })
   for (const key of ['b', '12', 'x', 'w', 'f']) {
-    expect((await $.command.run(pk(key)))?.text).toBe(NEEDS_RECORDING)
+    expect((await $.command.run(tl(key)))?.text).toBe(NEEDS_RECORDING)
   }
   expect(steps(w)).toEqual([])
   expect(w.runs.some(r => r[1] === 'origin')).toBe(false)
@@ -91,7 +91,7 @@ test('a step that fails keeps the pause on screen and says why in words', async 
   w.step = '{"ok": false, "error": "cannot step over: the program is running", "hint": "`pause --live` stops it"}'
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight context --live' })
-  await $.command.run(pk('n'))
+  await $.command.run(tl('n'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: 'paused · no recording' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'The step did not run: cannot step over: the program is running' })).toBeDefined()
@@ -104,7 +104,7 @@ test('a step that runs the program to its end says so, with the exit code', asyn
   w.afterStep = CONTEXT_OFF
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight context --live' })
-  await $.command.run(pk('o'))
+  await $.command.run(tl('o'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: /The program finished \(exit 0\)\. Press r to record the file from the top\./ })).toBeDefined()
   await ui.unmount()
@@ -149,7 +149,7 @@ test('tool: show describes the pause; step, bugs, origin and fix say they need a
   for (const call of [{ action: 'step', step: 3 }, { action: 'bugs' }, { action: 'origin' }, { action: 'fix' }]) {
     const said = JSON.stringify(await $.tool.call({ tool: BAND_TOOL, ...call }))
     expect(said).toContain('without a recording')
-    expect(said).toContain('The person can press r (or /pk r) to record from here.')
+    expect(said).toContain('The person can press r (or /tl r) to record from here.')
   }
   expect(steps(w)).toEqual([])
   expect(w.runs.some(r => ['origin', 'exceptions', 'suspects'].includes(r[1] ?? ''))).toBe(false)

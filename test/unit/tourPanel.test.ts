@@ -114,7 +114,7 @@ describe('the tour command', () => {
     expect(err).toBeInstanceOf(TourError);
     expect((err as TourError).violations).toHaveLength(2);
     expect(violationText(err as TourError)).toBe("the prose has 2 problems: c9: unknown chapter id; s12-abc.text: number 37 is not in the stop's values or quote");
-    expect(() => parseTourOutput(2, '', 'usage: tracelight ...\npyokka: error: unrecognized arguments: --prose /t/p.json')).toThrow(/cannot merge a narration yet/);
+    expect(() => parseTourOutput(2, '', 'usage: tracelight ...\ntracelight: error: unrecognized arguments: --prose /t/p.json')).toThrow(/cannot merge a narration yet/);
     expect(() => parseTourOutput(1, '', 'Traceback ...\nKeyError: x')).toThrow(/exited with 1: Traceback ... KeyError: x/);
     expect(() => parseTourOutput(0, '{"tour": 1}', '')).toThrow(/not a tour/);
   });

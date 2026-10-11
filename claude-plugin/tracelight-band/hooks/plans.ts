@@ -2,7 +2,7 @@ import type { Finding, Fix, ValueOrigin, OriginLink, Spot } from '../types'
 import { baseName } from './parse'
 
 // Fix plans: each proposed fix is written to .tracelight/findings/<file>-<finding>.md next to the
-// program, a local file for the person, who applies it (`/pk a`). A later run without the
+// program, a local file for the person, who applies it (`/tl a`). A later run without the
 // finding marks it fixed.
 
 export const planPath = (programPath: string, finding: Finding) => {

@@ -35,7 +35,7 @@ test('a plan is written next to the program, named by file, finding and place', 
 test('a plan holds front matter, the reproduce commands, the diff and the check', async () => {
   const text = planText(finding, spot, proposal, 'open', '2026-10-02 12:00')
   expect(text).toStartWith('---\nstatus: open\nprogram: invoices.py\nfinding: swallowed exception\nwhere: invoices.py:34\nstep: 64\nrecorded: 81 steps\nupdated: 2026-10-02 12:00\n---\n')
-  expect(text).toContain('tracelight step --live --to 64\npyokka why --live 64')
+  expect(text).toContain('tracelight step --live --to 64\ntracelight why --live 64')
   expect(text).toContain(`-  16      text = raw.strip('"')\n+  16      text = raw.strip('"').replace(",", "")`)
   expect(text).toContain('- swallowed exceptions: 1 -> 0')
   expect(text).toContain('- output after: `4 invoices, revenue 1398.79`')

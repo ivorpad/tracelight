@@ -1,5 +1,6 @@
-// Written by scripts/band-fixtures.py from what the tracelight CLI printed. Do not edit by hand:
-// run the script again when the CLI's JSON changes. Paths read /work/<file>.
+// CLI answers captured from the two programs in tests/programs/ when the band served the Python
+// runtime too; the band reads their shape, which the tracelight CLI prints for a JS/TS run as well.
+// Paths read /work/<file>. Re-capturing them from JS programs is still to do.
 
 // `context --json` at step 64 of invoices.py: the TypeError that subtotal swallows
 export const CONTEXT_64 = {

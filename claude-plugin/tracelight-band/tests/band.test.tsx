@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { CONTEXT_29, CONTEXT_STALE, SUSPECTS } from './fixtures'
-import { BAND, engine, newWorld, pk, steps } from './world'
+import { BAND, engine, newWorld, tl, steps } from './world'
 
 // The band as drawn, from the CLI's real answers. The plugin's state is seeded by driving its
 // hooks: a tracelight command in Bash makes it ask the CLI and draw.
@@ -69,7 +69,7 @@ test('bugs view: the list from suspects, the picked finding, j/k and go to step'
   w.suspects = SUSPECTS
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
-  await $.command.run(pk('x'))
+  await $.command.run(tl('x'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: 'tracelight bugs ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '2 suspicious steps · from suspects' })).toBeDefined()
@@ -88,7 +88,7 @@ test('without suspects the band falls back to exceptions', async ($, on) => {
   const w = newWorld()
   engine(on, w)
   await $.tool.call({ tool: 'Bash', command: 'tracelight step --live --to 64' })
-  await $.command.run(pk('x'))
+  await $.command.run(tl('x'))
   const ui = await $.ui.mount(mountBand())
   expect(await ui.find({ type: 'Text', text: '1 suspicious step · from exceptions' })).toBeDefined()
   await ui.unmount()

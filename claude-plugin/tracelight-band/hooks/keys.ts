@@ -1,6 +1,6 @@
 import type { Bugs, Finding, Fix, Mode, ValueOrigin, Spot } from '../types'
 
-// The band's keys and the model's tool actions, as data. A band button, `/pk <key>` and the
+// The band's keys and the model's tool actions, as data. A band button, `/tl <key>` and the
 // `band` tool all end in `press` (register.tsx), which does what a key does.
 //
 // A new key is one entry in BUTTONS (when the band draws it), one in KEY_HELP and one case
@@ -93,7 +93,7 @@ export const TOOL_SPEC = {
     'The band follows the Tracelight Time Machine of a VS Code session: the code around the current step, the recorded values, the call stack, a short explanation, and bugs found in the run.',
     'Call action "show" when you start to step through a run with the person, "hide" when the work moves to something else (planning, editing other code).',
     '"explain" and "bugs" pick the view; "step" moves the Time Machine to `step`; "origin" shows and returns where the bad value of the bug on the current step came from (`tracelight origin`), newest step first, with the root to fix; "fix" writes a fix plan for that bug, aimed at the root, to .tracelight/findings and leaves the source file as it is.',
-    'Applying the fix is the person\'s choice: point them to `/pk a` (apply) and `/pk u` (undo).',
+    'Applying the fix is the person\'s choice: point them to `/tl a` (apply) and `/tl u` (undo).',
     'At a `tracelight debug` pause without a recording the band shows the paused frame: "show" and "explain" work, "step", "bugs", "origin" and "fix" answer that they need a recording.',
     'Pass `session` (a file name such as "invoices.py" or "invoices.ts") when several VS Code sessions are live.',
   ].join(' '),

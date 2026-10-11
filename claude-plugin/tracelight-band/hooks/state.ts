@@ -3,21 +3,20 @@ import type { Finding } from '../types'
 // The band's settings, and what one load of the plugin remembers outside its atoms (the atoms
 // are in register.tsx, where the validator can read every update of them).
 
-export const TRACELIGHT = ['tracelight']
-/** Tracelight, the same CLI for JavaScript and TypeScript (`node/bin/tracelight.mjs`). */
+/** The CLI that reads a program (`node/bin/tracelight.mjs`). */
 export const TRACELIGHT = ['tracelight']
 export const JS_FILE = /\.[mc]?[jt]sx?$/
-/** The CLI that reads a program: `tracelight` for a JS/TS file, `tracelight` for the rest. */
-export const cliFor = (path: string) => (JS_FILE.test(path) ? TRACELIGHT : TRACELIGHT)
+/** The CLI that reads a program: `tracelight`, whatever the file. */
+export const cliFor = (_path: string) => TRACELIGHT
 /** The program's language, for the model prompts. */
 export const languageOf = (path: string) => (/\.[mc]?tsx?$/.test(path) ? 'TypeScript' : JS_FILE.test(path) ? 'JavaScript' : 'Python')
 /** How the program runs without the Time Machine, for a fix check. */
 export const plainRun = (path: string) => (JS_FILE.test(path) ? ['node', path] : ['python3', path])
 export const POLL_MS = 3000
 export const FOLLOW_MS = 60_000
-// With no tracelight or tracelight command, band press or band tool call for this long, the band steps aside.
+// With no tracelight command, band press or band tool call for this long, the band steps aside.
 export const IDLE_MS = 10 * 60_000
-export const TRACELIGHT_COMMAND = /(^|[\s;&|/])(tracelight|tracelight|pk)(\s|$)/
+export const TRACELIGHT_COMMAND = /(^|[\s;&|/])(tracelight|tl)(\s|$)/
 export const NARRATOR = 'haiku'
 export const FIXER = 'sonnet'
 /**

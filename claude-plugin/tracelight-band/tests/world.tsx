@@ -119,6 +119,6 @@ export const BAND = { hasSurvey: false, isWorking: false, maxRows: 30, bodyColum
 /** The argvs of the band's `tracelight step` calls. */
 export const steps = (w: World) => w.runs.filter(r => r[1] === 'step').map(r => r.slice(2).join(' '))
 
-/** `/pk <key>` as the person types it. */
-export const pk = (key: string) =>
-  ({ command: 'pk', args: key, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } }) as const
+/** `/tl <key>` as the person types it. */
+export const tl = (key: string) =>
+  ({ command: 'tl', args: key, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } }) as const
