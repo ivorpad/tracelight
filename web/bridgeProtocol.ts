@@ -41,6 +41,7 @@ export type AgentCommand =
   | { action: 'clear'; noteId?: string }
   /** Select existing bindings for display only; no expressions are evaluated. */
   | { action: 'values'; mode: 'selected' | 'all' | 'none'; names?: string[]; file?: string; line?: number }
+  | { action: 'inspect'; name: string; open: boolean }
   | { action: 'start' }
   | { action: 'stop' }
   | { action: 'run' }

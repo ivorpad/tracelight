@@ -34,10 +34,9 @@ function ValueTree({ node, debug, name }: { node: ValueNode; debug: Inspector; n
   </div>;
 }
 
-function ObservedBinding({ v, inspector }: { v: { name: string; text: string; valueBag?: { data: ValueNode; runtimeKey: string } }; inspector: Inspector }) {
-  const [open, setOpen] = useState(false);
+function ObservedBinding({ v, inspector, open, onToggle }: { open: boolean; onToggle: (name: string) => void; v: { name: string; text: string; valueBag?: { data: ValueNode; runtimeKey: string } }; inspector: Inspector }) {
   return <div class={`pkw-observed-binding${open ? ' pkw-observed-open' : ''}`}>
-    <button class="pkw-observed-summary" aria-expanded={open} title={v.text} onClick={() => setOpen(!open)}><span class="pkw-debug-name">{v.name}</span> <span class="pkw-observed-preview">{pausedSummary(v)}</span></button>
+    <button class="pkw-observed-summary" aria-expanded={open} title={v.text} onClick={() => onToggle(v.name)}><span class="pkw-debug-name">{v.name}</span> <span class="pkw-observed-preview">{pausedSummary(v)}</span></button>
     {open ? <div class="pkw-variable-detail"><div class="pkw-value-note">Valor observado en esta pausa</div><pre>{v.text}</pre>
       {runtimeCapped(v.valueBag?.data, v.text) ? <div class="pkw-value-note">Vista del runtime truncada. Expande el árbol para el detalle disponible.</div> : null}
       {v.valueBag ? <ValueTree node={v.valueBag.data} name={v.name} debug={inspector} /> : null}
@@ -45,9 +44,9 @@ function ObservedBinding({ v, inspector }: { v: { name: string; text: string; va
   </div>;
 }
 
-export function ObservedBindings({ locals, inspector }: { locals: { name: string; text: string; valueBag?: { data: ValueNode; runtimeKey: string } }[]; inspector: Inspector }) {
+export function ObservedBindings({ locals, inspector, expanded, onToggle }: { expanded: Set<string>; onToggle: (name: string) => void; locals: { name: string; text: string; valueBag?: { data: ValueNode; runtimeKey: string } }[]; inspector: Inspector }) {
   return <div class="pkw-observed-bindings" aria-label="Valores de la pausa actual">
-    {locals.map(v => <ObservedBinding key={v.name} v={v} inspector={inspector} />)}
+    {locals.map(v => <ObservedBinding key={v.name} v={v} inspector={inspector} open={expanded.has(v.name)} onToggle={onToggle} />)}
   </div>;
 }
 

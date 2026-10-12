@@ -88,6 +88,9 @@ describe('web bridge helpers', () => {
     expect(() => parseCtl(['debug', 'fly'])).toThrow(/unknown debug op/);
     expect(parseCtl(['story'])).toEqual({ action: 'story' });
     expect(parseCtl(['profile'])).toEqual({ action: 'profile' });
+    expect(parseCtl(['inspect', 'open', 'queue'])).toEqual({ action: 'inspect', name: 'queue', open: true });
+    expect(parseCtl(['inspect', 'close', 'queue'])).toEqual({ action: 'inspect', name: 'queue', open: false });
+    expect(() => parseCtl(['inspect', 'toggle', 'queue'])).toThrow('open|close NAME');
   });
 
   it('keeps only well-formed watch requests from a page', () => {

@@ -54,6 +54,9 @@ export interface CodeDecorations {
 
 /** What the page needs from the code pane (web/codePane.ts). */
 export interface CodeView {
+  inspectValue?(name: string, open: boolean): { name: string; open: boolean; visible: boolean };
+  valueUiState?(): { name: string; open: boolean; visible: boolean }[];
+  presentationReady?(): Promise<void>;
   setNotes?(notes: TeachingNote[]): void;
   showFile(file: BridgeFile, opts?: { keepDirty?: boolean }): void;
   shownPath(): string | undefined;
@@ -1245,6 +1248,19 @@ export class PageHost {
   readonly notes = new Map<string, TeachingNote>();
   private valuePresentation: { mode: 'selected' | 'all' | 'none'; names: string[]; file: string; line?: number; runId: string; frame: number } | null = null;
 
+  async inspectValue(name: string, open: boolean): Promise<unknown> {
+    const pause = this.debug.paused;
+    const state = this.debug.state();
+    if (!pause || !state) throw new Error('inspect needs a live pause');
+    if (!state.locals.some(v => v.name === name)) throw new Error(`not in the current paused frame: ${name}`);
+    if (!this.code.inspectValue) throw new Error('the code view does not support value inspection');
+    const requested = this.code.inspectValue(name, open);
+    await this.code.presentationReady?.();
+    const ui = this.code.valueUiState?.().find(v => v.name === name) ?? requested;
+    const frame = pause.stack[this.debug.selectedFrame];
+    return { ...ui, observed: { runId: state.id, step: pause.step, frame: this.debug.selectedFrame, file: this.debug.pathOf(frame?.fileId ?? pause.fileId), line: frame?.line ?? pause.line } };
+  }
+
   resolvePresentationFile(file?: string): string {
     if (!file) return this.code.shownPath() ?? this.main?.path ?? '';
     const paths = new Set([this.main?.path, ...this.run?.files.all().map((f) => f.path) ?? [], ...this.debug.run?.files.all().map((f) => f.path) ?? []].filter((p): p is string => !!p));
@@ -1255,7 +1271,7 @@ export class PageHost {
   }
 
   /** A display filter tied to the current run/frame/file. Values refresh from every new pause. */
-  presentValues(command: { mode: 'selected' | 'all' | 'none'; names?: string[]; file?: string; line?: number }): unknown {
+  async presentValues(command: { mode: 'selected' | 'all' | 'none'; names?: string[]; file?: string; line?: number }): Promise<unknown> {
     const p = this.debug.paused;
     const state = this.debug.state();
     if (!p || !state) throw new Error('values needs a live pause');
@@ -1274,8 +1290,9 @@ export class PageHost {
     this.valuePresentation = { mode: command.mode, names, file, ...(command.line !== undefined ? { line: command.line } : {}), runId: state.id, frame: this.debug.selectedFrame };
     this.render();
     this.onChange();
+    await this.code.presentationReady?.();
     return { observed: { runId: state.id, step: p.step, frame: this.debug.selectedFrame, file, line: f?.line ?? p.line },
-      shown: state.locals.filter((v) => command.mode === 'all' || (command.mode === 'selected' && names.includes(v.name))).map((v) => ({ name: v.name, text: v.text })) };
+      shown: state.locals.filter((v) => command.mode === 'all' || (command.mode === 'selected' && names.includes(v.name))).map((v) => ({ name: v.name, text: v.text })), rendered: this.code.valueUiState?.() ?? null };
   }
 
   private validatePresentationLine(file: string, line: number): void {

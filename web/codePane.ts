@@ -32,6 +32,30 @@ export class CodePane implements CodeView {
   private notesKey = '';
   private lastNotes: TeachingNote[] = [];
   private inspectionNode: HTMLElement | null = null;
+  private expandedValues = new Set<string>();
+  private inspectionSnapshot: string | undefined;
+  private drawInspection: (() => void) | null = null;
+
+  async presentationReady(): Promise<void> {
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  }
+
+  valueUiState(): { name: string; open: boolean; visible: boolean }[] {
+    return [...this.inspectionNode?.querySelectorAll<HTMLButtonElement>('.pkw-observed-summary') ?? []].map(button => {
+      const rect = button.getBoundingClientRect();
+      return { name: button.querySelector('.pkw-debug-name')?.textContent ?? '', open: button.getAttribute('aria-expanded') === 'true', visible: rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight };
+    });
+  }
+
+  inspectValue(name: string, open: boolean): { name: string; open: boolean; visible: boolean } {
+    const node = this.inspectionNode;
+    if (!node || !this.drawInspection) throw new Error('value row is not visible; choose Aprender and show this binding first');
+    const names = this.lastRender?.liveValues?.locals.filter(v => this.lastRender?.liveValues?.ghostNames === undefined || this.lastRender.liveValues.ghostNames.includes(v.name)).map(v => v.name) ?? [];
+    if (!names.includes(name)) throw new Error(`binding is not shown: ${name}`);
+    if (open) this.expandedValues.add(name); else this.expandedValues.delete(name);
+    this.drawInspection();
+    return this.valueUiState().find(v => v.name === name)!;
+  }
   onExpandValue: (node: ValueNode) => Promise<ValueNode | null> = async () => null;
   private applying = false;
   private lastRender: CodeDecorations | undefined;
@@ -259,11 +283,24 @@ export class CodePane implements CodeView {
         node.className = 'pkw-observed-zone';
         node.style.width = `${this.editor.getLayoutInfo().contentWidth}px`;
         this.inspectionNode = node;
-        renderUi(h(ObservedBindings, { locals, inspector: { expandNode: (value) => this.onExpandValue(value) } }), node);
+        if (this.inspectionSnapshot !== observed.snapshot) this.expandedValues.clear();
+        this.inspectionSnapshot = observed.snapshot;
+        this.drawInspection = () => renderUi(h(ObservedBindings, {
+          locals, expanded: this.expandedValues,
+          onToggle: (name) => { this.inspectValue(name, !this.expandedValues.has(name)); },
+          inspector: { expandNode: (value) => this.onExpandValue(value) },
+        }), node);
+        this.drawInspection();
         this.editor.changeViewZones((acc) => {
           const height = Math.max(28, (node.firstElementChild as HTMLElement)?.scrollHeight + 8 || 28);
           const zone = { afterLineNumber: line, heightInPx: height, domNode: node, suppressMouseDown: true };
           const id = acc.addZone(zone);
+          // The native embedded browser also hit-tests Monaco's transparent view-lines.
+          // Give the interactive zone its own explicit layer rather than relying on :has().
+          if (node.parentElement) node.parentElement.style.zIndex = '30';
+          node.style.zIndex = '30';
+          node.addEventListener('mousedown', event => event.stopPropagation());
+          node.addEventListener('pointerdown', event => event.stopPropagation());
           this.extraZones.push(id);
           // Expansion changes only the view zone, not the program or its source.
           const resize = new ResizeObserver(() => {
@@ -314,6 +351,7 @@ export class CodePane implements CodeView {
     this.notesKey = '';
     if (this.inspectionNode) renderUi(null, this.inspectionNode);
     this.inspectionNode = null;
+    this.drawInspection = null;
     const ids = [...(zone ? [zone.id] : []), ...this.extraZones];
     this.zone = null;
     this.extraZones = [];

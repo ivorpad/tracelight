@@ -715,7 +715,7 @@ const USAGE = `usage:
   tracelight-web FILE [--port N] [--runtime js|"CMD ARGS"] [--open] [--no-watch] [--verbose]
   tracelight-web ctl [--port N] state | goto STEP | step into|over|out|back|backOver|backOut | line N
                  | say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kind explanation|prediction]
-                 | clear [--id ID] | values NAME... [--file FILE] [--line N] | values --all|--hide
+                 | clear [--id ID] | values NAME... [--file FILE] [--line N] | values --all|--hide | inspect open|close NAME
                  | start | stop | run | eval EXPR
                  | var NAME | why NAME [--step N] | watch EXPR [--remove]
                  | break LINE [on|off] [--if COND] | debug start|continue|step [into|over|out]|pause|stop|state
@@ -749,6 +749,9 @@ export function parseCtl(args: string[]): AgentCommand {
       return { action };
     case 'clear':
       return { action, ...(flags.has('id') ? { noteId: flags.get('id') } : {}) };
+    case 'inspect':
+      if (!['open', 'close'].includes(words[0] ?? '') || !words[1]) throw new Error('inspect needs open|close NAME');
+      return { action, name: words.slice(1).join(' '), open: words[0] === 'open' };
     case 'values':
       if (flags.has('all') && flags.has('hide')) throw new Error('choose --all or --hide');
       return { action, mode: flags.has('all') ? 'all' : flags.has('hide') ? 'none' : 'selected', ...(words.length ? { names: words } : {}), ...(flags.has('file') ? { file: flags.get('file') } : {}), ...(flags.has('line') ? { line: int(flags.get('line'), '--line') } : {}) };
