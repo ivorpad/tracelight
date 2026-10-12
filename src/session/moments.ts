@@ -1,8 +1,8 @@
 /**
  * The moment builder behind `walkthrough.ts`: one pass per kind over a session's state (calls
  * with library scopes merged per user-code call site, decisions and loops from the file map,
- * logged values, prints, errors, start and end). `python/pyokka_runtime/agent/moments.py` is
- * the same builder over a saved run; the fixture test pins both.
+ * logged values, prints, errors, start and end). `node/src/agent/moments.ts` is the same builder
+ * over a saved run. `test/unit/walkthrough.test.ts` pins this one to a fixture.
  */
 import * as path from 'node:path';
 import type { LogEvent } from '../shared/protocol';
@@ -334,7 +334,7 @@ export class MomentBuilder {
         }
         const site = this.callSite(s);
         const pkg = libraryPackage(this.filePath(fid)) ?? '';
-        const key = `${site} ${pkg}`;
+        const key = `${site}\u0000${pkg}`;
         const existing = rootBySite.get(key);
         if (existing !== undefined && this.trace.scope(existing)?.parent === s.parent) {
           groups.get(existing)!.members.push(s);
@@ -505,7 +505,7 @@ export class MomentBuilder {
     const seen = new Set<string>();
     const sorted = [...this.inputs.errors].sort((a, b) => Number(!!a.handled) - Number(!!b.handled));
     for (const ev of sorted) {
-      const key = `${ev.errorType} ${ev.message} ${ev.step}`;
+      const key = `${ev.errorType}\u0000${ev.message}\u0000${ev.step}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const step = ev.step;

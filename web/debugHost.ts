@@ -7,6 +7,7 @@
  * VS Code shows the call stack, the variables and the step buttons in its own side bar; here the
  * page draws them under the code pane (`DebugPane`, main.tsx).
  */
+import { entryPause } from '../src/session/debugState';
 import { FileTable } from '../src/session/fileTable';
 import { OutputLog } from '../src/session/outputBuffer';
 import type { DebugBreakpointSpec, DebugExceptionMode, DebugPausedEvent, RunEvent, RunnerMessage, ValueBag } from '../src/shared/protocol';
@@ -67,6 +68,8 @@ export class DebugHost {
     private readonly mainFile: () => BridgeFile | null,
     private readonly reveal: (path: string, line: number) => void,
     private readonly notice: (text: string, level: 'info' | 'error') => void,
+    /** the files the page's recorded run instrumented, for `entryPause` */
+    private readonly knownFiles: () => string[] = () => [],
   ) {}
 
   get active(): boolean {
@@ -115,8 +118,16 @@ export class DebugHost {
 
   /* ---------- the run ---------- */
 
-  start(content?: string, stopOnEntry = true): void {
-    this.link.send({ type: 'debug.start', breakpoints: this.specs(), exceptions: this.exceptions, ...(content === undefined ? {} : { content }), stopOnEntry });
+  /**
+   * Start a debug run. It goes to the first breakpoint, and pauses at the first statement only when
+   * asked or when no breakpoint can hit: VS Code's rule (`entryPause`), over the main file and the
+   * files of the recorded run and of the last debug run.
+   */
+  start(content?: string, stopOnEntry?: boolean): void {
+    const main = this.mainFile();
+    const files = [...(main ? [main.path] : []), ...this.knownFiles(), ...(this.run?.files.all().map((f) => f.path) ?? [])];
+    const breakpoints = this.specs();
+    this.link.send({ type: 'debug.start', breakpoints, exceptions: this.exceptions, ...(content === undefined ? {} : { content }), stopOnEntry: entryPause({ stopOnEntry }, breakpoints, files) });
   }
 
   stop(): void {
@@ -271,10 +282,17 @@ export class DebugHost {
 
   /** Evaluate in the selected frame of the pause; undefined when it cannot. */
   async evaluate(expression: string): Promise<{ text: string; valueBag?: ValueBag } | undefined> {
+    if (!this.run?.paused || !expression.trim()) return undefined;
+    return this.evaluateAtPause(expression).catch(() => undefined);
+  }
+
+  /** Evaluate in the selected frame of the pause, or throw the runtime's error (an agent's `eval`). */
+  async evaluateAtPause(expression: string): Promise<{ text: string; valueBag?: ValueBag }> {
     const run = this.run;
-    if (!run?.paused || !expression.trim()) return undefined;
-    const reply = await this.link.debugRequest({ type: 'evaluate', runId: run.runId, expression, ...(this.selectedFrame ? { frameId: this.selectedFrame } : {}) }).catch(() => undefined);
-    return reply?.type === 'evaluated' ? { text: reply.text, valueBag: reply.valueBag } : undefined;
+    if (!run?.paused) throw new Error('the debugger is not paused');
+    const reply = await this.link.debugRequest({ type: 'evaluate', runId: run.runId, expression, ...(this.selectedFrame ? { frameId: this.selectedFrame } : {}) });
+    if (reply.type === 'evaluated') return { text: reply.text, valueBag: reply.valueBag };
+    throw new Error(reply.type === 'error' ? reply.message : `unexpected reply ${reply.type}`);
   }
 
   /* ---------- the panel's Debugger view ---------- */

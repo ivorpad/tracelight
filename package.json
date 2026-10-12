@@ -1669,7 +1669,7 @@
             "Run when the file is saved (the default).",
             "Run only on Re-execute.",
             "Run on every edit, and for hovers, watches, Show Value and the Time Machine: a paid run each time for a file that calls an API.",
-            "Scratch files run on every edit; files inside a project (pyproject.toml, requirements.txt, a lock file, ...) run on save."
+            "Scratch files run on every edit; files inside a project (package.json, tsconfig.json, jsconfig.json, deno.json or a lock file) run on save."
           ],
           "description": "Default run mode for new sessions. Only the automatic mode executes the file without an explicit action (hover, watch, Show Value)."
         },

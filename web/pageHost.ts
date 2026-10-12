@@ -166,6 +166,7 @@ export class PageHost {
       () => this.main,
       (path, line) => this.revealPath(path, line),
       (text, level) => this.notice(text, level),
+      () => this.run?.files.all().map((f) => f.path) ?? [],
     );
     this.debug.onChange = () => {
       this.scheduleRender();

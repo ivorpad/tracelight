@@ -58,6 +58,8 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
       await host.idle();
       return host.state();
     case 'eval': {
+      // at a pause of the live debugger the paused frame answers, as `tracelight eval --live` does
+      if (host.debug.paused) return { text: (await host.debug.evaluateAtPause(cmd.expression)).text, at: host.debug.state()?.location };
       const runId = host.run?.runId;
       if (!runId) throw new Error('no run yet');
       const reply = await link.request({ type: 'evaluate', runId, expression: cmd.expression });
@@ -118,9 +120,11 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
   const wait = (): Promise<void> => d.nextStop();
   switch (cmd.op) {
     case 'start': {
+      // the new run's first stop (a breakpoint, or the first statement when none can hit) or its end
+      const before = d.run?.runId;
       const waiting = new Promise<void>((resolve) => {
         const t = setInterval(() => {
-          if (d.run?.running && d.paused) {
+          if (d.run && d.run.runId !== before && (d.paused || !d.run.running)) {
             clearInterval(t);
             resolve();
           }
@@ -205,14 +209,14 @@ export function webMcpTools(host: PageHost, link: Link): WebMcpTool[] {
     tool('tracelight_line', 'Move the Time Machine to the next time a line of the shown file runs.', { line: { type: 'integer', minimum: 1 }, say: SAY }, ['line'], (i) => ({ action: 'line', line: Number(i['line']), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
     tool('tracelight_say', 'Explain something to the person watching: a bubble under a line (the current line by default). Empty text clears it.', { text: { type: 'string' }, line: { type: 'integer', minimum: 1 } }, ['text'], (i) => (String(i['text'] ?? '') === '' ? { action: 'clear' } : { action: 'say', text: String(i['text']), ...(typeof i['line'] === 'number' ? { line: i['line'] } : {}) })),
     tool('tracelight_run', 'Run the file again and wait for it to finish; returns the new state.', {}, [], () => ({ action: 'run' })),
-    tool('tracelight_eval', 'Evaluate a side-effect-free expression against the finished run (no statement is re-run).', { expression: { type: 'string' } }, ['expression'], (i) => ({ action: 'eval', expression: String(i['expression'] ?? '') })),
+    tool('tracelight_eval', 'Evaluate an expression. While the live debugger is paused it runs in the paused frame and sees its variables; otherwise it is evaluated side-effect-free against the finished run (no statement is re-run).',{ expression: { type: 'string' } }, ['expression'], (i) => ({ action: 'eval', expression: String(i['expression'] ?? '') })),
     tool('tracelight_var', 'Every recorded change of a variable in the run: step, line, function and value. Also opens the Variable History view.', { name: { type: 'string' } }, ['name'], (i) => ({ action: 'var', name: String(i['name'] ?? '') })),
     tool('tracelight_why', 'Why a variable had its value after a step (default: the Time Machine step): the statements and values it came from. An empty name explains the statement.', { name: { type: 'string' }, step: { type: 'integer', minimum: 0 } }, ['name'], (i) => ({ action: 'why', name: String(i['name'] ?? ''), ...(typeof i['step'] === 'number' ? { step: i['step'] } : {}) })),
     tool('tracelight_watch', 'Add a Time Machine watch expression (remove: true drops it); returns every watch value at the current step.', { exp: { type: 'string' }, remove: { type: 'boolean' } }, ['exp'], (i) => ({ action: 'watch', exp: String(i['exp'] ?? ''), ...(i['remove'] === true ? { remove: true } : {}) })),
     tool('tracelight_breakpoint', 'Set, clear or toggle a breakpoint on a line of the file for the live debugger.', { line: { type: 'integer', minimum: 1 }, on: { type: 'boolean' }, condition: { type: 'string' } }, ['line'], (i) => ({ action: 'breakpoint', line: Number(i['line']), ...(typeof i['on'] === 'boolean' ? { on: i['on'] } : {}), ...(typeof i['condition'] === 'string' ? { condition: i['condition'] } : {}) })),
     tool('tracelight_story', 'Open the Code Story of the recorded run (every pass through a scope, in execution order) in the code pane; returns its text and the row of the Time Machine step.', {}, [], () => ({ action: 'story' })),
     tool('tracelight_profile', 'Run the file once under the runtime profiler and show the hottest functions (self and total ms) in the code pane.', {}, [], () => ({ action: 'profile' })),
-    tool('tracelight_debug', 'Drive the live debugger (a real run, nothing recorded): start (pauses at the first statement), continue, step (into/over/out), pause, stop, state. Returns where it paused, the stack and the variables.', { op: { type: 'string', enum: ['start', 'continue', 'step', 'pause', 'stop', 'state'] }, kind: { type: 'string', enum: ['into', 'over', 'out'] }, say: SAY }, ['op'], (i) => ({ action: 'debug', op: String(i['op']) as Extract<AgentCommand, { action: 'debug' }>['op'], ...(typeof i['kind'] === 'string' ? { kind: i['kind'] as 'into' | 'over' | 'out' } : {}), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
+    tool('tracelight_debug', 'Drive the live debugger (a real run, nothing recorded): start (runs to the first breakpoint, or pauses at the first statement when no breakpoint is set), continue, step (into/over/out), pause, stop, state. Returns where it paused, the stack and the variables.', { op: { type: 'string', enum: ['start', 'continue', 'step', 'pause', 'stop', 'state'] }, kind: { type: 'string', enum: ['into', 'over', 'out'] }, say: SAY }, ['op'], (i) => ({ action: 'debug', op: String(i['op']) as Extract<AgentCommand, { action: 'debug' }>['op'], ...(typeof i['kind'] === 'string' ? { kind: i['kind'] as 'into' | 'over' | 'out' } : {}), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
   ];
 }
 

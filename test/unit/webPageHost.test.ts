@@ -281,7 +281,7 @@ describe('PageHost views', () => {
     host.render();
     expect([...(code.last?.breakpoints.keys() ?? [])]).toEqual([2]);
     host.onPanel({ type: 'command', command: 'tracelight.debugCurrentFile' });
-    expect(link.sent).toContainEqual({ type: 'debug.start', breakpoints: [{ path: MAIN.path, line: 2 }], exceptions: 'uncaught', stopOnEntry: true });
+    expect(link.sent).toContainEqual({ type: 'debug.start', breakpoints: [{ path: MAIN.path, line: 2 }], exceptions: 'uncaught', stopOnEntry: false });
     feed({ type: 'debug.begin', runId: 'd-1', content: SOURCE });
     const [, file] = runEvents('d-1');
     feed({ type: 'debug.event', event: file! });
@@ -299,6 +299,48 @@ describe('PageHost views', () => {
     expect(link.debugRequests[1]).toEqual({ type: 'debug', runId: 'd-1', action: 'step', kind: 'over' });
     feed({ type: 'debug.end', runId: 'd-1' });
     expect(last(panel, 'debug.session')!.state).toMatchObject({ running: false, paused: false, reasonText: 'ended' });
+  });
+
+  it('starts the live debugger at the first breakpoint, at the first statement only when none can hit', () => {
+    const { host, link } = setup();
+    const entries = () => link.sent.flatMap((m) => (m.type === 'debug.start' ? [m.stopOnEntry] : []));
+    host.debug.start();
+    // a file the recorded run never touched: that breakpoint cannot hit, so the run still stops somewhere
+    host.debug.setBreakpoint('/w/lib.js', 4);
+    host.debug.start();
+    host.debug.setBreakpoint(MAIN.path, 2);
+    host.debug.start();
+    host.debug.start(undefined, true);
+    expect(entries()).toEqual([true, true, false, true]);
+  });
+
+  it('evaluates an agent eval in the paused frame while the live debugger is paused', async () => {
+    const { host, link, feed } = setup();
+    host.debug.setBreakpoint(MAIN.path, 2);
+    host.debug.start();
+    feed({ type: 'debug.begin', runId: 'd-1', content: SOURCE });
+    feed({ type: 'debug.event', event: runEvents('d-1')[1]! });
+    link.replies.push({ type: 'debug.result', id: 1, locals: [{ name: 'a', text: '1' }, { name: 'b', text: '2' }] });
+    feed({ type: 'debug.event', event: { runId: 'd-1', seq: 3, type: 'debug.paused', step: 3, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'breakpoint', breakpoint: { path: MAIN.path, line: 2 }, stack: [{ frameId: 0, name: 'add', fileId: 1, line: 2 }, { frameId: 1, name: '<module>', fileId: 1, line: 5 }] } });
+    for (let i = 0; i < 5; i++) await tick();
+    link.replies.push({ type: 'evaluated', id: 2, text: '3', valueBag: { runtimeKey: 'e', data: { type: 'number', value: '3', id: 'v', queryPath: [] } } });
+    expect(await runAgentCommand(host, link, { action: 'eval', expression: 'a + b' })).toEqual({ text: '3', at: 'demo.py:2' });
+    expect(link.debugRequests.at(-1)).toEqual({ type: 'evaluate', runId: 'd-1', expression: 'a + b' });
+    // the recorded run, where `a` is not in scope, is never asked
+    expect(link.requests.filter((r) => r.type === 'evaluate')).toEqual([]);
+    link.replies.push({ type: 'error', id: 3, message: 'ReferenceError: nope is not defined' });
+    await expect(runAgentCommand(host, link, { action: 'eval', expression: 'nope' })).rejects.toThrow('ReferenceError: nope is not defined');
+  });
+
+  it('answers an agent debug start as soon as the run ends without pausing', async () => {
+    const { host, link, feed } = setup();
+    host.debug.setBreakpoint(MAIN.path, 2);
+    const began = Date.now();
+    const answer = runAgentCommand(host, link, { action: 'debug', op: 'start' });
+    feed({ type: 'debug.begin', runId: 'd-1', content: SOURCE });
+    feed({ type: 'debug.end', runId: 'd-1' });
+    expect(await answer).toMatchObject({ running: false, paused: false });
+    expect(Date.now() - began).toBeLessThan(2000);
   });
 
   it('answers the agent var, why and breakpoint commands', async () => {

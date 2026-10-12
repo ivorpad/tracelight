@@ -228,6 +228,8 @@ describe('Tracelight runs JavaScript and TypeScript', () => {
     expect(manifest.name).toBe('tracelight');
     expect(manifest.displayName).toBe('Tracelight');
     expect(JSON.stringify(manifest)).not.toMatch(/pyokka/i);
+    // nor Python's project files, which a description carried over from Pyokka once named
+    expect(JSON.stringify(manifest)).not.toMatch(/python|pyproject|requirements\.txt/i);
     for (const x of c.commands) expect(x.command).toMatch(/^tracelight\./);
     for (const k of Object.keys(c.configuration.properties)) expect(k).toMatch(/^tracelight\./);
     expect(c.debuggers[0]!.type).toBe('tracelight');

@@ -29,7 +29,8 @@ Every view of the panel works as it does in VS Code:
   model call with `TRACELIGHT_EXPLAIN_COMMAND` when set (a command that reads the prompt on stdin),
   else `claude -p`, else `codex exec`. The tour runs the runtime's own `tour` verb over the run.
 - The live Debugger: the header's debug button runs the file for real, with nothing recorded, and
-  pauses at breakpoints. Click the gutter or press F9 to set one. Under the code pane are the call
+  pauses at breakpoints (at the first statement when none is set). Click the gutter or press F9 to
+  set one. Under the code pane are the call
   stack, the variables and continue, pause, step over, into and out, restart and stop (F5, F10,
   F11, Shift+F11, Shift+F5). The panel's Debugger view keeps the watches, breakpoints, where
   exceptions pause, and the output. It runs on a second runtime process, so the recorded run and
@@ -83,7 +84,7 @@ node dist/web/server.js ctl step over      # into | over | out | back | backOver
 node dist/web/server.js ctl goto 42
 node dist/web/server.js ctl say "Squaring makes the sign irrelevant." --line 13
 node dist/web/server.js ctl clear          # remove the bubble
-node dist/web/server.js ctl eval "len(points)"
+node dist/web/server.js ctl eval "points.length"   # in the paused frame while the debugger is paused
 node dist/web/server.js ctl run            # run again and wait for it
 node dist/web/server.js ctl var total      # every recorded change of a variable
 node dist/web/server.js ctl why total --step 13
@@ -95,7 +96,11 @@ node dist/web/server.js ctl profile        # profile one run: the hottest functi
 ```
 
 `--say` shows the explanation as a bubble under the new line, for the person watching; a move
-without it clears the previous bubble. The same commands are the HTTP API the CLI calls:
+without it clears the previous bubble. `debug start` runs to the first breakpoint and pauses at the
+first statement only when no breakpoint is set in a file the run touches, the rule VS Code follows
+(`entryPause` in `src/session/debugState.ts`). While the live debugger is paused, `eval` runs in the
+paused frame and sees its variables, like `tracelight eval --live`; otherwise it reads the finished
+run without running anything. The same commands are the HTTP API the CLI calls:
 `GET /api/state`, and `POST /api/command` with a JSON body such as
 `{"action": "step", "kind": "over", "say": "..."}` (see `AgentCommand` in
 `web/bridgeProtocol.ts`). A command needs a page open; without one the API answers 409.

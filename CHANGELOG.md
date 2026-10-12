@@ -28,6 +28,17 @@
   instead of through the Python extension's `python.envFile`.
 - The snippets file starts with JavaScript snippets, and the untrusted-workspace prompt says the
   file runs on Node.js.
+- Fixed: the browser page's debugger paused at the first statement on every start, even with
+  breakpoints set. It now goes to the first breakpoint and stops at the first statement only when
+  no breakpoint can hit, the rule VS Code and `tracelight debug` follow (`entryPause`). Restart
+  follows the same rule.
+- Fixed: the page's `eval` (`ctl eval`, `tracelight_eval`) ignored a debugger pause and evaluated
+  at the top level of the finished run, so a paused function's variables were "not defined". At a
+  pause it now runs in the paused frame and returns the runtime's own error when it fails.
+- Fixed: an agent's `debug start` on the page waited 10 seconds when the run ended without pausing;
+  it answers when the run ends.
+- `src/session/moments.ts` had three raw NUL bytes as key separators, which made `grep` and `file`
+  treat it as binary. They are `\u0000` escapes now, the same strings at runtime.
 
 Carried over from Pyokka's Unreleased section, where Tracelight was developed:
 
