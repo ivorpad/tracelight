@@ -138,23 +138,36 @@ Under a test runner that spawns workers, neither recording reaches the code: use
 file or the entry point, or the page of live pauses, and tell the user that history is the part
 that is missing.
 
-In Claude Code, the band follows a debug session: call the `band` tool with `{"action": "show"}`
-after the first stop, and pass `--session NAME` on every `--live` command (SKILL.md, "In Claude
-Code: the band"). With `--record` it shows the Time Machine: the step, the recorded values, bugs,
-where from and fix plans. With a plain `tracelight debug FILE --at NAME` it shows the pause: the
-place, the code, the paused frame's variables with their shape, the call stack, an
-uncaught exception as `⚠ TypeError: Cannot read properties of undefined (reading 'rate')`, and the
-prose. There `/pk n`, `i` and `o` step the program; back, step numbers, bugs, where from and fix
-plans answer in one line that they need a recording, and `/pk r` records from the paused line: it
-stops the plain run and starts `tracelight debug FILE --record-from FILE:LINE`, which runs the
-program again from the top and pauses the first time it reaches that line. Tell the person the
-program runs again before they press it. On a step with a finding, `{"action": "fix"}` leaves a
-fix plan in `.tracelight/findings/` next to the program, a local file outside commits. Give the
-person its path, and point them to `/pk a` to apply the edit and `/pk u` to undo it; the choice
-to apply is theirs.
+In Claude Code, show the band after the first stop (`{"action": "show"}`) and pass `--session
+NAME` on every `--live` command. At a plain pause it shows the frame, marked `paused · no
+recording`, and its `/tl r` key records from the paused line by running the program again from
+the top; with `--record` it shows the Time Machine, bugs, where a value came from and fix plans.
+Which keys to tell the person, and what each does at a pause: [band.md](band.md).
 
 A long session of stops is cheaper through `tracelight shell --live`: one command per stdin line,
 the same words without `--live`, one connection instead of a new Node process per command.
+
+## Without VS Code: the browser page's debugger
+
+When the person watches a browser rather than their editor, or VS Code is not the place to pause
+(another person's window, a machine without it), the browser page has a debugger of its own. It
+runs the file for real on a second runtime, records nothing, and shows each stop in the page with
+the stack and the variables. [browser.md](browser.md) has the commands and their replies.
+
+```sh
+tracelight web app.ts --port 4790 --open          # in the background; the person opens the page
+tracelight web ctl --port 4790 break 32 on
+tracelight web ctl --port 4790 debug start        # paused at the first statement ("start of the run")
+tracelight web ctl --port 4790 debug continue     # the first breakpoint, with the frame's locals
+tracelight web ctl --port 4790 debug step into
+tracelight web ctl --port 4790 debug stop
+```
+
+It differs from the VS Code debugger in ways that change what you run: `debug start` pauses at
+the first statement before any breakpoint, `ctl eval` reads the recorded run rather than the
+pause (read the frame from the stop's `locals`), and there is no `exec`, break-when watch,
+function breakpoint or recording. Breakpoints are lines of the main file. Finish clean there too:
+`break LINE off` for each line you set, `debug stop`, and stop the page if nobody uses it.
 
 ## What the human says, and what you run
 
@@ -178,6 +191,7 @@ the same words without `--live`, one connection instead of a new Node process pe
 | "where did this bad value come from" | on a recording, `tracelight origin --live STEP` (or `origin run.json STEP`) with the exception's step from `exceptions`; fix the line marked root, not the line that threw |
 | "let it run, do not wait" | `tracelight continue --live --no-wait` |
 | "start over" / "stop" | `tracelight restart --live` / `tracelight stop --live` |
+| "debug it in the browser" | `tracelight web FILE --open`, then `tracelight web ctl break LINE on` and `debug start`, `debug continue` |
 
 ## After an edit
 

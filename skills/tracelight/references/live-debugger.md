@@ -20,9 +20,11 @@ program doing nothing. Launch the entry file itself, with no watcher.
 ## Starting
 
 ```
-tracelight debug FILE [--at NAME | --at FILE:LINE] [--args ...] [--stop-on-entry]
-                      [--library-code] [--record | --record-from NAME|FILE:LINE]
-tracelight debug api/server.ts [--cwd DIR] [--env K=V] [--node PATH]
+tracelight debug FILE [--at NAME | --at FILE:LINE]... [--stop-on-entry] [--library-code]
+                      [--record | --record-from NAME|FILE:LINE] [--cwd DIR] [--env K=V]...
+                      [--node PATH] [--no-focus] [--session NAME|PATH] [--json] [--args ...]
+tracelight debug --live [--stop-on-entry]       # the open session's own file
+tracelight debug api/server.ts --cwd . --env PORT=8765
 ```
 
 A cold start brings the VS Code window to the front at the first stop (`code --goto`), because
@@ -124,9 +126,9 @@ run session on api/server.ts`), so read the second line before concluding the de
 
 Open `tracelight shell --live` once and keep it: one command per stdin line, the same words
 without `--live`, over one connection instead of a new Node process per command. One catch: the
-shell splits a line itself, so quotes inside an expression are eaten. `eval
-rankings['bm25'].length` arrives as `rankings[bm25].length` and is refused as an unknown name.
-Send an expression with quotes in it as a one-shot `eval --live` instead, where argv keeps them.
+shell splits each line as a POSIX shell would, so quotes inside an expression are eaten unless the
+whole expression is quoted. `eval rankings['bm25'].length` arrives as `rankings[bm25].length` and
+is refused as an unknown name; `eval "rankings['bm25'].length"` arrives whole.
 
 ## What a stop shows, and what it leaves out
 
@@ -134,7 +136,9 @@ A stop is bounded, or a long function and a chatty program would bury the answer
 it draws, it names:
 
 ```
-paused at run.ts:148 (step)
+paused at run.ts:148 (step over)
+not recording yet: the recording starts at the --record-from pause; `record --live` starts it here
+thread main
 stack: quickTest run.ts:148 ← … 7 library frames in openai/core.mjs, undici/lib/fetch/index.js ← <module> run.ts:203
 block quickTest  run.ts (60 of 210 lines; --scope for all)
   18  async function quickTest(query: string): Promise<Result> {
@@ -149,6 +153,14 @@ output (2 new lines; 412 earlier):
   took 1.2s
 ```
 
+- **The first line is the place and the reason**: `breakpoint` (with `if COND` for a conditional
+  one), `step over`, `step into`, `step out`, `watch total: 3`, `uncaught TypeError: ...` or
+  `raised TypeError: ...`, `start`, `pause`. `(values modified from the console)` follows once
+  `exec` wrote to the frame.
+- **`not recording yet:`** is on every stop of a debug run that records nothing, a plain `debug`
+  included. For a `--record-from` run it means the recording starts later and `record --live`
+  starts it here; for a plain run it only says nothing is recorded. Read past it.
+- **`thread main`** names the thread that paused. Only the main thread is debugged (Limits).
 - **`stack` folds library frames, it does not drop them.** A file Tracelight did not instrument
   has no source to show, so a run of those frames becomes one marker with a count and the files
   it went through. Without it the chain read `quickTest ← <module>`: a call the program never made.
@@ -169,20 +181,26 @@ Lines that ran in other functions have nothing, because nothing kept them; that 
 ## Moving and reading
 
 ```
-tracelight continue --live [--no-wait | --until EXPR | --to FILE:LINE]
-tracelight step --live --into|--over|--out [--count N]
+tracelight continue --live [--no-wait] [--until EXPR | --to FILE:LINE] [--no-start]
+tracelight step --live --into|--over|--out [--count N] [--scope]
 tracelight pause --live [--no-wait]
 tracelight locals --live [--frame N]
 tracelight eval --live EXPR [--frame N]
-tracelight break --live [FILE:LINE ...] [--when EXPR] [--at NAME] [--remove F:L] [--list]
-                        [--on-exception off|uncaught|raised]
-tracelight watches --live [--add EXPR [--break-when change|true]] [--remove ID] [--list]
-tracelight stop --live | tracelight restart --live [--stop-on-entry]
+tracelight exec --live SOURCE [--frame N]
+tracelight break --live [FILE:LINE ...] [--when EXPR] [--at NAME|FILE:LINE]... [--remove FILE:LINE|NAME]...
+                        [--list] [--on-exception off|uncaught|raised] [--no-start]
+tracelight watches --live [--add EXPR]... [--break-when change|true] [--remove ID]... [--list]
+tracelight stop --live
+tracelight restart --live [--stop-on-entry] [--no-start]
 tracelight record --live
 ```
 
+Every one takes `--session NAME|PATH` and `--json`, and none has a saved-run form: without
+`--live` (or `--session`) they refuse. `debug FILE` is the only one that needs no `--live`.
+
 `--frame N` sends `locals`, `eval` and `exec` to a caller frame; the stop's `stack:` numbers
-them, innermost 0.
+them, innermost 0. `--no-start` makes `continue`, `break` and `restart` fail when no debug session
+is running, instead of starting the last launch from this directory again (see Starting).
 
 `eval --live` reads without side effects: names, properties, subscripts, operators and pure
 calls (`Math`, `JSON`, non-mutating methods of `String`, `Array`, `Object`, `Map` and `Set`). V8

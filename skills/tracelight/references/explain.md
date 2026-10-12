@@ -1,9 +1,15 @@
-# explain: walk a person through a run in their editor
+# explain: walk a person through a run in their editor or the browser page
 
 A model can explain source without any tool. What this mode adds is the real run in front
-of the user: the `tracelight` CLI puts the VS Code editor on a line, the line shows the values
-it had at that step, you say what those values mean, the user asks or says next, and you
-move again. Understanding is built in many small passes, together, never delivered in one.
+of the user: the `tracelight` CLI puts the VS Code editor (or the browser page) on a line, the
+line shows the values it had at that step, you say what those values mean, the user asks or says
+next, and you move again. Understanding is built in many small passes, together, never delivered
+in one.
+
+Pick the surface by where the person is looking. At their VS Code window, drive its Time Machine
+with `--live` (below). In a browser tab, or next to VS Code in its Simple Browser, drive the page
+with `tracelight web ctl` and put each explanation in a bubble under the line
+([On the browser page](#on-the-browser-page)). The method is the same on both.
 
 Three rules:
 
@@ -26,11 +32,10 @@ on a line puts their Time Machine there.
 Reads never move the editor: `state`, `walkthrough`, `graph`, `context N`, `values`,
 `var`, `why`. Only `step` moves it, so `state --live` is how you check that a session exists.
 
-In Claude Code, call the `band` tool with `{"action": "show"}` before the first stop (SKILL.md,
-"In Claude Code: the band"). The band then shows each stop's line, values and stack above the
-person's prompt, and the person can move with `/pk n`, `/pk b`, `/pk i`, `/pk o`. Pass
-`--session NAME` on every command, and read where they went with `context --live` when they moved
-on their own. Call it with `{"action": "hide"}` when the walk ends.
+In Claude Code, show the band before the first stop (`{"action": "show"}`) and hide it when the
+walk ends; it draws each stop's line, values and stack above the person's prompt, and they can move
+on their own with its `/tl` keys ([band.md](band.md)). Pass `--session NAME` on every command, and
+read where they went with `context --live` when they moved on their own.
 
 ## 1. Map, for yourself
 
@@ -129,6 +134,35 @@ from Vector, E from BM25").
 **Where a value came from.** `tracelight why --live 117 fusedRanking` walks back through
 `scores` to `rankings` to the two module arrays at #1 and #2, five levels, one command.
 `= ?` means nothing recorded that value (a function, like `rrf = ?`); say exactly that.
+
+## On the browser page
+
+Start the page on the file and give the person the URL, then walk the same loop with the page's
+commands ([browser.md](browser.md) has every one and its reply):
+
+```sh
+tracelight web demo.ts --port 4790 --open           # in the background; Ctrl+C or kill to stop
+tracelight web ctl --port 4790 state                # "pages": 1 once the person has it open
+tracelight web ctl --port 4790 goto 53              # move; read the reply's location, code and locals
+tracelight web ctl --port 4790 say "That is A, first in the BM25 array: 1/61, 0.016393." --line 49
+tracelight web ctl --port 4790 step into            # the next move clears the last bubble
+tracelight web ctl --port 4790 line 64 --say "C already had 0.016129 from BM25 rank 2."
+```
+
+- **Move, read, then say.** The reply to a move is where the page is now (`location`, `code`,
+  `locals`, `stack`). Write the bubble from those values. `--say` on the move is fine once you know
+  where it lands, as with `line` or `goto` to a step you mapped.
+- **The bubble is short**: one or two sentences, the numbers on that line. The longer explanation
+  goes in chat, the same three parts as always.
+- **The person can move too**: they click the timeline, step with the toolbar, or open views. Read
+  `ctl state` before your next move when they may have.
+- `ctl var NAME` and `ctl why NAME --step N` also open the Variable History and the why tree on the
+  page, so the person sees the table you are reading from.
+- Map with the CLI over a saved run of the same file (`tracelight run demo.ts --save run.json`,
+  then `walkthrough`, `graph`): both number the same program's steps the same way, so a step you
+  mapped is the page's step (check one: `ctl goto N` and `context run.json N` name the same line).
+  A save re-runs the page and the steps may move; re-map after it.
+- When the walk ends, `ctl clear`, and stop the page unless the person keeps using it.
 
 ## Visuals
 

@@ -1,44 +1,97 @@
-# The `tracelight` CLI over a recording
+# The `tracelight` CLI
 
-Every verb takes `RUN` (a `run.json`) or `--live` (an open VS Code session with
-`tracelight.agentAccess` on). Every verb takes `--json` for the raw shape; the text form is the one
-to read. Errors go to stderr as `error: <what>` plus a line saying what to do next, exit 2; with
-`--json` the same thing arrives as `{"ok": false, "error", "hint"}` on stdout.
+Every verb, flag, output shape and variable. A verb reads `RUN` (a `run.json` that `tracelight run
+FILE --save` wrote) or `--live` (the open VS Code session, setting `tracelight.agentAccess`), and
+`--session NAME|PATH` picks one when several are live. The debugger's verbs are in
+[live-debugger.md](live-debugger.md), the browser page's in [browser.md](browser.md), the MCP
+tools in [mcp.md](mcp.md).
 
-Contents: [Recording a run](#recording-a-run) · [Mapping](#mapping-a-run-you-do-not-know) ·
-[Stepping](#stepping) · [Following a value](#following-a-value) ·
-[Comparing two runs](#comparing-two-runs-after-an-edit) ·
-[Reports](#reports-exceptions-http-coverage-graph) · [Tours](#tours-of-a-large-run) ·
-[The page](#the-page) · [Shapes](#the-shapes-worth-knowing) · [Live only](#live-only) ·
-[Environment](#environment)
+Contents: [Conventions](#conventions) · [Recording a run](#recording-a-run) ·
+[Mapping](#mapping-a-run-you-do-not-know) · [Stepping](#stepping) ·
+[Following a value](#following-a-value) · [Comparing two runs](#comparing-two-runs-after-an-edit) ·
+[Reports](#reports-exceptions-http-coverage) · [Tours](#tours-of-a-large-run) ·
+[The page](#the-page) · [Narration](#narration) · [Live only](#live-only) ·
+[Plumbing](#plumbing-serve-instrument-bindings-cache-mcp-version) ·
+[Shapes](#the-shapes-worth-knowing) · [Environment](#environment) ·
+[Settings and config files](#settings-and-config-files)
+
+## Conventions
+
+- **Text or JSON.** The text form is the one to read: bounded, `file:line` and `#step` on every
+  line, values inline. `--json` prints the contract shape instead, on one result per command.
+- **Errors.** A verb's error goes to stderr as `error: <what>` and a second line saying what to do
+  next, exit 2; with `--json` it is `{"ok": false, "error": ..., "hint": ...}` on stdout, still
+  exit 2. A wrong flag prints the verb's usage and `tracelight VERB: error: ...`, exit 2. A command
+  that fails before any verb runs prints `tracelight: <message>`, exit 2; `TRACELIGHT_DEBUG=1`
+  adds the stack.
+- **Help.** `tracelight VERB -h` (or `--help`) prints that verb's usage and exits 0. Bare
+  `tracelight`, or `tracelight -h`, prints the usage line with every verb and exits 2.
+- **`--live` and numbers.** With `--live` there is no `RUN`, so a leading number is the step:
+  `tracelight step --live 18 --into`, `tracelight why --live 117 fusedRanking`.
+- **Pipes.** `tracelight ... | head` ends quietly when the pipe closes.
+- **`FILE:LINE`** takes a path suffix or a basename (`demo.ts:64`, `api/server.ts:12`).
 
 ## Recording a run
 
 ```
-tracelight run FILE [--save RUN.JSON] [--library-code] [--keep] [--no-locals]
-                    [--http off|record|replay] [--timeout MS] [--auto-log]
-                    [--max-steps N] [--exclude GLOB]... [--only GLOB]... [--max-value-chars N]
-                    [-- ARGS]
+tracelight run FILE [--save RUN.JSON] [--json] [--timeout MS] [--max-steps N] [--auto-log]
+                    [--library-code] [--exclude GLOB]... [--only GLOB]... [--plugin MODULE]...
+                    [--mode normal|profile|snaps] [--max-value-chars N] [--record-locals | --no-locals]
+                    [--http off|record|replay] [--keep] [--trace-context STEP --watch EXPR]...
+                    [--instrumented] [--node PATH] [-- ARGS]
+tracelight run -h
 ```
 
 `FILE` is `.js`, `.mjs`, `.cjs`, `.ts`, `.mts`, `.cts`, `.jsx` or `.tsx`. TypeScript runs as it is:
 types are stripped, and `enum`, `namespace`, parameter properties and JSX are lowered, so there is
 no build step and the line numbers are the source's. A file's module format comes from its
 extension, then `package.json`'s `type`, then its syntax, as Node decides it. `--save` is what
-writes the recording; without it the command prints the event stream. `-- ARGS` reach the program
-as `process.argv.slice(2)`.
+writes the recording; without it the command prints the program's output and the counts and
+keeps nothing. `-- ARGS` reach the program as `process.argv.slice(2)`, and the program inherits the
+shell's environment (`PORT=8765 tracelight run server.ts ...`).
+
+`tracelight run` exits with the program's own exit code (1 for an uncaught exception), so read the
+`saved ...` line, not the status, to know the recording was written.
 
 - `--library-code` instruments packages in `node_modules` too, never Node's built-in `node:`
   modules. Without it `--into` on a package call steps over it. Ask for it when the question is
   what a package did with an argument; it is slower and the run is bigger.
-- `--keep` leaves the runner alive so `eval` and `expand` can reach the finished values.
-  `tracelight release run.json` shuts it down.
-- `--no-locals` skips recording locals at every step, which is what `var`, `why` and `origin`
-  read. Leave it on unless the run is enormous.
-- `--http record` writes every HTTP exchange (`fetch`, `node:http`, `undici`) to
-  `.tracelight/replay/<hash>.jsonl` next to the file; `--http replay` answers later runs from it, so a
-  program that calls an API runs again with no network and no tokens and returns the same values.
+- `--keep` leaves the runner alive so `eval` and `expand` can reach the finished values. It needs
+  `--save` (the saved run records where the runner listens). `tracelight release run.json` shuts it
+  down.
+- `--no-locals` skips recording locals at every step, which is what `var`, `why`, `origin` and
+  `diff` read. A saved run records them unless you pass it; leave it off unless the run is
+  enormous. `--record-locals` turns them on for a run without `--save`.
+- `--http record` writes every HTTP exchange (`fetch`, `node:http`/`https`, `undici`) to
+  `.tracelight/replay/<hash>.jsonl` next to the file; `--http replay` answers later runs from it,
+  so a program that calls an API runs again with no network and no tokens and returns the same
+  values. `off` is the default.
 - `--timeout MS` stops the program after that long (default 30,000).
+- `--auto-log` logs the value every statement produced, so `values --line` and the walkthrough
+  see plain assignments too, not only `console.log` and `// ?` lines.
+- `--mode profile` runs the program once under V8's profiler instead of recording it: it prints
+  `profile: PATH.cpuprofile` and `profiled, no steps recorded` (see [ask.md](ask.md#where-the-time-goes)).
+  `--mode snaps` also runs the file's snaps, `/*{{ expression }}*/` comments, and logs each value
+  on its line (`s.ts:4  double(21) = 42`). `normal` is the default.
+- `--plugin MODULE` (repeatable) loads a runtime plugin: a path (`./mock.mjs`, resolved from the
+  file's directory) or a package name. A plugin may export `before(config, api)`,
+  `beforeEach(config, api)` and `after(config, api)`; the built-in `http` plugin is the one `--http`
+  loads. A plugin that throws prints `runner: plugin NAME failed in STAGE: ...` and the run goes on.
+- `--trace-context STEP --watch EXPR` (repeat `--watch`) evaluates each expression at STEP and
+  the ten steps after it, in whatever frame runs there, as the Time Machine's watches do. It prints
+  `[watch w0 step 46] gold` lines among the program's output, and `ReferenceError: order is not
+  defined` at a step where the name is out of scope.
+- `--instrumented` prints the instrumented JavaScript of `FILE` instead of running it, as
+  `tracelight instrument FILE` does.
+- `--node PATH` runs the program with another Node (22.15 or newer), else `$TRACELIGHT_NODE`, else
+  the Node running the CLI. Use it when the project pins one (`.nvmrc`, `engines`).
+- `--json` prints the whole run as `{meta, events}` instead of the text form.
+
+A first statement like `({ autoLog: true, env: { A: '1' }, mode: 'snaps' })` in the main file is
+an inline config, as in Quokka: it sets that run's options (`autoLog`, `timeoutMs`,
+`maxTraceSteps`, `maxValueChars`, `libraryCode`, `exclude`, `only`, `plugins`, `recordLocals`,
+`secrets` and a few more), its environment and its mode, over the flags. A run whose options do
+not match the flags you gave has one.
 
 ```sh
 tracelight run demo.ts --save run.json
@@ -48,15 +101,16 @@ tracelight run demo.ts --save run.json
 # saved run.json: 266 steps, 1 files, exit 0
 ```
 
-What the program prints comes first, each line prefixed with the `file:line` that printed it; an
-uncaught exception prints as `error: TypeError: … (file:line)`, and the last line is the count.
-The program runs under the `node` that runs the CLI (Node 22.15 or newer); run the CLI through
-another `node` when the program needs one.
+What the program prints comes first: a logged value with the `file:line` that logged it, plain
+output as it was written. An uncaught exception prints as `error: TypeError: … (file:line)`, and
+the last line is the count, with `, N caught exception group(s)` when the program caught some. The
+CLI needs Node 22.18 or newer, and the program 22.15 or newer.
 
 **What the recording leaves out is printed.**
 
-- `--max-steps N` (default 999,999) caps the recorded steps. Every verb over a run past it starts
-  with one line, and `--json` gets `recording: {truncated, cap, kept, stepsRun, spentBy, exclude}`:
+- `--max-steps N` (default 999,999) caps the recorded steps. A run past it prints a WARNING naming
+  the files that spent the most steps, every verb over it starts with one line, and `--json` gets
+  `recording: {truncated, cap, kept, stepsRun, spentBy, exclude}`:
 
   ```sh
   tracelight run main.ts --save run.json --max-steps 50
@@ -70,11 +124,10 @@ another `node` when the program needs one.
 - `--exclude GLOB` (repeatable) leaves code out: a package name or glob (`lodash` also covers
   `lodash/fp`, `@scope/*`), a path glob relative to the file's directory, where a directory covers
   what is under it (`lib/heavy`, `src/*.ts`), or a bare file or directory name, with or without
-  its extension. Excluded
-  code runs at full speed and records no steps, values or coverage; calls into it show as calls
-  whose body left no steps. `--only GLOB` (repeatable) records just the matching files, packages
-  included without `--library-code`; the program file is always recorded and `--exclude` wins over
-  `--only`.
+  its extension. Excluded code runs at full speed and records no steps, values or coverage; calls
+  into it show as calls whose body left no steps. `--only GLOB` (repeatable) records just the
+  matching files, packages included without `--library-code`; the program file is always recorded
+  and `--exclude` wins over `--only`.
 - `--max-value-chars N` is how much of one value a recording keeps (default 120 characters for a
   local, 200 for a logged value; `0` keeps the whole value up to a ceiling of 1,000,000
   characters, which bounds what one value costs in memory and in `run.json`). A cut value ends in
@@ -181,20 +234,24 @@ left in that block, and a `calls:` line lists the calls the current statement ma
 returned (`calls: rrf #43 → { A: 0.0322… }`), so `return f(x)` shows both values without stepping
 in.
 
-**`step RUN N --into|--over|--out|--back|--back-over|--back-out|--to M [--scope]`** moves and
+**`step RUN N --into|--over|--out|--back|--back-over|--back-out|--to M [--scope] [--count N]`** moves and
 prints the new step in the same shape. `--into` from a call line lands in the callee with its
 arguments in `values`. `--over` and `--out` follow the call chain, so `--over` on an
 `await Promise.all([...])` skips every step of the awaited calls. Live, `step` moves the user's
-editor, so use it to go somewhere and the reads to look.
+editor, so use it to go somewhere and the reads to look. `--scope` lifts the 60-line and 20-value
+caps. `--count N` (1 to 1000) is for a live debug pause: it takes N steps in a row and prints the
+last stop, and a breakpoint or an exception on the way wins and is reported. Live with no `N`, the
+move starts from the session's current step, and the first `--into` starts the Time Machine.
 
 **`values RUN --line F:L`** is every value logged on a line, by hit: the way to see a loop's
 passes without stepping each one. A line whose values are only locals has none logged unless the
 run had `--auto-log`; `var` reads those.
 
-**`eval RUN EXPR`** reads a name, property, subscript or pure call (`Math`, `JSON`,
+**`eval RUN EXPR [--frame N]`** reads a name, property, subscript or pure call (`Math`, `JSON`,
 non-mutating methods of `String`, `Array`, `Object`, `Map` and `Set`) from the finished state. It
 refuses a function of the program's own, because reading must not change anything. Needs `--keep`
-or `--live`.
+or `--live`. Live at a debug pause it evaluates in the paused frame, or in a caller with
+`--frame N` (innermost 0, as the stop's `stack` numbers them).
 
 ```sh
 tracelight run demo.ts --save run.json --keep
@@ -206,7 +263,12 @@ tracelight release run.json
 ```
 
 **`expand RUN VALUE_ID [--path SEGMENT ...]`** opens a value node from `eval --json`'s
-`valueBag.data.id`.
+`valueBag.data.id` (`d:2 1 1`), one `--path` per segment of its `queryPath`.
+
+**`release RUN`** shuts down the runner `--keep` left alive: `released the kept runner (pid
+18909)`, or `was already gone`. `state RUN` says whether one is kept (`kept runner: pid 18909`, or
+`no kept runner (eval needs run --keep)`); `eval` on a run whose runner is gone says so and prints
+the `run ... --keep` command that makes a new one.
 
 ## Following a value
 
@@ -359,7 +421,7 @@ step} | null, b}]}]}`. `kind` is `value`, `branch`, `loop`, `call`, `return`, `p
 `error` or `decision`; a capped group is `{kind, name, more}`. `textA`/`textB` are a statement's
 first line (` …` when it goes on); an `edited` one also has `sourceA`/`sourceB`, all its lines.
 
-## Reports: exceptions, HTTP, coverage, graph
+## Reports: exceptions, HTTP, coverage
 
 **`exceptions RUN`** answers "what did this program swallow": one row per exception type, throw
 site and handler, uncaught first. `broad handler` marks a `catch` clause, which in JavaScript
@@ -473,14 +535,19 @@ recordingCut?}}`, where `quote.text` is cut by Tracelight from the recorded valu
 
 ## The page
 
-**`history RUN --at STEP|FILE:LINE --var NAME --why STEP NAME [--pause] --out PATH`** writes the
-data behind the code-history page. Also `--prose PATH`, `--pad N` (default 2), `--limit K`
-(default 20 checkpoints per `--var`), `--lang L` (`en` or `es`: the page's buttons, legend and
-chips), `--scope`, and `--append` to add these checkpoints to the page already at `--out` rather
-than replacing it, which is how a page follows a live program through more than one pause. A
-value on a card is as long as the run kept it (its `--max-value-chars`; 200 characters when the
-run does not say, which a live session does not); `--value-chars N` cuts shorter, `0` shows every
-value whole.
+**`history RUN|--live [--at STEP|FILE:LINE]... [--var NAME]... [--why STEP NAME]... [--pause] --out PATH [--prose PATH] [--pad N] [--limit K] [--lang en|es] [--scope] [--append] [--value-chars N]`** writes the
+data behind the code-history page. `--at` is one checkpoint at a step or at the first step on a
+line, `--var` one per recorded change of a name, `--why` one for the provenance chain of a name
+after a step, and `--pause` (with `--live`) one from the debug session's current pause, read
+without moving it. `--out` is required. `--prose PATH` merges a JSON file of prose fields (it may
+not set a generated one), `--pad N` is the dim context above and below each block (default 2),
+`--limit K` the most checkpoints one `--var` may make (default 20), `--lang` the page's language
+(`en` or `es`: its buttons, legend and chips), `--scope` lifts the 60-line block cap, and
+`--append` adds these checkpoints to the page already at `--out` rather than replacing it, which
+is how a page follows a live program through more than one pause. A value on a card is as long
+as the run kept it (its `--max-value-chars`; 200 characters when the run does not say, which a
+live session does not); `--value-chars N` cuts shorter, `0` shows every value whole. It refuses a
+stale run.
 
 ```sh
 tracelight history run.json --at 1 --at demo.ts:64 --var contribution --why 117 fusedRanking --out history.json
@@ -512,21 +579,40 @@ plus `debug: {active, paused, frontier}` and `others` on a live session.
 **The saved run**: `{meta, events}`. `meta` has `runtimeVersion`, `language` (`javascript`),
 `node`, `executable`, `file`, `workspaceRoot`, `argv`, `config`, `started`, `durationMs`,
 `exitCode`, `stepCount` (the statements the program ran, recorded or not), `recording` when the
-step cap cut it, and `files: [{fileId, path, sha256}]`. Read `events` through the verbs, which is
-what they are for.
+step cap cut it, `keep: {pid, socket}` with `--keep`, and `files: [{fileId, path, sha256,
+source?}]`, where `source` is a redacted copy of each of the user's own files as it ran (what
+`diff` reads after an edit). `python` is an old field that holds Node's version. Read `events`
+through the verbs, which is what they are for.
 
 ## Live only
 
-**`state --live`** is how you find out what exists. It never moves anything.
+These read or follow the open VS Code session. The debugger's own verbs (`debug`, `continue`,
+`pause`, `stop`, `restart`, `break`, `watches`, `locals`, `exec`, `record`) have their synopses
+and their contract in [live-debugger.md](live-debugger.md).
+
+**`state RUN|--live`** is how you find out what exists. It never moves anything. Over a saved run
+it prints the file, the step count, the exit code and whether a kept runner is alive; live it adds
+whether the Time Machine is on and at which step, the debug session if one is paused, and the
+other sessions it could have picked.
 
 **`watch --live`** prints one line per stop while the user steps in VS Code, until Ctrl-C:
 `paused at file:line (reason)`, `resumed`, `output`, `finished: exit N`. Also `stopped` (the
 user closed the Time Machine) and `rerun` (the file was saved and ran again, so earlier step
-numbers are void; re-read `state` and re-map).
+numbers are void; re-read `state` and re-map). It refuses a saved run, which does not move.
 
-**`shell --live`** reads one command per stdin line, the same words without `--live`, over one
-connection: a fraction of a millisecond a command instead of the time a new Node process spends
-starting. Every live command works there except `watch`. `exit` or end of input closes it.
+**`shell --live [--session NAME] [--json]`** reads one command per stdin line, the same words as
+the one-shot commands without `--live`, over one connection: a fraction of a millisecond a command
+instead of the time a new Node process spends starting. Each result prints as the one-shot command
+would, then a blank line; with `--json`, one JSON line per result. A line is split the way a POSIX
+shell splits it, so quote an expression that has quotes or spaces in it: `eval
+"rankings['bm25'].length"`. Every live command works there except `watch` (it would block the
+shell) and `shell`; a line may not name a saved run or another `--session` (start a second shell
+for that). Blank lines and lines starting with `#` are skipped; `exit`, `quit` or end of input
+closes it.
+
+```sh
+printf '%s\n' 'state' 'step --over' 'locals' 'eval "order.tier"' exit | tracelight shell --live --session invoices.ts
+```
 
 **`record --live`** at a pause of a `tracelight debug FILE --record-from NAME` run that has not
 reached NAME yet records from that pause on and prints it again as step 0. On a run that records
@@ -536,28 +622,94 @@ Live has no `story`, `find` or `steps --line`: those need the whole trace and th
 one step at a time. The error names the saved-run command instead. `diff BEFORE.json --live`
 works, with the session as the after; in `shell --live` it is `diff BEFORE.json`.
 
-**`narrate RUN [--command CMD] [--dry-run]`** asks a model for one sentence per walkthrough moment
-and stores it in the saved run (default command `claude -p`, else `codex exec`; `--dry-run` prints
-the prompt). Never automatic, and the result is a gloss, not an observation.
+## Narration
 
-**`cache [--clear]`** is the instrumented-package cache (`~/.tracelight/cache`).
+**`narrate RUN|--live [--command CMD] [--dry-run]`** asks a model for one sentence per walkthrough
+moment and stores it in the saved run, where `walkthrough` prints it under each moment. The command reads
+the prompt on stdin and answers on stdout (default `claude -p`, else `codex exec`; `--dry-run`
+prints the prompt instead of calling anything). Never automatic, and the result is a gloss, not an
+observation: a page shows it as kind `gloss`.
 
-**`mcp`** serves these commands as MCP tools on stdin/stdout: [mcp.md](mcp.md).
+## Plumbing: serve, instrument, bindings, cache, mcp, version
+
+What hosts and maintainers call. An agent rarely needs them, except `mcp`.
+
+```
+tracelight serve
+tracelight instrument FILE [--json]
+tracelight bindings FILE
+tracelight cache [--clear] [--json]
+tracelight mcp
+tracelight version
+tracelight web FILE | tracelight web ctl ...
+```
+
+- `tracelight serve` is the NDJSON runner the extension and the browser page spawn: one JSON
+  message per line on stdin and stdout (`{"type": "hello", "id": 0}` answers `ready` with the
+  runtime's version, language and capabilities). The protocol is `docs/PROTOCOL.md` in the
+  repository. Nothing to call by hand.
+- `tracelight instrument FILE` prints the JavaScript the recorder runs for `FILE` (the same as
+  `run FILE --instrumented`), and `--json` the range tables (`ranges`, `statements`, `functions`,
+  `localNames`, `error`); exit 1 when the file does not instrument. For a recording that looks
+  wrong: whether a line was instrumented at all.
+- `tracelight bindings FILE` prints, as JSON, what each statement of `FILE` assigns and reads
+  (`[{line, col, assigns, reads, calls?}]`), the table `var` and `why` use.
+- `tracelight cache` is the instrumented-package cache: `/Users/me/.tracelight/cache: 3 entries,
+  1.2 MB`; `--clear` empties it; `--json` gives `{dir, entries, bytes}` (or `{dir, removed,
+  bytes}`). `TRACELIGHT_CACHE_DIR` moves it, an empty value turns it off.
+- `tracelight mcp` serves the verbs as MCP tools on stdin and stdout: [mcp.md](mcp.md).
+- `tracelight version` (or `--version`) prints `tracelight 0.3.0 (node 24.19.0)`: the runtime's
+  version and the Node running it.
+- `tracelight web` serves the browser page and drives it: [browser.md](browser.md).
 
 ## Environment
 
-- `TRACELIGHT_HOME` is the extension's per-user directory, `~/.tracelight` when unset or empty (a leading
-  `~` is expanded). It holds `sessions/` (one descriptor and socket per live window session) and
-  `last-debug.json` (the launch `break`, `continue` and `restart` start again). The CLI finds a
-  window's sessions when both see the same value, so set it in the shell the same way it is set
-  for VS Code. `TRACELIGHT_SESSIONS_DIR` (or the extension's `TRACELIGHT_SESSIONS_DIR`) moves only
-  `sessions/` (`last-debug.json` then sits beside it).
-- `TRACELIGHT_HOME` is Tracelight's own directory, `~/.tracelight` when unset or empty. It holds
-  the library cache (`cache/`; `TRACELIGHT_CACHE_DIR` moves it, an empty value turns it off). The
-  sessions stay under `TRACELIGHT_HOME` because the VS Code extension writes them there.
-- `TRACELIGHT_CODE` is the `code` binary `tracelight debug` opens the window with, and
-  `TRACELIGHT_NO_FOCUS=1` leaves window focus alone.
-- `TRACELIGHT_NODE` is the `node` a debug launch runs the program with (`--node` wins; the
-  window's `tracelight.nodePath` is the default).
-- `TRACELIGHT_CACHE_DIR` moves the package cache (empty turns it off), and `TRACELIGHT_KEEP_DIR`
-  is where a `--keep` runner puts its socket (the temp directory by default).
+The CLI and the extension read these. Set them in the shell the same way they are set for VS Code,
+or the CLI and the window look in different places.
+
+| variable | what it does |
+|---|---|
+| `TRACELIGHT_HOME` | the per-user directory, `~/.tracelight` when unset or empty (a leading `~` is expanded): `sessions/` (one descriptor and socket per live window session), `last-debug.json` (the launch `break`, `continue` and `restart` start again), `cache/` |
+| `TRACELIGHT_SESSIONS_DIR` | moves only `sessions/`; `last-debug.json` then sits beside it |
+| `TRACELIGHT_CACHE_DIR` | moves the instrumented-package cache; an empty value turns it off |
+| `TRACELIGHT_KEEP_DIR` | where a `--keep` runner puts its socket (the temp directory by default; macOS caps a socket path at 104 bytes) |
+| `TRACELIGHT_NODE` | the Node that runs the program: `run` and `debug` (`--node` wins; for `debug`, the window's `tracelight.nodePath` is the default) |
+| `TRACELIGHT_CLI_NODE` | the Node that the `~/.local/bin/tracelight` script runs the CLI with (22.18 or newer) |
+| `TRACELIGHT_CODE` | the `code` binary a cold `tracelight debug` opens the window with; the `~/.local/bin` script sets it to the editor that wrote it |
+| `TRACELIGHT_NO_FOCUS` | `1` leaves window focus alone at a cold start's first stop (as `--no-focus`) |
+| `TRACELIGHT_DEBUG` | `1` prints the stack of a `tracelight:` error |
+| `TRACELIGHT_RAW_TRANSFER` | `0` turns off the parser's raw transfer, a workaround for a parser that fails on this platform |
+| `TRACELIGHT_PORT` | the browser page's port, for `tracelight web` and `web ctl` (default 4777) |
+| `TRACELIGHT_RUNTIME` | the browser page's `--runtime` |
+| `TRACELIGHT_EXPLAIN_COMMAND` | the model command the browser page's Narrate and tour call (prompt on stdin) |
+
+## Settings and config files
+
+The VS Code window's runs follow its settings; a CLI run follows only its flags, the shell's
+environment and the file's inline config. When a live session and your saved run disagree, this
+is usually why.
+
+| setting | default | what changes for you |
+|---|---|---|
+| `tracelight.agentAccess` | off | the window answers `--live` and `tracelight debug`, and writes `~/.local/bin/tracelight`; off, a cold `debug` makes the window ask the user |
+| `tracelight.timeMachine.recordLocals` | off | the window records every changed local: `var --live`, `why --live`, `origin --live` and `diff --live` values need it |
+| `tracelight.timeMachine.libraryCode` | off | Step Into enters packages; the `--library-code` of a live session (`tracelight.timeMachine.libraryPackages` narrows it) |
+| `tracelight.timeMachine.exclude` | `[]` | the window's `--exclude` |
+| `tracelight.maxTraceSteps` | 999,999 | the window's `--max-steps` |
+| `tracelight.maxValueChars` | unset (120, 200) | the window's `--max-value-chars` |
+| `tracelight.http` | `off` | `record` or `replay` the window's HTTP |
+| `tracelight.httpObserve` | on | the HTTP view lists a run's requests even with `http` off |
+| `tracelight.runMode` | `onSave` | `auto` re-runs as the user types, `onSave` on save, `onDemand` only when asked: a re-run voids step numbers |
+| `tracelight.runTimeout` | 30,000 | the window's `--timeout`; it does not apply to a debug session |
+| `tracelight.nodePath` | `node` on PATH | the Node the window runs programs with (22.18 or newer) |
+| `tracelight.env`, `tracelight.args` | `{}`, `[]` | the window's environment and `-- ARGS` |
+| `tracelight.plugins` | `[]` | the window's `--plugin` |
+| `tracelight.secrets.mask`, `tracelight.secrets.names` | on, `[]` | redaction, and extra words that make a name secret |
+| `tracelight.explain.command` | empty | the command Narrate and Narrate Tour call (prompt on stdin), else `claude`, else `codex` |
+| `tracelight.untrustedWorkspaceBehavior` | ask | whether the window runs code in an untrusted workspace |
+
+A window's run also merges, later winning: `~/.tracelight/config.json`, the `"tracelight"` key of
+the project's `package.json`, and a `.tracelight` JSON file in the workspace or the file's
+directory. It loads the workspace's `.env` into the program's environment before those. A CLI run
+reads none of them: pass the environment in the shell, the options as flags. Both read the inline
+config `({ ... })` at the top of the main file.

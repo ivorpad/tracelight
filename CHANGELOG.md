@@ -8,6 +8,11 @@
   start when nothing is served on the port.
 - `tracelight run FILE --mode profile` prints `profile: PATH.cpuprofile` and `profiled, no steps
   recorded`; the path was only in `--json`, and `0 steps` read like a failed run.
+- The skill has a fourth mode, `ask`: a question about code answered in chat from a recording
+  (learning a module, hidden failures, reviewing an edit, offline HTTP, profiles). Its references
+  cover every verb and flag, the browser page (`references/browser.md`) and the band
+  (`references/band.md`), and `node/test/skill.test.ts` fails when a verb, flag, MCP argument,
+  `ctl` command, band key or `TRACELIGHT_` variable has no line in the skill.
 - Tracelight is its own repository, split on 2026-10-11 from Pyokka (`ivorpad/pyokka`, branch
   `tracelight-extension` at d2f28e8, PR #17), where it was built as a second extension from
   Pyokka's sources. Nothing here builds, ships or calls Pyokka: no Python runtime, no
