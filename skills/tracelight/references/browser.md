@@ -53,8 +53,7 @@ older than the verb prints the top-level usage without `web`; from a Tracelight 
 
 ## A page must be open
 
-The bridge only relays: the page in the browser carries out every command except `state` and
-`profile`. With no page connected, a command answers `{"result": null, "error": "no page is
+The bridge only relays: the page in the browser carries out every command except `profile`. With no page connected, a command answers `{"result": null, "error": "no page is
 open: open http://127.0.0.1:4790/ first"}` and exits 1. `tracelight web ctl state` says how many
 are connected (`"pages": 1`), so read it first.
 
@@ -69,7 +68,8 @@ are connected (`"pages": 1`), so read it first.
 until tracelight web ctl --port 4790 state | grep -q '"pages": 1'; do sleep 0.2; done
 ```
 
-Two pages on one bridge both receive every command, and the first answer wins. Keep one.
+The bridge requires exactly one page for control and state reads. Multiple pages, concurrent
+commands and a disconnected target return errors; no cached state is reported as a fresh reply.
 
 ## Commands
 
@@ -82,7 +82,7 @@ tracelight web ctl start
 tracelight web ctl stop
 tracelight web ctl goto STEP [--say TEXT]
 tracelight web ctl step into|over|out|back|backOver|backOut [--say TEXT]
-tracelight web ctl line LINE [--say TEXT]
+tracelight web ctl line LINE [--file FILE] [--say TEXT]
 tracelight web ctl say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kind explanation|prediction]
 tracelight web ctl clear [--id ID]
 tracelight web ctl values NAME... [--file FILE] [--line N]
@@ -125,6 +125,11 @@ Quote anything your shell would split or expand (spaces, quotes, brackets, `*`):
 --line 4`. The words after the command are joined with spaces into TEXT, EXPR or NAME; a word that
 starts with `--` is a flag and takes the next word as its value.
 
+Commands also accept `--expect-source live|recording`, `--expect-run ID`, `--expect-step N`,
+`--expect-frame N` and `--expect-file PATH`. Copy the expected context from `state.context`;
+a mismatch rejects the command before changing presentation or execution. While a live debugger
+is active, recording navigation returns an error. Use `debug step` for that pause.
+
 ## What each answers
 
 `state` answers `{url, file, runtime, pages, state}`. `runtime` is what the bridge spawned and the
@@ -137,6 +142,11 @@ connected:
  locals: [{name, text}], stack: [{function, line, step}], values: [{line, context?, text, step}],
  output, errors: [{type, message, line}], narration: {text, line} | null}
 ```
+
+`state.context` identifies the active live or recording run, pause, frame, source file, line and
+locals readiness. Top-level execution fields retain the recording contract. `notes[].observed`
+identifies the context in which a note was written, and `noteRendering` confirms its actual
+rendered and visible state. Notes, values and inspection commands wait for presentation.
 
 `steps` is the size of the last recording, `step` the Time Machine's position (`null` while it is
 off), `code` the source line at `location`, `locals` the variables recorded at the step (the page
@@ -156,7 +166,7 @@ records every changed local), `values` what was logged up to the step.
 | `profile` | `{path, totalMs, rows: [{name, file, line, selfMs, totalMs}]}`, top 20 by self time; `path` is the `.cpuprofile` |
 
 An error is `{"result": null, "error": "..."}` with exit 1: `no page is open`, `the page did not
-answer` (a page gets 10 seconds), `nothing recorded yet: the run has no trace`, `name a step, or
+answer` (a page gets 15 seconds), `nothing recorded yet: the run has no trace`, `name a step, or
 start the Time Machine first`, `no recorded run to tell: run the file first`, or the program's own
 error from `eval` (`ReferenceError: nope is not defined`).
 
@@ -196,10 +206,9 @@ defined`), since that statement has not run.
 
 Differences from the VS Code debugger, each with what to do:
 
-- **`debug pause` on a program that is already paused** waits 10 seconds and answers `the page
-  did not answer`. Pause only a running program; `debug state` says which it is.
-- **A move longer than 10 seconds** (a server waiting for a request) answers `the page did not
-  answer` while the program goes on. `debug state` reads it later.
+- **`debug pause` on a program that is already paused** returns the existing pause immediately.
+- **A move longer than 10 seconds** (a server waiting for a request) returns an error when no new
+  pause or end can be confirmed. Read `debug state` before retrying; the program can still run.
 - `ctl` has no command for watches that pause the run, for where exceptions pause (the person
   sets that in the Debugger view), for `exec`, function breakpoints or recording. The VS Code
   debugger has all of them ([live-debugger.md](live-debugger.md)).
@@ -222,7 +231,7 @@ line the person may not be looking at.
 
 `tracelight web ctl` is a client of the bridge's API, which any HTTP client can call:
 
-- `GET /api/state`: the `state` reply above.
+- `GET /api/state`: the `state` reply above, or 409 when no single responding page is available.
 - `POST /api/command` with `content-type: application/json` and one command as JSON:
   `{"action": "step", "kind": "over", "say": "..."}`, `{"action": "goto", "step": 42}`,
   `{"action": "line", "line": 19}`, `{"action": "say", "text": "...", "line": 13}`,
