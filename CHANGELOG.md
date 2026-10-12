@@ -13,6 +13,9 @@
   cover every verb and flag, the browser page (`references/browser.md`) and the band
   (`references/band.md`), and `node/test/skill.test.ts` fails when a verb, flag, MCP argument,
   `ctl` command, band key or `TRACELIGHT_` variable has no line in the skill.
+- Codex, like Claude Code, starts the skill only when the user asks (`$tracelight`, `/tracelight`):
+  `skills/tracelight/agents/openai.yaml` sets `allow_implicit_invocation: false` next to
+  `SKILL.md`'s `disable-model-invocation: true`.
 - Tracelight is its own repository, split on 2026-10-11 from Pyokka (`ivorpad/pyokka`, branch
   `tracelight-extension` at d2f28e8, PR #17), where it was built as a second extension from
   Pyokka's sources. Nothing here builds, ships or calls Pyokka: no Python runtime, no

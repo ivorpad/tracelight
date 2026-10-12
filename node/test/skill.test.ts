@@ -66,6 +66,12 @@ test('the frontmatter is strict YAML: no ": " in a plain value', () => {
   }
 });
 
+test('only the user starts the skill, in Claude Code and in Codex', () => {
+  // `/tracelight` and `$tracelight`; neither agent loads it on its own
+  assert.match(doc('SKILL.md').split('\n---')[0]!, /^disable-model-invocation: true$/m);
+  assert.match(doc('agents/openai.yaml'), /^policy:\n(?: {2}.*\n)*? {2}allow_implicit_invocation: false$/m);
+});
+
 test('the shared flags are documented', () => {
   for (const f of SHARED) assert.ok(has(REFERENCE, f), f);
 });
