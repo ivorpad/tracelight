@@ -19,6 +19,17 @@ extension shows. The bridge re-runs the file whenever it changes on disk, so sav
 or any other editor updates the page. Typing in the page's code pane runs the edited buffer
 without saving it, Quokka-style; Ctrl/Cmd+S writes it to disk.
 
+The default **Aprender** presentation gives the code the full width. At a live pause its compact
+bar offers Siguiente (step over), Entrar (step into), and Variables y pila. That last button opens
+the lower inspector only when requested. **Depurar** shows the right panel and the full debugger
+controls. Changing presentation preserves the run, pause and inspector state. Presentation does
+not change whether execution is live or recorded, and a live run has no backwards step.
+
+Inline arrays show their serialized element count instead of their contents. Objects use a short
+preview. Ghost values that would extend past the code pane are omitted; hovering the binding still
+shows its runtime text. The earlier-recording warning appears only when consulting a recording
+view during live debugging.
+
 Every view of the panel works as it does in VS Code:
 
 - Entries, Details, Compare and the value diagram; Exceptions; Walkthrough.
@@ -38,6 +49,19 @@ Every view of the panel works as it does in VS Code:
   F11, Shift+F11, Shift+F5). The panel's Debugger view keeps the watches, breakpoints, where
   exceptions pause, and the output. It runs on a second runtime process, so the recorded run and
   its Time Machine stay as they were.
+
+  While the debugger runs, the source hides annotations, coverage and errors from that earlier
+  recording. At a pause, Aprender shows a wrapping row of actual selected-frame bindings below the active statement. Click a name or preview to open its runtime text and object tree. Depurar keeps short ghost values beside source. Hover an
+  identifier for its runtime text; display never evaluates source expressions.
+  Values disappear on resume and refresh when stepping or selecting another frame. Edited source
+  does not show values from a different buffer. The panel opens the live Debugger view and labels
+  the recording views as earlier results.
+
+  Drag the top edge of the lower Debugger pane to set its height, or the divider between Call Stack
+  and Variables to set their widths. Both dividers also accept arrow keys. Click a variable to read
+  its text and open its object/array tree. Expandable nodes request more detail using the paused
+  runtime's value ID. Runtime truncation is labelled separately from the row's visual ellipsis;
+  nodes without expansion support keep their available preview.
 
 - Code Story (the rail's book button): the run as one read-only document in the code pane, one
   block per pass through a scope, with the step's box and its values. It starts the Time Machine

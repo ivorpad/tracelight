@@ -26,6 +26,10 @@ const layout = params.get('layout') === 'panel' ? 'panel' : params.get('layout')
 const theme = params.get('theme') ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
 if (theme === 'light') document.body.classList.add('light');
 document.body.dataset.layout = layout;
+let presentation: 'learn' | 'debug' = params.get('presentation') === 'debug' || layout === 'panel' ? 'debug' : 'learn';
+let toolsOpen = presentation === 'debug';
+let panelView = 'output';
+document.body.dataset.presentation = presentation;
 
 function injectCodicons(): void {
   const uri = window.__tracelight?.codiconsUri;
@@ -47,7 +51,10 @@ const statusDot = $('pkw-status');
 let host: PageHost;
 const PREFS_KEY = 'tracelight.web.panelState';
 (globalThis as unknown as { acquireVsCodeApi: () => unknown }).acquireVsCodeApi = () => ({
-  postMessage: (m: WebviewToHost) => queueMicrotask(() => host.onPanel(m)),
+  postMessage: (m: WebviewToHost) => queueMicrotask(() => {
+    if (m.type === 'viewChanged') { panelView = m.view; updateRecordingNotice(); }
+    host.onPanel(m);
+  }),
   getState: () => {
     try {
       const raw = localStorage.getItem(PREFS_KEY);
@@ -106,6 +113,7 @@ host.notice = (text, level) => {
 
 // the live debugger: breakpoints in the gutter (or F9), its controls under the code
 code.onGutterClick = (path, line) => host.debug.setBreakpoint(path, line);
+code.onExpandValue = (node) => host.debug.expandNode(node);
 // the Code Story and the profile: a row picked goes to its step, Ctrl/Cmd+click opens its source
 code.onLinePick = (path, line, how) => host.linePick(path, line, how);
 
@@ -143,9 +151,36 @@ document.addEventListener('pointerdown', (e) => {
   if (!box.hidden && !box.contains(e.target as Node)) box.hidden = true;
 });
 const debugPane = $('pkw-debugpane');
-const showDebuggerView = () => toPanel({ type: 'showView', view: 'debug' });
+const showDebuggerView = () => {
+  setPresentation('debug');
+  toPanel({ type: 'showView', view: 'debug' });
+};
+function updateRecordingNotice(): void {
+  document.body.classList.toggle('pkw-show-recording-notice', host.debug.active && panelView !== 'debug' && panelView !== 'settings');
+}
+function setPresentation(next: 'learn' | 'debug'): void {
+  presentation = next;
+  toolsOpen = next === 'debug';
+  document.body.dataset.presentation = next;
+  if (next === 'debug') document.body.dataset.layout = 'split';
+  $('pkw-learn').setAttribute('aria-pressed', String(next === 'learn'));
+  $('pkw-tools').setAttribute('aria-pressed', String(next === 'debug'));
+  const u = new URL(location.href);
+  if (next === 'learn') u.searchParams.delete('presentation');
+  else u.searchParams.set('presentation', next);
+  history.replaceState(null, '', u);
+  renderDebug();
+  code.layout();
+  host.scheduleRender(true);
+}
 function renderDebug(): void {
-  render(<DebugPane debug={host.debug} onShowView={showDebuggerView} />, debugPane);
+  document.body.classList.toggle('pkw-live-debug', host.debug.active);
+  document.body.classList.toggle('pkw-live-active', host.debug.active);
+  updateRecordingNotice();
+  debugPane.classList.toggle('compact', !host.debug.paused || !toolsOpen);
+  render(<DebugPane debug={host.debug} learning={presentation === 'learn'} expanded={toolsOpen}
+    onToggleTools={() => { toolsOpen = !toolsOpen; renderDebug(); code.layout(); host.scheduleRender(true); }}
+    onShowView={showDebuggerView} onLayout={() => { code.layout(); host.scheduleRender(true); }} />, debugPane);
   $('pkw-debug').classList.toggle('active', host.debug.active);
 }
 document.addEventListener('keydown', (e) => {
@@ -201,6 +236,10 @@ $('pkw-back').addEventListener('click', () => {
 });
 $('pkw-tm').addEventListener('click', () => (host.nav.active ? host.stop() : host.start({ line: code.cursorLine() })));
 $('pkw-debug').addEventListener('click', () => (host.debug.active ? showDebuggerView() : host.debug.start(code.dirtyContent())));
+$('pkw-learn').addEventListener('click', () => setPresentation('learn'));
+$('pkw-tools').addEventListener('click', () => setPresentation('debug'));
+$('pkw-learn').setAttribute('aria-pressed', String(presentation === 'learn'));
+$('pkw-tools').setAttribute('aria-pressed', String(presentation === 'debug'));
 $('pkw-layout').addEventListener('click', () => {
   const next = document.body.dataset.layout === 'split' ? 'panel' : document.body.dataset.layout === 'panel' ? 'code' : 'split';
   document.body.dataset.layout = next;

@@ -50,6 +50,7 @@
   --vscode-debugTokenExpression-error: #f48771;
 }
 body.light {
+  --vscode-debugTokenExpression-value: #606060;
   --vscode-foreground: #3b3b3b;
   --vscode-descriptionForeground: #717171;
   --vscode-errorForeground: #f85149;

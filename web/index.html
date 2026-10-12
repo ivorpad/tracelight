@@ -19,12 +19,16 @@
   <span id="pkw-file" class="pkw-file"></span>
   <button id="pkw-back" class="pkw-btn" type="button" title="Back to the running file" hidden><i class="codicon codicon-arrow-left"></i></button>
   <span class="pkw-spacer"></span>
+  <div class="pkw-presentation" role="group" aria-label="Presentación">
+    <button id="pkw-learn" type="button" aria-pressed="true">Aprender</button>
+    <button id="pkw-tools" type="button" aria-pressed="false">Depurar</button>
+  </div>
   <span id="pkw-webmcp" class="pkw-chip" title="This page offers its Time Machine to an agent in the browser as WebMCP tools (tracelight_state, tracelight_step, tracelight_say, ...)" hidden>WebMCP</span>
   <span id="pkw-runtime" class="pkw-runtime"></span>
   <span id="pkw-status" class="pkw-dot off"></span>
   <button id="pkw-run" class="pkw-btn" type="button" title="Run again"><i class="codicon codicon-play"></i></button>
   <button id="pkw-tm" class="pkw-btn" type="button" title="Time Machine: start at the cursor line, or stop"><i class="codicon codicon-history"></i></button>
-  <button id="pkw-debug" class="pkw-btn" type="button" title="Debug: run live and pause at breakpoints (click the gutter or F9 to set one)"><i class="codicon codicon-debug-alt"></i></button>
+  <button id="pkw-debug" class="pkw-btn" type="button" title="Start stepping through code"><i class="codicon codicon-debug-alt"></i><span class="pkw-learn-label">Empezar</span></button>
   <button id="pkw-layout" class="pkw-btn" type="button" title="Code and panel / panel only / code only"><i class="codicon codicon-layout"></i></button>
 </header>
 <main id="pkw-main">
@@ -33,7 +37,7 @@
     <div id="pkw-debugpane"></div>
   </section>
   <div id="pkw-split" role="separator" aria-orientation="vertical"></div>
-  <section id="pkw-panel"><div id="root"></div></section>
+  <section id="pkw-panel"><div class="pkw-recording-notice" role="status">Grabación anterior · estos resultados son de otra ejecución.</div><div id="root"></div></section>
 </main>
 <div id="pkw-notice" class="pkw-notice" role="status" hidden></div>
 <div id="pkw-recent" class="pkw-recent" hidden></div>

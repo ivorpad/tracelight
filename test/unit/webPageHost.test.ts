@@ -96,6 +96,42 @@ function setup() {
 }
 
 describe('PageHost', () => {
+  it('ignores locals and expansions arriving after a frame change or resume', async () => {
+    const { host, link, feed } = setup();
+    feed({ type: 'debug.begin', runId: 'd-race', content: SOURCE });
+    feed({ type: 'debug.event', event: runEvents('d-race')[1]! });
+    const pending: ((reply: RunnerMessage) => void)[] = [];
+    link.debugRequest = () => new Promise((resolve) => pending.push(resolve));
+    feed({ type: 'debug.event', event: { runId: 'd-race', seq: 3, type: 'debug.paused', step: 3, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'add', fileId: 1, line: 2 }, { name: '<module>', fileId: 1, line: 5 }] } });
+    const selection = host.debug.selectFrame(1);
+    expect(host.debug.locals).toBeNull();
+    pending[1]!({ type: 'debug.result', id: 1, locals: [{ name: 'x', text: 'caller' }] });
+    await selection;
+    pending[0]!({ type: 'debug.result', id: 2, locals: [{ name: 'a', text: 'stale callee' }] });
+    await tick();
+    expect(host.debug.state()?.locals).toEqual([{ name: 'x', text: 'caller' }]);
+    const node = { id: 'd:1', type: 'object', queryPath: [], expandable: true };
+    const expansion = host.debug.expandNode(node);
+    feed({ type: 'debug.event', event: { runId: 'd-race', seq: 4, type: 'debug.resumed', step: 3, action: 'continue' } });
+    pending[2]!({ type: 'value', id: 3, node: { ...node, value: 'old value' } });
+    expect(await expansion).toBeNull();
+    expect(host.debug.state()?.locals).toEqual([]);
+  });
+
+  it('uses the selected debug file and local function ranges, excluding the module wrapper', async () => {
+    const { host, link, feed, code } = setup();
+    feed({ type: 'debug.begin', runId: 'd-files', content: SOURCE });
+    feed({ type: 'debug.event', event: { type: 'file.instrumented', runId: 'd-files', seq: 1, fileId: 2, path: '/w/worker.ts', rangeBase: 100, ranges: [[1, 0, 9, 0], [1, 0, 8, 1]], statements: [1], functions: [{ rid: 0, name: '<module>', bodyRange: [1, 0, 9, 0] }, { rid: 1, name: 'processNext', bodyRange: [1, 0, 8, 1] }], magic: [] } });
+    link.replies.push({ type: 'debug.result', id: 1, locals: [{ name: 'queue', text: '[1, 2, 3]' }] });
+    feed({ type: 'debug.event', event: { type: 'debug.paused', runId: 'd-files', seq: 2, step: 4, rid: 101, fileId: 2, line: 4, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'processNext', fileId: 2, line: 4 }] } });
+    feed({ type: 'file', file: { path: '/w/worker.ts', displayName: 'worker.ts', language: 'typescript', content: 'function processNext(queue) {\n\n\n queue.shift();\n}' } });
+    await tick();
+    host.render();
+    expect(code.shown).toBe('/w/worker.ts');
+    expect(code.last?.paused).toBe(4);
+    expect(code.last?.liveValues).toMatchObject({ start: 1, end: 8, excluded: [], locals: [{ name: 'queue', text: '[1, 2, 3]' }] });
+  });
+
   it('feeds the panel what the extension would: init, entries, timeline, walkthrough, exceptions', () => {
     const { panel } = setup();
     const types = panel.map((m) => m.type);
@@ -167,7 +203,7 @@ describe('PageHost', () => {
   it('declares WebMCP tools that run the same commands', async () => {
     const { host, link } = setup();
     const tools = webMcpTools(host, link);
-    expect(tools.map((t) => t.name)).toEqual(['tracelight_state', 'tracelight_goto', 'tracelight_step', 'tracelight_line', 'tracelight_say', 'tracelight_run', 'tracelight_eval', 'tracelight_var', 'tracelight_why', 'tracelight_watch', 'tracelight_breakpoint', 'tracelight_story', 'tracelight_profile', 'tracelight_debug']);
+    expect(tools.map((t) => t.name)).toEqual(['tracelight_state', 'tracelight_goto', 'tracelight_step', 'tracelight_line', 'tracelight_say', 'tracelight_values', 'tracelight_run', 'tracelight_eval', 'tracelight_var', 'tracelight_why', 'tracelight_watch', 'tracelight_breakpoint', 'tracelight_story', 'tracelight_profile', 'tracelight_debug']);
     const step = tools.find((t) => t.name === 'tracelight_step')!;
     const out = await step.execute({ kind: 'into' });
     expect(JSON.parse(out.content[0]!.text)).toMatchObject({ moved: true });
@@ -293,12 +329,31 @@ describe('PageHost views', () => {
     expect(st).toMatchObject({ paused: true, reasonText: 'breakpoint', location: 'demo.py:2', stack: [{ name: 'add', file: 'demo.py', line: 2 }, { name: '<module>', file: 'demo.py', line: 5 }], locals: [{ name: 'a', text: '1' }, { name: 'b', text: '2' }] });
     host.render();
     expect(code.last?.paused).toBe(2);
+    expect(code.last?.inline.size).toBe(0);
+    expect(code.last?.coverage.size).toBe(0);
+    expect(code.last?.liveValues?.locals).toEqual(st.locals);
+    const requestCount = link.debugRequests.length;
+    expect(await runAgentCommand(host, link, { action: 'values', mode: 'selected', names: ['a'], file: 'demo.py', line: 2 })).toMatchObject({ observed: { runId: 'd-1', step: 3, frame: 0, file: MAIN.path }, shown: [{ name: 'a', text: '1' }] });
+    expect(code.last?.liveValues?.ghostNames).toEqual(['a']);
+    expect(code.last?.liveValues?.locals).toEqual(st.locals); // unselected names still have accurate hovers
+    expect(link.debugRequests.length).toBe(requestCount); // display never evaluates or mutates
+    await expect(runAgentCommand(host, link, { action: 'values', mode: 'selected', names: ['a + b'] })).rejects.toThrow('not in the current paused frame');
+    expect(panel).toContainEqual({ type: 'showView', view: 'debug' });
+    feed({ type: 'debug.event', event: { runId: 'd-1', seq: 4, type: 'debug.resumed', step: 3, action: 'step', kind: 'over' } });
+    host.render();
+    expect(code.last?.liveValues).toBeUndefined();
+    expect(code.last?.inline.size).toBe(0);
+    // A resume removes live values but still hides the earlier recording until the run ends.
+    feed({ type: 'debug.event', event: { runId: 'd-1', seq: 5, type: 'debug.paused', step: 4, rid: 3, fileId: 1, line: 3, scopeId: 1, depth: 1, reason: 'step', stack: [{ frameId: 0, name: 'add', fileId: 1, line: 3 }] } });
     link.replies.push({ type: 'debug.result', id: 2 });
     host.onPanel({ type: 'debug.control', action: 'stepOver' });
     await tick();
-    expect(link.debugRequests[1]).toEqual({ type: 'debug', runId: 'd-1', action: 'step', kind: 'over' });
+    expect(link.debugRequests).toContainEqual({ type: 'debug', runId: 'd-1', action: 'step', kind: 'over' });
     feed({ type: 'debug.end', runId: 'd-1' });
     expect(last(panel, 'debug.session')!.state).toMatchObject({ running: false, paused: false, reasonText: 'ended' });
+    host.render();
+    expect(code.last?.liveValues).toBeUndefined();
+    expect(code.last?.inline.get(6)).toBe('3');
   });
 
   it('starts the live debugger at the first breakpoint, at the first statement only when none can hit', () => {

@@ -83,8 +83,10 @@ tracelight web ctl stop
 tracelight web ctl goto STEP [--say TEXT]
 tracelight web ctl step into|over|out|back|backOver|backOut [--say TEXT]
 tracelight web ctl line LINE [--say TEXT]
-tracelight web ctl say TEXT [--line N] [--step N]
-tracelight web ctl clear
+tracelight web ctl say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kind explanation|prediction]
+tracelight web ctl clear [--id ID]
+tracelight web ctl values NAME... [--file FILE] [--line N]
+tracelight web ctl values --all|--hide
 tracelight web ctl run
 tracelight web ctl eval EXPR
 tracelight web ctl var NAME
@@ -105,7 +107,8 @@ tracelight web ctl profile
 | `step KIND` | a Time Machine move: `into`, `over`, `out`, or back with `back`, `backOver`, `backOut`; with the Time Machine off, any `step` starts it at step 0 |
 | `line LINE` | the next time line LINE of the shown file runs after the current step, else its first run (and the first run when the Time Machine is off) |
 | `say TEXT` | a narration bubble under the current line, or `--line N`; `--step N` moves there first |
-| `clear` | removes the bubble |
+| `clear` | removes all notes, or one with `--id ID` |
+| `values` | selects actual paused-frame bindings by name; `--all` restores all, `--hide` hides the visible row. Modes are `selected`, `all`, `none`. Hovers retain all current bindings. |
 | `run` | runs the file again and waits for it to finish |
 | `eval EXPR` | while the page's debugger is paused, an expression in the paused frame; otherwise a side-effect-free expression over the recorded run's finished state, at module scope |
 | `var NAME` | every recorded change of NAME, and opens the Variable History view for the person |
@@ -236,7 +239,7 @@ recording the run wrote.
 
 An agent that works inside the browser gets the same commands as WebMCP tools when the browser
 offers `navigator.modelContext` (the header then shows a WebMCP chip): `tracelight_state`,
-`tracelight_goto`, `tracelight_step`, `tracelight_line`, `tracelight_say`, `tracelight_run`,
+`tracelight_goto`, `tracelight_step`, `tracelight_line`, `tracelight_say`, `tracelight_values`, `tracelight_run`,
 `tracelight_eval`, `tracelight_var`, `tracelight_why`, `tracelight_watch`, `tracelight_breakpoint`,
 `tracelight_story`, `tracelight_profile`, `tracelight_debug`. A browser-automation agent can also
 call `window.tracelight`, the page's host object, directly.
@@ -268,3 +271,5 @@ web` has no flags for these; a person sets them in the page.
 
 Ctrl+C in its terminal, or `kill` the PID you kept; kill the headless browser too. Leave it
 running only when the person is still using it, and tell them the URL and port.
+
+Notes accept a known source `--file`, positive `--line`, and stable `--id` for replacement. `--kind prediction` labels a prediction separately from an explanation. `tracelight_values` accepts `mode`, `names`, `file`, and `line`; it selects existing locals without evaluation or source edits. Replies include the observed run, step, frame and source location. Values refresh on stepping and vanish on resume. Notes remain separate from runtime observations.

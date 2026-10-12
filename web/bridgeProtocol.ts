@@ -37,8 +37,10 @@ export type AgentCommand =
   | { action: 'goto'; step: number; say?: string }
   | { action: 'step'; kind: 'into' | 'over' | 'out' | 'back' | 'backOver' | 'backOut'; say?: string }
   | { action: 'line'; line: number; file?: string; say?: string }
-  | { action: 'say'; text: string; line?: number; step?: number }
-  | { action: 'clear' }
+  | { action: 'say'; text: string; line?: number; step?: number; file?: string; noteId?: string; kind?: 'explanation' | 'prediction' }
+  | { action: 'clear'; noteId?: string }
+  /** Select existing bindings for display only; no expressions are evaluated. */
+  | { action: 'values'; mode: 'selected' | 'all' | 'none'; names?: string[]; file?: string; line?: number }
   | { action: 'start' }
   | { action: 'stop' }
   | { action: 'run' }
@@ -165,4 +167,16 @@ export interface PageState {
   errors: { type: string; message: string; line: number }[];
   /** the narration bubble now showing */
   narration: { text: string; line: number } | null;
+  notes?: TeachingNote[];
+  valuePresentation?: { mode: 'selected' | 'all' | 'none'; names: string[]; file: string; line?: number } | null;
+  /** Live execution is separate from the recording fields above. */
+  live?: { runId: string; step: number | null; frame: number; file: string | null; line: number | null; locals: { name: string; text: string }[] } | null;
+}
+
+export interface TeachingNote {
+  noteId: string;
+  file: string;
+  line: number;
+  text: string;
+  kind: 'explanation' | 'prediction';
 }

@@ -10,7 +10,7 @@
 import { entryPause } from '../src/session/debugState';
 import { FileTable } from '../src/session/fileTable';
 import { OutputLog } from '../src/session/outputBuffer';
-import type { DebugBreakpointSpec, DebugExceptionMode, DebugPausedEvent, RunEvent, RunnerMessage, ValueBag } from '../src/shared/protocol';
+import type { DebugBreakpointSpec, DebugExceptionMode, DebugPausedEvent, RunEvent, RunnerMessage, ValueBag, ValueNode } from '../src/shared/protocol';
 import type { DebugSessionBreakpoint, DebugSessionFrame, DebugSessionPanel, DebugSessionWatch, HostToWebview, WebviewToHost } from '../src/shared/webviewProtocol';
 import type { BridgeFile, PageToBridge, RequestBody } from './bridgeProtocol';
 
@@ -140,9 +140,10 @@ export class DebugHost {
     this.locals = null;
     this.values.clear();
     this.echoes = [];
+    this.post({ type: 'showView', view: 'debug' });
     // watches that pause the run take effect from its first statement
     if (this.breakWatches.length) void this.request({ action: 'watches', set: this.breakWatches }).catch(() => undefined);
-    this.push();
+    this.changed();
   }
 
   onEvent(ev: RunEvent): void {
@@ -188,6 +189,7 @@ export class DebugHost {
     if (!run || run.runId !== runId) return;
     run.running = false;
     run.paused = null;
+    this.locals = null;
     run.endedAt ??= Date.now();
     if (message) {
       run.message = message;
@@ -249,6 +251,8 @@ export class DebugHost {
     const p = this.run?.paused;
     if (!p || !p.stack[index]) return;
     this.selectedFrame = index;
+    this.locals = null;
+    this.changed();
     const f = p.stack[index]!;
     const path = this.pathOf(f.fileId ?? p.fileId);
     if (path && f.line) this.reveal(path, f.line);
@@ -261,7 +265,7 @@ export class DebugHost {
     const frameId = this.selectedFrame;
     try {
       const reply = await this.request({ action: 'locals', ...(frameId ? { frameId } : {}) });
-      if (this.run?.paused !== p) return;
+      if (this.run?.paused !== p || this.selectedFrame !== frameId) return;
       if (reply['modified'] === true && this.run) this.run.modified = true;
       this.locals = { step: p.step, frameId, locals: (reply['locals'] as LocalVar[] | undefined) ?? [] };
       await this.refreshWatches();
@@ -293,6 +297,18 @@ export class DebugHost {
     const reply = await this.link.debugRequest({ type: 'evaluate', runId: run.runId, expression, ...(this.selectedFrame ? { frameId: this.selectedFrame } : {}) });
     if (reply.type === 'evaluated') return { text: reply.text, valueBag: reply.valueBag };
     throw new Error(reply.type === 'error' ? reply.message : `unexpected reply ${reply.type}`);
+  }
+
+  /** Expand an existing serialized value, never evaluate the source under the mouse. */
+  async expandNode(node: ValueNode): Promise<ValueNode | null> {
+    const run = this.run;
+    const pause = run?.paused;
+    const frame = this.selectedFrame;
+    if (!run || !pause || !node.id || !node.expandable) return null;
+    const reply = await this.link.debugRequest({ type: 'expand', runId: run.runId, valueId: node.id, queryPath: node.queryPath });
+    if (this.run !== run || run.paused !== pause || frame !== this.selectedFrame) return null;
+    if (reply.type === 'error') throw new Error(reply.message);
+    return reply.type === 'value' ? reply.node : null;
   }
 
   /* ---------- the panel's Debugger view ---------- */

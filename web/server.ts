@@ -714,7 +714,9 @@ function loadRecent(file: string | undefined): RecentFile[] {
 const USAGE = `usage:
   tracelight-web FILE [--port N] [--runtime js|"CMD ARGS"] [--open] [--no-watch] [--verbose]
   tracelight-web ctl [--port N] state | goto STEP | step into|over|out|back|backOver|backOut | line N
-                 | say TEXT [--line N] [--step N] | clear | start | stop | run | eval EXPR
+                 | say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kind explanation|prediction]
+                 | clear [--id ID] | values NAME... [--file FILE] [--line N] | values --all|--hide
+                 | start | stop | run | eval EXPR
                  | var NAME | why NAME [--step N] | watch EXPR [--remove]
                  | break LINE [on|off] [--if COND] | debug start|continue|step [into|over|out]|pause|stop|state
                  | story | profile
@@ -726,7 +728,7 @@ export function parseCtl(args: string[]): AgentCommand {
   const rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
-    if (a === '--remove') flags.set('remove', '');
+    if (a === '--remove' || a === '--all' || a === '--hide') flags.set(a.slice(2), '');
     else if (a.startsWith('--')) flags.set(a.slice(2), args[++i] ?? '');
     else rest.push(a);
   }
@@ -739,13 +741,17 @@ export function parseCtl(args: string[]): AgentCommand {
   };
   switch (action) {
     case 'state':
-    case 'clear':
     case 'start':
     case 'stop':
     case 'run':
     case 'story':
     case 'profile':
       return { action };
+    case 'clear':
+      return { action, ...(flags.has('id') ? { noteId: flags.get('id') } : {}) };
+    case 'values':
+      if (flags.has('all') && flags.has('hide')) throw new Error('choose --all or --hide');
+      return { action, mode: flags.has('all') ? 'all' : flags.has('hide') ? 'none' : 'selected', ...(words.length ? { names: words } : {}), ...(flags.has('file') ? { file: flags.get('file') } : {}), ...(flags.has('line') ? { line: int(flags.get('line'), '--line') } : {}) };
     case 'goto':
       return { action, step: int(words[0], 'STEP'), ...(say ? { say } : {}) };
     case 'step': {
@@ -761,6 +767,9 @@ export function parseCtl(args: string[]): AgentCommand {
         text: words.join(' '),
         ...(flags.has('line') ? { line: int(flags.get('line'), '--line') } : {}),
         ...(flags.has('step') ? { step: int(flags.get('step'), '--step') } : {}),
+        ...(flags.has('file') ? { file: flags.get('file') } : {}),
+        ...(flags.has('id') ? { noteId: flags.get('id') } : {}),
+        ...(flags.has('kind') ? { kind: flags.get('kind') as 'explanation' | 'prediction' } : {}),
       };
     case 'eval':
       return { action, expression: words.join(' ') };

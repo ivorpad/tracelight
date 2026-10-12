@@ -7,9 +7,15 @@
 import { monaco, READONLY_OPTIONS } from '../webview/monaco';
 import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution';
 import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution';
-import type { BridgeFile } from './bridgeProtocol';
+import 'monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution';
+import type { BridgeFile, TeachingNote } from './bridgeProtocol';
 import { PROFILE_PATH, type CodeDecorations, type CodeView } from './pageHost';
 import { STORY_PATH } from './story';
+import { pausedOccurrences, pausedInline, pausedHover } from './pausedValues';
+import { ObservedBindings } from './debugPane';
+import { render as renderUi } from 'preact';
+import { h } from 'preact';
+import type { ValueNode } from '../src/shared/protocol';
 
 const INLINE_MAX = 160;
 
@@ -22,7 +28,13 @@ export class CodePane implements CodeView {
   private shown: string | undefined;
   private decorations: monaco.editor.IEditorDecorationsCollection;
   private zone: { id: string; line: number; text: string } | null = null;
+  private extraZones: string[] = [];
+  private notesKey = '';
+  private lastNotes: TeachingNote[] = [];
+  private inspectionNode: HTMLElement | null = null;
+  onExpandValue: (node: ValueNode) => Promise<ValueNode | null> = async () => null;
   private applying = false;
+  private lastRender: CodeDecorations | undefined;
   /** a click in the glyph margin or on a line number: toggle the live debugger's breakpoint there */
   onGutterClick: (path: string, line: number) => void = () => {};
   /** a made-up document's row (the Code Story, the profile): text selected on it, or Ctrl/Cmd+click */
@@ -52,7 +64,9 @@ export class CodePane implements CodeView {
       scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
     });
     this.decorations = this.editor.createDecorationsCollection();
+    this.editor.onDidLayoutChange(() => { if (this.lastRender) this.render(this.lastRender); });
     this.editor.onDidChangeModelContent(() => {
+      this.decorations.clear();
       if (this.applying || this.shown !== this.mainPath) return;
       this.onEdit(this.editor.getValue());
     });
@@ -156,6 +170,7 @@ export class CodePane implements CodeView {
   }
 
   render(d: CodeDecorations): void {
+    this.lastRender = d;
     const model = this.editor.getModel();
     if (!model) return;
     const lines = model.getLineCount();
@@ -193,20 +208,78 @@ export class CodePane implements CodeView {
       if (line < 1 || line > lines || d.errors.has(line)) continue;
       out.push({ range: endOf(line), options: { after: { content: `  ${clip(text)}`, inlineClassName: 'pkw-inline-value' }, hoverMessage: { value: '```\n' + text + '\n```' } } });
     }
+    if (d.liveValues && model.getValue() === (d.liveValues.content ?? this.loaded.get(this.shown!))) {
+      const occurrences = pausedOccurrences(model.getLinesContent(), monaco.editor.tokenize(model.getValue(), model.getLanguageId()), d.liveValues);
+      for (const o of occurrences) {
+        out.push({ range: new monaco.Range(o.line, o.start + 1, o.line, o.end + 1), options: {
+          hoverMessage: { value: pausedHover(o.local), isTrusted: false },
+        } });
+      }
+      const ghosts = d.liveValues.ghostNames === undefined ? occurrences : d.liveValues.locals.filter((v) => d.liveValues!.ghostNames!.includes(v.name)).map((local) => ({ line: d.liveValues!.line, start: 0, end: 0, local }));
+      for (const [line, text] of document.body.dataset.presentation === 'learn' ? [] : pausedInline(ghosts, d.liveValues.line, d.liveValues.anchor)) {
+        if (line < 1 || line > lines) continue;
+        const font = this.editor.getOption(monaco.editor.EditorOption.fontInfo);
+        const available = Math.floor(this.editor.getLayoutInfo().contentWidth / font.typicalHalfwidthCharacterWidth) - model.getLineLength(line) - 4;
+        // Do not create horizontal scrolling just to show a value; hover keeps the complete preview.
+        const parts: string[] = [];
+        for (const part of text.split(' · ')) {
+          if ([...parts, part].join(' · ').length <= available) parts.push(part);
+        }
+        if (parts.length) out.push({ range: endOf(line), options: { after: { content: `  ${parts.join(' · ')}`, inlineClassName: 'pkw-live-value' } } });
+      }
+    }
     for (const [line, text] of d.errors) {
       if (line < 1 || line > lines) continue;
       out.push({ range: new monaco.Range(line, 1, line, 1), options: { isWholeLine: true, className: 'pkw-error-line' } });
       out.push({ range: endOf(line), options: { after: { content: `  ${clip(text)}`, inlineClassName: 'pkw-inline-error' } } });
     }
     this.decorations.set(out);
+    this.setNotes(this.lastNotes);
   }
 
   setNarration(n: { text: string; line: number } | null): void {
-    if (this.zone && n && this.zone.line === n.line && this.zone.text === n.text) return;
+    this.setNotes(n ? [{ noteId: 'main', file: this.shown ?? '', text: n.text, line: n.line, kind: 'explanation' }] : []);
+  }
+
+  setNotes(notes: TeachingNote[]): void {
+    this.lastNotes = notes;
+    const pause = this.lastRender?.liveValues;
+    const observed = document.body.dataset.presentation === 'learn' && pause && this.editor.getValue() === (pause.content ?? this.loaded.get(this.shown!)) ? pause : undefined;
+    const locals = observed?.locals.filter((v) => observed.ghostNames === undefined || observed.ghostNames.includes(v.name)) ?? [];
+    const key = JSON.stringify([notes, observed?.snapshot, observed?.anchor, locals, this.editor.getLayoutInfo().contentWidth]);
+    if (this.notesKey === key) return;
     this.clearZone();
+    this.notesKey = key;
     const model = this.editor.getModel();
-    if (!n || !model) return;
-    const line = Math.max(1, Math.min(n.line, model.getLineCount()));
+    if (!model) return;
+    if (observed && locals.length) {
+      const line = observed.anchor ?? observed.line;
+      if (line >= 1 && line <= model.getLineCount()) {
+        const node = document.createElement('div');
+        node.className = 'pkw-observed-zone';
+        node.style.width = `${this.editor.getLayoutInfo().contentWidth}px`;
+        this.inspectionNode = node;
+        renderUi(h(ObservedBindings, { locals, inspector: { expandNode: (value) => this.onExpandValue(value) } }), node);
+        this.editor.changeViewZones((acc) => {
+          const height = Math.max(28, (node.firstElementChild as HTMLElement)?.scrollHeight + 8 || 28);
+          const zone = { afterLineNumber: line, heightInPx: height, domNode: node, suppressMouseDown: true };
+          const id = acc.addZone(zone);
+          this.extraZones.push(id);
+          // Expansion changes only the view zone, not the program or its source.
+          const resize = new ResizeObserver(() => {
+            if (this.inspectionNode !== node) { resize.disconnect(); return; }
+            this.editor.changeViewZones((zones) => {
+            zone.heightInPx = Math.min(this.editor.getLayoutInfo().height * .45, Math.max(28, (node.firstElementChild as HTMLElement)?.scrollHeight + 8 || 28));
+            zones.layoutZone(id);
+          });
+          });
+          resize.observe(node.firstElementChild!);
+        });
+      }
+    }
+    for (const n of notes) {
+    if (n.line < 1 || n.line > model.getLineCount()) continue;
+    const line = n.line;
     // Monaco positions and shows/hides the zone's own node, so the bubble is a child of it
     const node = document.createElement('div');
     const bubble = document.createElement('div');
@@ -216,22 +289,35 @@ export class CodePane implements CodeView {
     icon.className = 'codicon codicon-comment-discussion';
     const text = document.createElement('div');
     text.className = 'pkw-narration-text';
-    text.textContent = n.text;
+    const label = document.createElement('span');
+    label.className = 'pkw-note-label';
+    label.textContent = n.kind === 'prediction' ? 'Predicción' : 'Nota';
+    text.append(label, document.createTextNode(n.text));
     bubble.append(icon, text);
     // estimate the height from the text: about 90 characters a row at the pane's usual width
     const rows = n.text.split('\n').reduce((sum, l) => sum + Math.max(1, Math.ceil(l.length / 90)), 0);
     this.editor.changeViewZones((acc) => {
-      const id = acc.addZone({ afterLineNumber: line, heightInPx: rows * 19 + 22, domNode: node });
-      this.zone = { id, line, text: n.text };
+      const height = Math.min(rows * 19 + 40, Math.max(70, this.editor.getLayoutInfo().height * .35));
+      bubble.style.maxHeight = `${height - 8}px`;
+      bubble.style.overflow = 'auto';
+      const id = acc.addZone({ afterLineNumber: line, heightInPx: height, domNode: node });
+      if (!this.zone) this.zone = { id, line, text: n.text };
+      else this.extraZones.push(id);
     });
-    this.reveal(line);
+    }
+    const active = this.lastRender?.paused ?? this.lastRender?.current?.line;
+    if (active) this.reveal(active);
   }
 
   private clearZone(): void {
     const zone = this.zone;
-    if (!zone) return;
+    this.notesKey = '';
+    if (this.inspectionNode) renderUi(null, this.inspectionNode);
+    this.inspectionNode = null;
+    const ids = [...(zone ? [zone.id] : []), ...this.extraZones];
     this.zone = null;
-    this.editor.changeViewZones((acc) => acc.removeZone(zone.id));
+    this.extraZones = [];
+    if (ids.length) this.editor.changeViewZones((acc) => ids.forEach((id) => acc.removeZone(id)));
   }
 
   layout(): void {

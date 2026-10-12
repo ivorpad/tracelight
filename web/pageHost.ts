@@ -19,6 +19,8 @@ import type { RunnerMessage } from '../src/shared/protocol';
 import { applyEvent, emptyRun, runInputs, type RunData } from './runState';
 import { Panes } from './panes';
 import { DebugHost } from './debugHost';
+import type { PausedValues } from './pausedValues';
+import type { TeachingNote } from './bridgeProtocol';
 import { buildStory, paintStory, storyRowOf, storyTarget, STORY_PATH, type StoryModel } from './story';
 
 /** What the page needs from its bridge connection (web/link.ts). */
@@ -44,6 +46,7 @@ export interface CodeDecorations {
   breakpoints: Map<number, { condition?: string }>;
   /** the line the live debugger is paused at, in this file */
   paused: number | null;
+  liveValues?: PausedValues;
   /** the Code Story only: the current step's columns on its line, and the columns to render dim */
   box?: { line: number; start: number; end: number } | null;
   dim?: { line: number; start: number; end: number }[];
@@ -51,6 +54,7 @@ export interface CodeDecorations {
 
 /** What the page needs from the code pane (web/codePane.ts). */
 export interface CodeView {
+  setNotes?(notes: TeachingNote[]): void;
   showFile(file: BridgeFile, opts?: { keepDirty?: boolean }): void;
   shownPath(): string | undefined;
   render(d: CodeDecorations): void;
@@ -169,6 +173,9 @@ export class PageHost {
       () => this.run?.files.all().map((f) => f.path) ?? [],
     );
     this.debug.onChange = () => {
+      const p = this.debug.paused;
+      const path = p ? this.debug.pathOf(p.stack[this.debug.selectedFrame]?.fileId ?? p.fileId) : undefined;
+      if (this.valuePresentation && (this.valuePresentation.runId !== this.debug.run?.runId || this.valuePresentation.frame !== this.debug.selectedFrame || !this.debug.active || (path && path !== this.valuePresentation.file))) this.valuePresentation = null;
       this.scheduleRender();
       this.onChange();
     };
@@ -998,8 +1005,33 @@ export class PageHost {
     if (shown) {
       out.breakpoints = this.debug.breakpointsOf(shown);
       const p = this.debug.paused;
-      if (p && p.line && this.debug.pathOf(p.fileId) === shown) out.paused = p.line;
+      const frame = p?.stack[this.debug.selectedFrame];
+      const fileId = frame?.fileId ?? p?.fileId;
+      const line = frame?.line ?? p?.line;
+      if (p && line && this.debug.pathOf(fileId) === shown) {
+        out.paused = line;
+        const file = this.debug.run?.files.get(fileId!);
+        const startOf = (f: NonNullable<typeof file>['functions'][number]) => file!.ranges[f.rid]?.[0] ?? f.bodyRange[0];
+        const fn = file?.functions.filter((f) => f.name !== '<module>' && startOf(f) <= line && f.bodyRange[2] >= line)
+          .sort((a, b) => (a.bodyRange[2] - a.bodyRange[0]) - (b.bodyRange[2] - b.bodyRange[0]))[0];
+        const cached = this.debug.locals;
+        if (cached && cached.step === p.step && cached.frameId === this.debug.selectedFrame) {
+          const selection = this.valuePresentation;
+          const applies = selection && selection.runId === this.debug.run?.runId && selection.frame === this.debug.selectedFrame && selection.file === shown;
+          out.liveValues = {
+            line, start: fn ? startOf(fn) : 1,
+            end: fn?.bodyRange[2] ?? file?.ranges[0]?.[2] ?? line,
+            locals: cached.locals,
+            snapshot: `${this.debug.run!.runId}:${p.step}:${this.debug.selectedFrame}`,
+            ...(applies && selection.mode !== 'all' ? { ghostNames: selection.mode === 'none' ? [] : selection.names, anchor: selection.line ?? line } : {}),
+            excluded: file?.functions.filter((f) => f.name !== '<module>' && f !== fn && (!fn || startOf(f) >= startOf(fn))).map((f) => [startOf(f), f.bodyRange[2]]),
+            content: shown === this.main?.path ? this.debug.run?.content : this.sources.get(shown),
+          };
+        }
+      }
     }
+    // Live execution has no recording. Keep the saved run intact, but never paint its results here.
+    if (this.debug.active) return out;
     const run = this.run;
     if (shown === STORY_PATH) return this.storyDecorations(out);
     const fileId = this.shownFileId();
@@ -1205,16 +1237,71 @@ export class PageHost {
 
   render(): void {
     this.code.render(this.decorations());
-    if (this.narration && this.narration.path === this.code.shownPath()) this.code.setNarration({ text: this.narration.text, line: this.narration.line });
+    if (this.code.setNotes) this.code.setNotes([...this.notes.values()].filter((n) => n.file === this.code.shownPath()));
+    else if (this.narration && this.narration.path === this.code.shownPath()) this.code.setNarration({ text: this.narration.text, line: this.narration.line });
     else this.code.setNarration(null);
   }
 
+  readonly notes = new Map<string, TeachingNote>();
+  private valuePresentation: { mode: 'selected' | 'all' | 'none'; names: string[]; file: string; line?: number; runId: string; frame: number } | null = null;
+
+  resolvePresentationFile(file?: string): string {
+    if (!file) return this.code.shownPath() ?? this.main?.path ?? '';
+    const paths = new Set([this.main?.path, ...this.run?.files.all().map((f) => f.path) ?? [], ...this.debug.run?.files.all().map((f) => f.path) ?? []].filter((p): p is string => !!p));
+    if (paths.has(file)) return file;
+    const matches = [...paths].filter((p) => p.endsWith('/' + file));
+    if (matches.length !== 1) throw new Error(`file must name one known source file: ${file}`);
+    return matches[0]!;
+  }
+
+  /** A display filter tied to the current run/frame/file. Values refresh from every new pause. */
+  presentValues(command: { mode: 'selected' | 'all' | 'none'; names?: string[]; file?: string; line?: number }): unknown {
+    const p = this.debug.paused;
+    const state = this.debug.state();
+    if (!p || !state) throw new Error('values needs a live pause');
+    const f = p.stack[this.debug.selectedFrame];
+    const path = this.debug.pathOf(f?.fileId ?? p.fileId);
+    if (!path) throw new Error('the selected frame has no source file');
+    const file = command.file ? this.resolvePresentationFile(command.file) : path;
+    if (file !== path) throw new Error('values must target the selected frame’s file');
+    if (!['selected', 'all', 'none'].includes(command.mode)) throw new Error('values mode must be selected, all or none');
+    const names = [...new Set(command.names ?? [])];
+    if (command.mode === 'selected' && (!names.length || names.some((n) => typeof n !== 'string'))) throw new Error('selected values needs binding names');
+    if (command.line !== undefined && (!Number.isInteger(command.line) || command.line < 1)) throw new Error('line must be a positive integer');
+    if (command.line !== undefined) this.validatePresentationLine(file, command.line);
+    const missing = names.filter((name) => !state.locals.some((v) => v.name === name));
+    if (missing.length) throw new Error(`not in the current paused frame: ${missing.join(', ')}`);
+    this.valuePresentation = { mode: command.mode, names, file, ...(command.line !== undefined ? { line: command.line } : {}), runId: state.id, frame: this.debug.selectedFrame };
+    this.render();
+    this.onChange();
+    return { observed: { runId: state.id, step: p.step, frame: this.debug.selectedFrame, file, line: f?.line ?? p.line },
+      shown: state.locals.filter((v) => command.mode === 'all' || (command.mode === 'selected' && names.includes(v.name))).map((v) => ({ name: v.name, text: v.text })) };
+  }
+
+  private validatePresentationLine(file: string, line: number): void {
+    const source = file === this.main?.path ? this.debug.active ? this.debug.run?.content : this.main.content : this.sources.get(file);
+    const max = source !== undefined ? source.split(/\r?\n/).length : (this.debug.run?.files.byPath(file) ?? this.run?.files.byPath(file))?.ranges[0]?.[2];
+    if (max !== undefined && line > max) throw new Error(`line ${line} is outside ${file}`);
+  }
+
   /** Show an explanation bubble under `line` of the shown file (null clears it). */
-  say(text: string | null, line?: number): void {
-    if (text === null) this.narration = null;
+  say(text: string | null, line?: number, opts: { file?: string; noteId?: string; kind?: 'explanation' | 'prediction' } = {}): void {
+    if (text === null) {
+      if (opts.noteId) this.notes.delete(opts.noteId);
+      else this.notes.clear();
+      const last = [...this.notes.values()].at(-1);
+      this.narration = last ? { text: last.text, line: last.line, path: last.file } : null;
+    }
     else {
-      const at = line ?? this.state().location?.line ?? 1;
-      this.narration = { text, line: at, path: this.code.shownPath() ?? '' };
+      const p = this.debug.paused;
+      const f = p?.stack[this.debug.selectedFrame];
+      const path = this.resolvePresentationFile(opts.file);
+      const at = line ?? (p && this.debug.pathOf(f?.fileId ?? p.fileId) === path ? f?.line ?? p.line : undefined) ?? this.state().location?.line ?? 1;
+      if (!Number.isInteger(at) || at < 1) throw new Error('line must be a positive integer');
+      this.validatePresentationLine(path, at);
+      if (opts.kind && !['explanation', 'prediction'].includes(opts.kind)) throw new Error('note kind must be explanation or prediction');
+      this.notes.set(opts.noteId ?? 'main', { noteId: opts.noteId ?? 'main', file: path, line: at, text, kind: opts.kind ?? 'explanation' });
+      this.narration = { text, line: at, path };
     }
     this.render();
     this.onChange();
@@ -1267,6 +1354,12 @@ export class PageHost {
       output: (run?.output ?? '').slice(-4000),
       errors: (run?.errors ?? []).filter((e) => !e.handled).map((e) => ({ type: e.errorType, message: e.message, line: run?.files.locate(e.rid)?.range[0] ?? 0 })),
       narration: this.narration ? { text: this.narration.text, line: this.narration.line } : null,
+      notes: [...this.notes.values()],
+      valuePresentation: this.valuePresentation ? { mode: this.valuePresentation.mode, names: this.valuePresentation.names, file: this.valuePresentation.file, ...(this.valuePresentation.line !== undefined ? { line: this.valuePresentation.line } : {}) } : null,
+      live: this.debug.active ? { runId: this.debug.run!.runId, step: this.debug.paused?.step ?? null, frame: this.debug.selectedFrame,
+        file: this.debug.pathOf(this.debug.paused?.stack[this.debug.selectedFrame]?.fileId ?? this.debug.paused?.fileId) ?? null,
+        line: this.debug.paused?.stack[this.debug.selectedFrame]?.line ?? this.debug.paused?.line ?? null,
+        locals: this.debug.state()?.locals.map((v) => ({ name: v.name, text: v.text })) ?? [] } : null,
     };
   }
 }
