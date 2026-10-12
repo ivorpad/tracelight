@@ -306,20 +306,20 @@ the band.
 ## In a browser
 
 ```sh
-npm run build
-node dist/web/server.js app.ts --open        # or: npm run tracelight-web -- app.ts --open
+tracelight web app.ts --open                 # from a checkout: npm run build, then node dist/web/server.js app.ts --open
 ```
 
 The page at http://127.0.0.1:4777/ is the panel next to a Monaco code pane, with the Time Machine
 and the debugger. It runs the file again when it changes on disk and runs edits typed in the page
-without saving them. An agent drives it with the same server:
+without saving them. An agent drives it with `tracelight web ctl` (from a checkout,
+`node dist/web/server.js ctl` takes the same words):
 
 ```sh
-node dist/web/server.js ctl break 23 on
-node dist/web/server.js ctl debug start --say "Runs to the breakpoint on line 23."
-node dist/web/server.js ctl debug step over --say "priceFor returned the price."
-node dist/web/server.js ctl eval "total + price"        # in the paused frame
-node dist/web/server.js ctl state
+tracelight web ctl break 23 on
+tracelight web ctl debug start --say "Runs to the breakpoint on line 23."
+tracelight web ctl debug step over --say "priceFor returned the price."
+tracelight web ctl eval "total + price"        # in the paused frame
+tracelight web ctl state
 ```
 
 `debug start` goes to the first breakpoint and pauses at the first statement only when none is

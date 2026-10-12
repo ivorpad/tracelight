@@ -185,7 +185,7 @@ const stdio: Io = { out: (t) => process.stdout.write(t), err: (t) => process.std
 /** the top-level usage argparse prints for words no verb took */
 function topUsage(): string {
   const p = new ArgumentParser(NAME);
-  p.addArgument('command', { metavar: `{serve,run,instrument,bindings,cache,_keep,version,${verbNames().join(',')}}`, nargs: 'parser' });
+  p.addArgument('command', { metavar: `{serve,run,instrument,bindings,cache,mcp,web,_keep,version,${verbNames().join(',')}}`, nargs: 'parser' });
   return p.usage();
 }
 

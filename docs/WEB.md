@@ -10,6 +10,9 @@ npm run build
 node dist/web/server.js path/to/file.ts --open        # or: npm run tracelight-web -- path/to/file.ts
 ```
 
+From an installed extension, `tracelight web path/to/file.ts --open` runs the same bridge (the vsix
+ships `dist/web`), and `tracelight web ctl ...` takes every `ctl` command below.
+
 Open http://127.0.0.1:4777/. The left side is the file in Monaco with values after their lines,
 coverage in the gutter and the exception on its line; the right side is the same panel the
 extension shows. The bridge re-runs the file whenever it changes on disk, so saving in VS Code

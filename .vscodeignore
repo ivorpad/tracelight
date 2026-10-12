@@ -8,7 +8,6 @@
 src/**
 webview/**
 web/**
-dist/web/**
 test/**
 node/**
 node_modules/**

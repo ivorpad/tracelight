@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `tracelight web FILE` serves the browser page from the installed extension, and `tracelight web
+  ctl ...` drives it, so an agent needs no checkout: the vsix now ships `dist/web`. It names the
+  bridge it runs (`tracelight web -h`), says to pass `--port` when 4777 is taken, and says what to
+  start when nothing is served on the port.
+- `tracelight run FILE --mode profile` prints `profile: PATH.cpuprofile` and `profiled, no steps
+  recorded`; the path was only in `--json`, and `0 steps` read like a failed run.
 - Tracelight is its own repository, split on 2026-10-11 from Pyokka (`ivorpad/pyokka`, branch
   `tracelight-extension` at d2f28e8, PR #17), where it was built as a second extension from
   Pyokka's sources. Nothing here builds, ships or calls Pyokka: no Python runtime, no

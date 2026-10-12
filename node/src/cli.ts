@@ -10,6 +10,7 @@
  *   tracelight VERB RUN.json ...          an agent verb over a saved run (`agent/`): story, steps,
  *                                        step, context, values, find, var, eval, expand, release, state
  *   tracelight mcp                        the agent tools as an MCP server on stdin/stdout (src/mcp/server.ts)
+ *   tracelight web FILE | web ctl ...     the browser page and the commands that drive it (src/web.ts, docs/WEB.md)
  *   tracelight version
  *
  * A saved run is `{meta, events}` (docs/PROTOCOL.md "Saved run"); the agent verbs that read one
@@ -257,7 +258,10 @@ async function cmdRun(args: string[]): Promise<number> {
     const cap = capInfo(traceEv, meta, (p) => display(p, request.workspaceRoot), Math.min(finished.stepCount ?? 0, traceEv?.cap ?? Infinity));
     if (cap) for (const l of warningLines(cap)) process.stderr.write(l + '\n');
     const caught = events.filter((e) => e.type === 'error' && e.handled).length;
-    process.stderr.write(`${a.save ? `saved ${a.save}: ` : ''}${finished.stepCount} steps, ${files.length} files, exit ${finished.exitCode}${finished.timedOut ? ' (timed out)' : ''}${caught ? `, ${caught} caught exception group(s)` : ''}\n`);
+    // a profile run records no steps: its result is the .cpuprofile, which only --json showed
+    const profile = typeof finished.profile?.path === 'string' ? finished.profile.path : null;
+    if (profile) process.stderr.write(`profile: ${profile}\n`);
+    process.stderr.write(`${a.save ? `saved ${a.save}: ` : ''}${profile ? 'profiled, no steps recorded' : `${finished.stepCount} steps`}, ${files.length} files, exit ${finished.exitCode}${finished.timedOut ? ' (timed out)' : ''}${caught ? `, ${caught} caught exception group(s)` : ''}\n`);
   }
   return finished.exitCode ?? 1;
 }
@@ -292,7 +296,7 @@ function cmdCache(args: string[]): number {
   return 0;
 }
 
-const USAGE = `usage: ${NAME} serve | run FILE [--save run.json] [--keep] | instrument FILE | bindings FILE | mcp | cache [--clear] | version | VERB RUN.json ...\n  verbs: ${verbNames().join(', ')}`;
+const USAGE = `usage: ${NAME} serve | run FILE [--save run.json] [--keep] | instrument FILE | bindings FILE | mcp | web FILE | web ctl ... | cache [--clear] | version | VERB RUN.json ...\n  verbs: ${verbNames().join(', ')}`;
 
 /** the command line; a usage or input error prints its message (the stack with `${ENV}DEBUG=1`) and exits 2 */
 export async function main(argv: string[]): Promise<number> {
@@ -329,6 +333,10 @@ async function command(argv: string[]): Promise<number> {
     case 'mcp': {
       const { serve } = await import('./mcp/server.ts');
       return serve();
+    }
+    case 'web': {
+      const { cmdWeb } = await import('./web.ts');
+      return cmdWeb(rest);
     }
     case 'version':
     case '--version':
