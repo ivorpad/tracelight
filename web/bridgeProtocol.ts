@@ -32,7 +32,15 @@ export interface RuntimeInfo {
 }
 
 /** An instruction from an agent (the HTTP API, the `ctl` CLI or WebMCP), carried out by the page. */
-export type AgentCommand =
+export interface AgentExpectation {
+  source?: 'live' | 'recording';
+  runId?: string;
+  step?: number | null;
+  frame?: number;
+  file?: string | null;
+}
+
+export type AgentCommand = ({ expect?: AgentExpectation } & (
   | { action: 'state' }
   | { action: 'goto'; step: number; say?: string }
   | { action: 'step'; kind: 'into' | 'over' | 'out' | 'back' | 'backOver' | 'backOut'; say?: string }
@@ -59,7 +67,7 @@ export type AgentCommand =
   /** open the Code Story of the last run (starting the Time Machine), and read it back */
   | { action: 'story' }
   /** run once under the runtime's profiler and read the hottest functions */
-  | { action: 'profile' };
+  | { action: 'profile' }));
 
 /** The TOUR section's state for a run, as the bridge computed it with `tracelight tour`. */
 export interface BridgeTour {
@@ -147,6 +155,10 @@ export type PageToBridge =
 
 /** The page's position as an agent reads it back (`GET /api/state`, `ctl state`, WebMCP `tracelight_state`). */
 export interface PageState {
+  /** Legacy top-level execution fields describe the recording. Use context for the active surface. */
+  context: { source: 'live' | 'recording'; runId: string | null; running: boolean; paused: boolean; step: number | null; frame: number; file: string | null; line: number | null; localsReady: boolean; locals: { name: string; text: string }[] };
+  shownFile: string | null;
+
   runId: string | null;
   running: boolean;
   file: string;
@@ -169,12 +181,15 @@ export interface PageState {
   /** the narration bubble now showing */
   narration: { text: string; line: number } | null;
   notes?: TeachingNote[];
+  noteRendering?: { noteId: string; file: string; line: number; rendered: boolean; visible: boolean }[] | null;
   valuePresentation?: { mode: 'selected' | 'all' | 'none'; names: string[]; file: string; line?: number } | null;
   /** Live execution is separate from the recording fields above. */
   live?: { runId: string; step: number | null; frame: number; file: string | null; line: number | null; locals: { name: string; text: string }[] } | null;
 }
 
 export interface TeachingNote {
+  /** Execution context at creation, distinct from the author's prediction/explanation. */
+  observed?: AgentExpectation;
   noteId: string;
   file: string;
   line: number;

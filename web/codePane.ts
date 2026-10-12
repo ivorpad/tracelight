@@ -31,6 +31,7 @@ export class CodePane implements CodeView {
   private extraZones: string[] = [];
   private notesKey = '';
   private lastNotes: TeachingNote[] = [];
+  private noteNodes = new Map<string, { note: TeachingNote; node: HTMLElement }>();
   private inspectionNode: HTMLElement | null = null;
   private expandedValues = new Set<string>();
   private inspectionSnapshot: string | undefined;
@@ -38,6 +39,14 @@ export class CodePane implements CodeView {
 
   async presentationReady(): Promise<void> {
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  }
+
+  noteUiState(): { noteId: string; file: string; line: number; rendered: boolean; visible: boolean }[] {
+    return [...this.noteNodes.values()].map(({ note, node }) => {
+      const rect = node.getBoundingClientRect();
+      return { noteId: note.noteId, file: note.file, line: note.line, rendered: node.isConnected,
+        visible: node.isConnected && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight };
+    });
   }
 
   valueUiState(): { name: string; open: boolean; visible: boolean }[] {
@@ -321,6 +330,7 @@ export class CodePane implements CodeView {
     const node = document.createElement('div');
     const bubble = document.createElement('div');
     bubble.className = 'pkw-narration';
+    this.noteNodes.set(n.noteId, { note: n, node: bubble });
     node.appendChild(bubble);
     const icon = document.createElement('i');
     icon.className = 'codicon codicon-comment-discussion';
@@ -349,6 +359,7 @@ export class CodePane implements CodeView {
   private clearZone(): void {
     const zone = this.zone;
     this.notesKey = '';
+    this.noteNodes.clear();
     if (this.inspectionNode) renderUi(null, this.inspectionNode);
     this.inspectionNode = null;
     this.drawInspection = null;

@@ -58,6 +58,7 @@ export interface CodeView {
   valueUiState?(): { name: string; open: boolean; visible: boolean }[];
   presentationReady?(): Promise<void>;
   setNotes?(notes: TeachingNote[]): void;
+  noteUiState?(): { noteId: string; file: string; line: number; rendered: boolean; visible: boolean }[];
   showFile(file: BridgeFile, opts?: { keepDirty?: boolean }): void;
   shownPath(): string | undefined;
   render(d: CodeDecorations): void;
@@ -1238,6 +1239,10 @@ export class PageHost {
     this.onChange();
   }
 
+  async presentationReady(): Promise<void> {
+    await this.code.presentationReady?.();
+  }
+
   render(): void {
     this.code.render(this.decorations());
     if (this.code.setNotes) this.code.setNotes([...this.notes.values()].filter((n) => n.file === this.code.shownPath()));
@@ -1256,6 +1261,7 @@ export class PageHost {
     if (!this.code.inspectValue) throw new Error('the code view does not support value inspection');
     const requested = this.code.inspectValue(name, open);
     await this.code.presentationReady?.();
+    if (this.debug.paused !== pause || this.debug.selectedFrame !== state.selectedFrame || this.debug.run?.runId !== state.id) throw new Error('pause changed while opening the inspector; read state again');
     const ui = this.code.valueUiState?.().find(v => v.name === name) ?? requested;
     const frame = pause.stack[this.debug.selectedFrame];
     return { ...ui, observed: { runId: state.id, step: pause.step, frame: this.debug.selectedFrame, file: this.debug.pathOf(frame?.fileId ?? pause.fileId), line: frame?.line ?? pause.line } };
@@ -1291,6 +1297,7 @@ export class PageHost {
     this.render();
     this.onChange();
     await this.code.presentationReady?.();
+    if (this.debug.paused !== p || this.debug.selectedFrame !== state.selectedFrame || this.debug.run?.runId !== state.id) throw new Error('pause changed while presenting values; read state again');
     return { observed: { runId: state.id, step: p.step, frame: this.debug.selectedFrame, file, line: f?.line ?? p.line },
       shown: state.locals.filter((v) => command.mode === 'all' || (command.mode === 'selected' && names.includes(v.name))).map((v) => ({ name: v.name, text: v.text })), rendered: this.code.valueUiState?.() ?? null };
   }
@@ -1317,7 +1324,8 @@ export class PageHost {
       if (!Number.isInteger(at) || at < 1) throw new Error('line must be a positive integer');
       this.validatePresentationLine(path, at);
       if (opts.kind && !['explanation', 'prediction'].includes(opts.kind)) throw new Error('note kind must be explanation or prediction');
-      this.notes.set(opts.noteId ?? 'main', { noteId: opts.noteId ?? 'main', file: path, line: at, text, kind: opts.kind ?? 'explanation' });
+      const context = this.state().context;
+      this.notes.set(opts.noteId ?? 'main', { observed: { source: context.source, runId: context.runId ?? undefined, step: context.step, frame: context.frame, file: context.file }, noteId: opts.noteId ?? 'main', file: path, line: at, text, kind: opts.kind ?? 'explanation' });
       this.narration = { text, line: at, path };
     }
     this.render();
@@ -1356,7 +1364,20 @@ export class PageHost {
       }
       stack = frames.map((f) => ({ function: f.function, line: f.line, step: f.step }));
     }
+    const live = this.debug.active;
+    const pause = this.debug.paused;
+    const frame = pause?.stack[this.debug.selectedFrame];
+    const debug = this.debug.state();
     return {
+      shownFile: this.code.shownPath() ?? null,
+      context: live ? { source: 'live', runId: this.debug.run!.runId, running: true, paused: !!pause,
+        step: pause?.step ?? null, frame: this.debug.selectedFrame,
+        file: this.debug.pathOf(frame?.fileId ?? pause?.fileId) ?? null, line: frame?.line ?? pause?.line ?? null,
+        localsReady: !!pause && this.debug.locals?.step === pause.step && this.debug.locals.frameId === this.debug.selectedFrame,
+        locals: debug?.locals.map(v => ({ name: v.name, text: v.text })) ?? [] }
+        : { source: 'recording', runId: run?.runId ?? null, running: !!this.incoming || !!run?.running, paused: this.nav.active,
+          step, frame: 0, file: location && trace && step !== null ? run?.files.get(trace.location(step)!.fileId)?.path ?? null : this.main?.path ?? null,
+          line: location?.line ?? null, localsReady: step !== null, locals: step === null ? [] : this.localsAt(step) },
       runId: run?.runId ?? null,
       running: !!this.incoming || !!run?.running,
       file: this.main?.path ?? '',
@@ -1372,6 +1393,7 @@ export class PageHost {
       errors: (run?.errors ?? []).filter((e) => !e.handled).map((e) => ({ type: e.errorType, message: e.message, line: run?.files.locate(e.rid)?.range[0] ?? 0 })),
       narration: this.narration ? { text: this.narration.text, line: this.narration.line } : null,
       notes: [...this.notes.values()],
+      noteRendering: this.code.noteUiState ? [...this.notes.values()].map(n => this.code.noteUiState!().find(ui => ui.noteId === n.noteId && ui.file === n.file) ?? { noteId: n.noteId, file: n.file, line: n.line, rendered: false, visible: false }) : null,
       valuePresentation: this.valuePresentation ? { mode: this.valuePresentation.mode, names: this.valuePresentation.names, file: this.valuePresentation.file, ...(this.valuePresentation.line !== undefined ? { line: this.valuePresentation.line } : {}) } : null,
       live: this.debug.active ? { runId: this.debug.run!.runId, step: this.debug.paused?.step ?? null, frame: this.debug.selectedFrame,
         file: this.debug.pathOf(this.debug.paused?.stack[this.debug.selectedFrame]?.fileId ?? this.debug.paused?.fileId) ?? null,

@@ -7,8 +7,43 @@ import type { AgentCommand, PageState } from './bridgeProtocol';
 import type { Link, PageHost } from './pageHost';
 import { renderValueNode } from '../src/views/valueText';
 
+const pending = new WeakSet<PageHost>();
+
+/** Shared entry point for HTTP/CLI and WebMCP. Concurrent writes never race the same pause. */
 export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentCommand): Promise<unknown> {
+  if (!cmd || typeof cmd !== 'object' || Array.isArray(cmd) || typeof cmd.action !== 'string') throw new Error('command must be an object with an action');
+  if (pending.has(host)) throw new Error('a command is still pending; wait for its result');
+  pending.add(host);
+  try {
+    checkExpectation(host, cmd);
+    return await executeCommand(host, link, cmd);
+  } finally { pending.delete(host); }
+}
+
+function checkExpectation(host: PageHost, cmd: AgentCommand): void {
+  const expected = cmd.expect;
+  if (!expected) return;
+  if (typeof expected !== 'object' || Array.isArray(expected)) throw new Error('expect must be a context object');
+  const actual = host.state().context;
+  for (const key of ['source', 'runId', 'step', 'frame', 'file'] as const) {
+    if (key in expected && expected[key] !== actual[key]) throw new Error(`stale context: ${key} changed; read state again`);
+  }
+}
+
+async function presentationState(host: PageHost): Promise<PageState> {
+  const before = host.state().context;
+  host.render();
+  await host.presentationReady();
+  checkExpectation(host, { action: 'state', expect: { source: before.source, ...(before.runId ? { runId: before.runId } : {}), step: before.step, frame: before.frame, file: before.file } });
+  return host.state();
+}
+
+async function executeCommand(host: PageHost, link: Link, cmd: AgentCommand): Promise<unknown> {
+  if (host.debug.active && ['goto', 'step', 'line', 'start', 'stop', 'run', 'var', 'why', 'watch', 'story'].includes(cmd.action)) {
+    throw new Error('live debugger is active; use debug step/state/stop before navigating the recording');
+  }
   if (cmd.action !== 'state' && cmd.action !== 'say' && cmd.action !== 'clear' && cmd.action !== 'values' && cmd.action !== 'inspect' && cmd.action !== 'debug' && cmd.action !== 'breakpoint' && cmd.action !== 'profile') await host.idle();
+  checkExpectation(host, cmd);
   switch (cmd.action) {
     case 'state':
       return host.state();
@@ -24,6 +59,7 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
       return { moved, state: await afterMove(host, cmd.say) };
     }
     case 'line': {
+      if (cmd.file && host.resolvePresentationFile(cmd.file) !== host.state().shownFile) throw new Error('line targets a file that is not shown; open it first');
       if (!host.trace) throw new Error('nothing recorded yet: the run has no trace');
       const fileId = host.shownFileId() ?? host.mainFileId();
       if (fileId === undefined) throw new Error('the shown file is not part of the run');
@@ -37,15 +73,17 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
       return afterMove(host, cmd.say);
     }
     case 'say':
+      if (cmd.text === '') { host.say(null, undefined, { noteId: cmd.noteId }); return presentationState(host); }
+      if (cmd.step !== undefined && host.debug.active) throw new Error('say step refers to a recording; use expect.step to anchor a live note');
       if (cmd.step !== undefined) {
         if (!host.nav.active) host.start({ step: cmd.step });
         else host.goto(cmd.step);
       }
       host.say(cmd.text, cmd.line, { file: cmd.file, noteId: cmd.noteId, kind: cmd.kind });
-      return host.state();
+      return presentationState(host);
     case 'clear':
       host.say(null, undefined, { noteId: cmd.noteId });
-      return host.state();
+      return presentationState(host);
     case 'values':
       return host.presentValues(cmd);
     case 'inspect':
@@ -115,12 +153,15 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
       if (p.error || !p.summary) throw new Error(p.error ?? 'no profile');
       return { path: p.path, totalMs: p.summary.totalMs, rows: p.summary.rows.slice(0, 20) };
     }
+    default: throw new Error('unknown agent command');
   }
 }
 
 /** The live debugger as an agent drives it: each move waits for the next pause (or the end). */
 async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action: 'debug' }>): Promise<unknown> {
   const d = host.debug;
+  if (!['start', 'continue', 'step', 'pause', 'stop', 'state'].includes(cmd.op)) throw new Error('unknown debug operation');
+  if (cmd.kind && !['into', 'over', 'out'].includes(cmd.kind)) throw new Error('unknown debug step kind');
   const wait = (): Promise<void> => d.nextStop();
   switch (cmd.op) {
     case 'start': {
@@ -130,49 +171,58 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
         const t = setInterval(() => {
           if (d.run && d.run.runId !== before && (d.paused || !d.run.running)) {
             clearInterval(t);
+            clearTimeout(timeout);
             resolve();
           }
         }, 30);
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
           clearInterval(t);
           resolve();
         }, 10_000);
       });
       d.start();
       await waiting;
+      if (!d.run || d.run.runId === before || (d.run.running && !d.paused)) throw new Error('debug start did not reach a confirmed pause or end');
       break;
     }
     case 'continue':
     case 'step':
     case 'pause': {
+      if (!d.active) throw new Error('no live debug run');
+      if (cmd.op !== 'pause' && !d.paused) throw new Error('debug step/continue needs a live pause');
+      if (cmd.op === 'pause' && d.paused) break;
+      const before = d.paused;
       const stop = wait();
-      await d.control(cmd.op === 'continue' ? 'continue' : cmd.op === 'pause' ? 'pause' : cmd.kind === 'over' ? 'stepOver' : cmd.kind === 'out' ? 'stepOut' : 'stepInto');
+      await d.control(cmd.op === 'continue' ? 'continue' : cmd.op === 'pause' ? 'pause' : cmd.kind === 'over' ? 'stepOver' : cmd.kind === 'out' ? 'stepOut' : 'stepInto', true);
       await stop;
+      if (d.active && (!d.paused || d.paused === before)) throw new Error('debug command did not reach a new pause');
       break;
     }
     case 'stop':
-      d.stop();
-      await new Promise((r) => setTimeout(r, 100));
+      { const stopped = wait(); d.stop(); await stopped; }
+      if (d.active) throw new Error('debug stop was not confirmed');
       break;
     case 'state':
       break;
   }
   // the locals of a new pause arrive just after it
-  for (let i = 0; i < 20 && d.paused && d.locals?.step !== d.paused.step; i++) await new Promise((r) => setTimeout(r, 25));
-  if (cmd.say !== undefined && d.paused?.line) host.say(cmd.say, d.paused.line);
+  for (let i = 0; i < 20 && d.paused && (d.locals?.step !== d.paused.step || d.locals.frameId !== d.selectedFrame); i++) await new Promise((r) => setTimeout(r, 25));
+  if (d.paused && (d.locals?.step !== d.paused.step || d.locals.frameId !== d.selectedFrame)) throw new Error('paused locals are not ready; read debug state again');
+  if (cmd.say !== undefined && d.paused?.line) host.say(cmd.say);
+  await presentationState(host);
   return debugSummary(host);
 }
 
 export function debugSummary(host: PageHost): unknown {
   const s = host.debug.state();
   if (!s) return { running: false };
-  return { running: s.running, paused: s.paused, reason: s.reasonText, location: s.location, stack: s.stack.map((f) => ({ name: f.name, file: f.file, line: f.line })), locals: s.locals.map((v) => ({ name: v.name, text: v.text })), output: s.output.map((c) => c.text).join('').slice(-2000) };
+  return { context: host.state().context, runId: s.id, running: s.running, paused: s.paused, reason: s.reasonText, location: s.location, stack: s.stack.map((f) => ({ name: f.name, file: f.file, line: f.line })), locals: s.locals.map((v) => ({ name: v.name, text: v.text })), output: s.output.map((c) => c.text).join('').slice(-2000) };
 }
 
-function afterMove(host: PageHost, say: string | undefined): PageState {
+async function afterMove(host: PageHost, say: string | undefined): Promise<PageState> {
   if (say !== undefined) host.say(say);
   else if (host.narration) host.say(null);
-  return host.state();
+  return presentationState(host);
 }
 
 /* ---------- WebMCP ---------- */
@@ -196,10 +246,10 @@ export function webMcpTools(host: PageHost, link: Link): WebMcpTool[] {
   const tool = (name: string, description: string, properties: Record<string, unknown>, required: string[], toCommand: (input: Record<string, unknown>) => AgentCommand): WebMcpTool => ({
     name,
     description,
-    inputSchema: { type: 'object', properties, required },
+    inputSchema: { type: 'object', properties: { ...properties, expect: { type: 'object', description: 'Context from state to reject obsolete run, pause, frame or file.', properties: { source: { type: 'string', enum: ['live', 'recording'] }, runId: { type: 'string' }, step: { type: ['integer', 'null'] }, frame: { type: 'integer' }, file: { type: ['string', 'null'] } } } }, required },
     execute: async (input) => {
       try {
-        const result = await runAgentCommand(host, link, toCommand(input ?? {}));
+        const result = await runAgentCommand(host, link, { ...toCommand(input ?? {}), ...(input?.['expect'] ? { expect: input['expect'] as AgentCommand['expect'] } : {}) });
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: 'text', text: err instanceof Error ? err.message : String(err) }], isError: true };
@@ -207,10 +257,10 @@ export function webMcpTools(host: PageHost, link: Link): WebMcpTool[] {
     },
   });
   return [
-    tool('tracelight_state', 'Where the Time Machine is in the recorded run: file, line, function, the source line, variables, call stack, logged values, output and errors.', {}, [], () => ({ action: 'state' })),
+    tool('tracelight_state', 'Read context for the active execution source, run, pause, frame, file and locals readiness. Legacy top-level fields describe the recording only.', {}, [], () => ({ action: 'state' })),
     tool('tracelight_goto', 'Move the Time Machine to a recorded step (0-based) and show it in the code pane.', { step: { type: 'integer', minimum: 0 }, say: SAY }, ['step'], (i) => ({ action: 'goto', step: Number(i['step']), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
     tool('tracelight_step', 'Step the Time Machine like a debugger, forwards or backwards: into, over, out, back, backOver, backOut.', { kind: { type: 'string', enum: ['into', 'over', 'out', 'back', 'backOver', 'backOut'] }, say: SAY }, ['kind'], (i) => ({ action: 'step', kind: String(i['kind']) as Extract<AgentCommand, { action: 'step' }>['kind'], ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
-    tool('tracelight_line', 'Move the Time Machine to the next time a line of the shown file runs.', { line: { type: 'integer', minimum: 1 }, say: SAY }, ['line'], (i) => ({ action: 'line', line: Number(i['line']), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
+    tool('tracelight_line', 'Move the Time Machine to the next time a line of the shown file runs.', { line: { type: 'integer', minimum: 1 }, file: { type: 'string' }, say: SAY }, ['line'], (i) => ({ action: 'line', line: Number(i['line']), ...(typeof i['file'] === 'string' ? { file: i['file'] } : {}), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
     tool('tracelight_say', 'Add or update a labelled teaching note without editing or executing source. file anchors it across modules; noteId updates that note, kind distinguishes explanation from prediction. Empty text removes noteId, or all notes when omitted.', { text: { type: 'string' }, line: { type: 'integer', minimum: 1 }, file: { type: 'string' }, noteId: { type: 'string' }, kind: { type: 'string', enum: ['explanation', 'prediction'] } }, ['text'], (i) => (String(i['text'] ?? '') === '' ? { action: 'clear', ...(typeof i['noteId'] === 'string' ? { noteId: i['noteId'] } : {}) } : { action: 'say', text: String(i['text']), ...(typeof i['line'] === 'number' ? { line: i['line'] } : {}), ...(typeof i['file'] === 'string' ? { file: i['file'] } : {}), ...(typeof i['noteId'] === 'string' ? { noteId: i['noteId'] } : {}), ...(typeof i['kind'] === 'string' ? { kind: i['kind'] as 'explanation' | 'prediction' } : {}) })),
     tool('tracelight_values', 'Select existing bindings to emphasize beside source at the live pause. selected shows names, all restores automatic values, none hides them. Optional file must match the selected frame; line anchors the selected values there. Reads only supplied locals, never evaluates expressions or changes program state. Returns actual observed values with run/step/frame provenance.', { mode: { type: 'string', enum: ['selected', 'all', 'none'] }, names: { type: 'array', items: { type: 'string' } }, file: { type: 'string' }, line: { type: 'integer', minimum: 1 } }, ['mode'], (i) => ({ action: 'values', mode: i['mode'] as 'selected' | 'all' | 'none', ...(Array.isArray(i['names']) ? { names: i['names'] as string[] } : {}), ...(typeof i['file'] === 'string' ? { file: i['file'] } : {}), ...(typeof i['line'] === 'number' ? { line: i['line'] } : {}) })),
     tool('tracelight_inspect', 'Open or close a shown paused binding in Aprender without executing source. Returns the actual rendered open/visible state and observed run/step/frame provenance; fails if the row or binding is hidden.', { name: { type: 'string' }, open: { type: 'boolean' } }, ['name', 'open'], i => ({ action: 'inspect', name: String(i['name'] ?? ''), open: i['open'] === true })),
