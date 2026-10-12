@@ -157,16 +157,17 @@ the stack and the variables. [browser.md](browser.md) has the commands and their
 ```sh
 tracelight web app.ts --port 4790 --open          # in the background; the person opens the page
 tracelight web ctl --port 4790 break 32 on
-tracelight web ctl --port 4790 debug start        # paused at the first statement ("start of the run")
-tracelight web ctl --port 4790 debug continue     # the first breakpoint, with the frame's locals
+tracelight web ctl --port 4790 debug start        # runs to the breakpoint: the stop, with the frame's locals
+tracelight web ctl --port 4790 eval "order.tier"  # in the paused frame
 tracelight web ctl --port 4790 debug step into
+tracelight web ctl --port 4790 debug continue     # the next breakpoint, or the end
 tracelight web ctl --port 4790 debug stop
 ```
 
-It differs from the VS Code debugger in ways that change what you run: `debug start` pauses at
-the first statement before any breakpoint, `ctl eval` reads the recorded run rather than the
-pause (read the frame from the stop's `locals`), and there is no `exec`, break-when watch,
-function breakpoint or recording. Breakpoints are lines of the main file. Finish clean there too:
+It starts like the VS Code debugger (to the first breakpoint, or the first statement when none
+is set), and `ctl eval` at a pause runs in the paused frame. It differs in what it lacks: no
+`exec`, break-when watch, function breakpoint or recording, and a pause request on a program that
+is already paused waits 10 seconds. Breakpoints are lines of the main file. Finish clean there too:
 `break LINE off` for each line you set, `debug stop`, and stop the page if nobody uses it.
 
 ## What the human says, and what you run

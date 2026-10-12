@@ -107,7 +107,7 @@ tracelight web ctl profile
 | `say TEXT` | a narration bubble under the current line, or `--line N`; `--step N` moves there first |
 | `clear` | removes the bubble |
 | `run` | runs the file again and waits for it to finish |
-| `eval EXPR` | a side-effect-free expression over the recorded run's finished state, at module scope |
+| `eval EXPR` | while the page's debugger is paused, an expression in the paused frame; otherwise a side-effect-free expression over the recorded run's finished state, at module scope |
 | `var NAME` | every recorded change of NAME, and opens the Variable History view for the person |
 | `why NAME` | where NAME's value came from after `--step N` (default: the Time Machine's step); an empty NAME explains the statement |
 | `watch EXPR` | adds a Time Machine watch, starting it if needed; `--remove` drops the watch with that text |
@@ -142,7 +142,7 @@ records every changed local), `values` what was logged up to the step.
 |---|---|
 | `start`, `stop`, `goto`, `line`, `say`, `clear`, `run` | the same `state` object |
 | `step` | `{moved, state}`; `moved: false` when the move had nowhere to go (the edge of the run) |
-| `eval` | `{text}` |
+| `eval` | `{text}`, and `at` (`"queue.ts:15"`) when it ran in a debugger pause |
 | `var` | `{name, changes: [{step, line, function, file, source, text?}]}`; a change without `text` was assigned but its value was not recorded |
 | `why` | the provenance tree: `{name, step, depth, nodes, truncated, recordedLocals, root, conclusion}` |
 | `watch` | `{step, watches: [{exp, value?, text?, error?, at?}]}`; a new watch costs one run of the file around the step |
@@ -154,7 +154,7 @@ records every changed local), `values` what was logged up to the step.
 An error is `{"result": null, "error": "..."}` with exit 1: `no page is open`, `the page did not
 answer` (a page gets 10 seconds), `nothing recorded yet: the run has no trace`, `name a step, or
 start the Time Machine first`, `no recorded run to tell: run the file first`, or the program's own
-`ReferenceError` from `eval`.
+error from `eval` (`ReferenceError: nope is not defined`).
 
 The replies are big (every local of every frame, the runtime's capability list in `state`). Read
 the fields you need with a JSON tool rather than pasting the reply:
@@ -172,8 +172,9 @@ person's clicks in the gutter, F9), stay set across debug runs, and belong to th
 ```sh
 tracelight web ctl --port 4790 break 32 on
 tracelight web ctl --port 4790 break 27 on --if "item.qty > 2"
-tracelight web ctl --port 4790 debug start          # paused, reason "start of the run"
-tracelight web ctl --port 4790 debug continue       # paused at 32, reason "breakpoint", with the frame's locals
+tracelight web ctl --port 4790 debug start          # paused at 32, reason "breakpoint", with the frame's locals
+tracelight web ctl --port 4790 eval "order.tier"    # in the paused frame: {"text": "'gold'", "at": "invoices.ts:32"}
+tracelight web ctl --port 4790 debug continue       # the next breakpoint, or the end
 tracelight web ctl --port 4790 debug step into      # into the call on that line
 tracelight web ctl --port 4790 debug stop
 ```
@@ -182,15 +183,15 @@ Each move waits for the next pause or the end and answers with it. The person se
 code pane, with the call stack, the variables and the controls under it (F5, F10, F11, Shift+F11,
 Shift+F5).
 
+`debug start` follows VS Code's rule: it runs to the first breakpoint, and pauses at the first
+statement (`reason: "start of the run"`) only when no breakpoint is set in a file the run
+touches. A run that ends without pausing answers `{running: false, ...}` as soon as it ends. While
+the debugger is paused, `eval` runs in the paused frame and answers with `at`, the place it ran;
+at the start pause the file's own names may not exist yet (`ReferenceError: jobs is not
+defined`), since that statement has not run.
+
 Differences from the VS Code debugger, each with what to do:
 
-- **`debug start` pauses at the first statement** (`reason: "start of the run"`), even with
-  breakpoints set. `debug continue` goes on to the first breakpoint. Narrate after that move, not
-  on the start.
-- **`eval` does not read the pause.** It evaluates against the recorded run's finished state at
-  module scope, so a paused function's names answer `ReferenceError: x is not defined`. Read the
-  frame from the stop's `locals` (or `debug state`), and do arithmetic on those values yourself.
-  For an evaluation in the paused frame, use the VS Code debugger (`tracelight eval --live`).
 - **`debug pause` on a program that is already paused** waits 10 seconds and answers `the page
   did not answer`. Pause only a running program; `debug state` says which it is.
 - **A move longer than 10 seconds** (a server waiting for a request) answers `the page did not
