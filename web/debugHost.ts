@@ -203,11 +203,13 @@ export class DebugHost {
   nextStop(timeoutMs = 10_000): Promise<void> {
     if (!this.run?.running) return Promise.resolve();
     return new Promise((resolve) => {
-      const t = setTimeout(resolve, timeoutMs);
-      this.pauseWaiters.push(() => {
-        clearTimeout(t);
+      const done = () => { clearTimeout(t); resolve(); };
+      const t = setTimeout(() => {
+        const i = this.pauseWaiters.indexOf(done);
+        if (i >= 0) this.pauseWaiters.splice(i, 1);
         resolve();
-      });
+      }, timeoutMs);
+      this.pauseWaiters.push(done);
     });
   }
 
@@ -220,7 +222,7 @@ export class DebugHost {
     });
   }
 
-  async control(action: Control): Promise<void> {
+  async control(action: Control, strict = false): Promise<void> {
     const run = this.run;
     try {
       switch (action) {
@@ -244,6 +246,7 @@ export class DebugHost {
       }
     } catch (err) {
       this.notice(`Debugger: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      if (strict) throw err;
     }
   }
 

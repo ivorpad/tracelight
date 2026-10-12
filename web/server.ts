@@ -115,8 +115,7 @@ export class BridgeServer {
   private debugCounter = 0;
   private runCounter = 0;
   private nextAgentId = 1;
-  private readonly agentWaiters = new Map<number, (r: { result: unknown; error?: string }) => void>();
-  private lastState: PageState | null = null;
+  private readonly agentWaiters = new Map<number, { page: WebSocketConnection; finish: (r: { result: unknown; error?: string }) => void }>();
   private watchTimer: NodeJS.Timeout | undefined;
   /** the content the bridge last wrote, so its own save does not count as an edit from outside */
   private lastWritten: string | undefined;
@@ -434,7 +433,13 @@ export class BridgeServer {
 
   private onPage(ws: WebSocketConnection): void {
     this.pages.add(ws);
-    ws.on('close', () => this.pages.delete(ws));
+    ws.on('close', () => {
+      this.pages.delete(ws);
+      for (const [id, waiter] of this.agentWaiters) if (waiter.page === ws) {
+        this.agentWaiters.delete(id);
+        waiter.finish({ result: null, error: 'the target page disconnected; read state after reconnecting before retrying' });
+      }
+    });
     ws.on('message', (text) => {
       let msg: PageToBridge;
       try {
@@ -540,13 +545,12 @@ export class BridgeServer {
         return;
       }
       case 'state':
-        this.lastState = msg.state;
         return;
       case 'agent.result': {
         const w = this.agentWaiters.get(msg.id);
-        if (w) {
+        if (w?.page === ws) {
           this.agentWaiters.delete(msg.id);
-          w({ result: msg.result, error: msg.error });
+          w.finish({ result: msg.result, error: msg.error });
         }
         return;
       }
@@ -562,20 +566,23 @@ export class BridgeServer {
     for (const p of this.pages) p.send(text);
   }
 
-  /** Hand a command to the open page(s) and wait for the first answer. */
-  agent(command: AgentCommand, timeoutMs = 10_000): Promise<{ result: unknown; error?: string }> {
+  /** Hand a command to exactly one page and accept only its answer. */
+  agent(command: AgentCommand, timeoutMs = 15_000): Promise<{ result: unknown; error?: string }> {
     if (!this.pages.size) return Promise.resolve({ result: null, error: `no page is open: open ${this.url} first` });
+    if (this.pages.size !== 1) return Promise.resolve({ result: null, error: 'multiple pages are open; close extra pages before controlling this session' });
+    if (this.agentWaiters.size) return Promise.resolve({ result: null, error: 'a page command is still pending; wait for its result before sending another' });
+    const page = [...this.pages][0]!;
     const id = this.nextAgentId++;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.agentWaiters.delete(id);
         resolve({ result: null, error: 'the page did not answer' });
       }, timeoutMs);
-      this.agentWaiters.set(id, (r) => {
+      this.agentWaiters.set(id, { page, finish: (r) => {
         clearTimeout(timer);
         resolve(r);
-      });
-      this.broadcast({ type: 'agent', id, command });
+      } });
+      this.sendTo(page, { type: 'agent', id, command });
     });
   }
 
@@ -585,8 +592,8 @@ export class BridgeServer {
     if (!sameOrigin(req.headers, this.opts.port)) return reply(res, 403, 'forbidden');
     const url = new URL(req.url ?? '/', this.url);
     if (url.pathname === '/api/state' && req.method === 'GET') {
-      const state = this.pages.size ? ((await this.agent({ action: 'state' })).result as PageState | null) ?? this.lastState : this.lastState;
-      return json(res, 200, { url: this.url, file: this.file.path, runtime: this.runtimeInfo, pages: this.pages.size, state });
+      const answer = await this.agent({ action: 'state' });
+      return json(res, answer.error ? 409 : 200, { url: this.url, file: this.file.path, runtime: this.runtimeInfo, pages: this.pages.size, state: answer.result, ...(answer.error ? { error: answer.error } : {}) });
     }
     if (url.pathname === '/api/command' && req.method === 'POST') {
       // a JSON body forces a CORS preflight in any browser, which this server never approves
@@ -597,6 +604,7 @@ export class BridgeServer {
       } catch {
         return reply(res, 400, 'bad JSON');
       }
+      if (!command || typeof command !== 'object' || Array.isArray(command) || typeof command.action !== 'string') return json(res, 400, { error: 'command must be an object with an action' });
       if (command.action === 'profile') {
         // the bridge runs it; the page shows the table when the answer arrives
         const p = await this.profile();
@@ -720,10 +728,34 @@ const USAGE = `usage:
                  | var NAME | why NAME [--step N] | watch EXPR [--remove]
                  | break LINE [on|off] [--if COND] | debug start|continue|step [into|over|out]|pause|stop|state
                  | story | profile
-  Step and debug commands take --say TEXT to show a narration bubble at the new position.`;
+  Step and debug commands take --say TEXT to show a narration bubble at the new position.
+  Commands accept --expect-source live|recording --expect-run ID --expect-step N --expect-frame N --expect-file PATH.`;
 
 /** Parse `ctl` arguments into a command. Exported for tests. */
 export function parseCtl(args: string[]): AgentCommand {
+  const expect: NonNullable<AgentCommand['expect']> = {};
+  const filtered: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const flag = args[i]!;
+    const keys: Record<string, keyof NonNullable<AgentCommand['expect']>> = { '--expect-source': 'source', '--expect-run': 'runId', '--expect-step': 'step', '--expect-frame': 'frame', '--expect-file': 'file' };
+    const key = keys[flag];
+    if (!key) { filtered.push(flag); continue; }
+    const value = args[++i];
+    if (value === undefined || value === '') throw new Error(`${flag} needs a value`);
+    if ((key === 'step' || key === 'file') && value === 'null') { expect[key] = null; continue; }
+    if (key === 'step' || key === 'frame') {
+      if (!Number.isInteger(Number(value)) || Number(value) < 0) throw new Error(`${flag} needs a nonnegative integer`);
+      expect[key] = Number(value);
+    } else if (key === 'source') {
+      if (value !== 'live' && value !== 'recording') throw new Error(`${flag} needs live or recording`);
+      expect.source = value;
+    } else expect[key] = value;
+  }
+  const command = parseCtlAction(filtered);
+  return Object.keys(expect).length ? { ...command, expect } : command;
+}
+
+function parseCtlAction(args: string[]): AgentCommand {
   const flags = new Map<string, string>();
   const rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -763,7 +795,7 @@ export function parseCtl(args: string[]): AgentCommand {
       return { action, kind, ...(say ? { say } : {}) };
     }
     case 'line':
-      return { action, line: int(words[0], 'LINE'), ...(say ? { say } : {}) };
+      return { action, line: int(words[0], 'LINE'), ...(flags.has('file') ? { file: flags.get('file') } : {}), ...(say ? { say } : {}) };
     case 'say':
       return {
         action,
