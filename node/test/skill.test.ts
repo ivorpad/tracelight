@@ -56,6 +56,16 @@ test('every verb has a synopsis with each of its flags', () => {
   assert.deepEqual(missing, []);
 });
 
+test('the frontmatter is strict YAML: no ": " in a plain value', () => {
+  // a loader with a strict parser (Codex's) drops a skill whose description reads `... in chat: how ...`
+  const head = doc('SKILL.md').split('\n---')[0]!.split('\n').slice(1);
+  for (const line of head) {
+    const m = line.match(/^([a-z-]+): (.*)$/);
+    if (!m || /^[>|'"]/.test(m[2]!)) continue;
+    assert.ok(!m[2]!.includes(': '), `${m[1]}: a plain value may not hold ": "; write it as a >- block or quote it`);
+  }
+});
+
 test('the shared flags are documented', () => {
   for (const f of SHARED) assert.ok(has(REFERENCE, f), f);
 });
