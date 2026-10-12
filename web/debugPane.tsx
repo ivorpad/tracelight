@@ -5,19 +5,18 @@
  * Debugger view keeps the watches, breakpoints, exceptions and output, as it does in VS Code.
  */
 import type { DebugHost } from './debugHost';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { ValueNode } from '../src/shared/protocol';
 import { pausedSummary, runtimeCapped } from './pausedValues';
 
 type Inspector = Pick<DebugHost, 'expandNode'>;
 
-function ValueTree({ node, debug, name }: { node: ValueNode; debug: Inspector; name: string }) {
+function ValueTree({ node, debug, name, root = false }: { node: ValueNode; debug: Inspector; name: string; root?: boolean }) {
   const [value, setValue] = useState(node);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(root);
   const [message, setMessage] = useState('');
-  const toggle = async () => {
-    setOpen(!open);
-    if (open || !value.expandable) return;
+  const load = async () => {
+    if (!value.expandable) return;
     setMessage('Loading…');
     try {
       const more = await debug.expandNode(value);
@@ -25,21 +24,30 @@ function ValueTree({ node, debug, name }: { node: ValueNode; debug: Inspector; n
       setMessage(more ? '' : 'More detail is unavailable for this pause.');
     } catch (err) { setMessage(err instanceof Error ? err.message : String(err)); }
   };
+  useEffect(() => { if (root) void load(); }, []);
+  const toggle = () => { setOpen(!open); if (!open) void load(); };
   const expandable = !!value.props?.length || !!value.expandable;
+  const displayValue = (value.type === 'str' || value.type === 'string') ? JSON.stringify(value.value ?? '') : value.value ?? value.type;
   return <div class="pkw-value-tree">
-    {expandable ? <button class="pkw-value-toggle" aria-expanded={open} onClick={() => void toggle()}>{open ? '▾' : '▸'} {name} <span>{value.value ?? value.type}</span></button>
-      : <div>{name} <span>{value.value ?? value.type}</span></div>}
-    {runtimeCapped(value) ? <div class="pkw-value-note">Runtime preview is truncated{value.expandable ? '; expand for more detail.' : '; more detail is unavailable.'}</div> : null}
+    {!root && (expandable ? <button class="pkw-value-toggle" aria-expanded={open} onClick={() => void toggle()}>{open ? '▾' : '▸'} {name} <span>{displayValue}</span></button>
+      : <div>{name} <span>{displayValue}</span></div>)}
+    {!root && runtimeCapped(value) ? <div class="pkw-value-note">Runtime preview is truncated{value.expandable ? '; expand for more detail.' : '; more detail is unavailable.'}</div> : null}
     {open ? <div class="pkw-value-children">{message ? <div class="pkw-value-note">{message}</div> : null}{value.props?.map((p, i) => <ValueTree key={`${p.id}:${i}`} node={p} name={p.name} debug={debug} />)}</div> : null}
   </div>;
 }
 
 function ObservedBinding({ v, inspector, open, onToggle }: { open: boolean; onToggle: (name: string) => void; v: { name: string; text: string; valueBag?: { data: ValueNode; runtimeKey: string } }; inspector: Inspector }) {
+  const node = v.valueBag?.data;
+  const tree = !!node && (!!node.props?.length || !!node.expandable);
+  const summary = pausedSummary(v);
+  const expandable = tree || (summary.includes('…') && summary !== v.text.replace(/\s*\n\s*/g, ' ')) || v.text.includes('\n');
+  const contents = <><span class="pkw-debug-name">{v.name}</span> <span class="pkw-observed-preview">{open ? '' : summary}</span></>;
   return <div class={`pkw-observed-binding${open ? ' pkw-observed-open' : ''}`}>
-    <button class="pkw-observed-summary" aria-expanded={open} title={v.text} onClick={() => onToggle(v.name)}><span class="pkw-debug-name">{v.name}</span> <span class="pkw-observed-preview">{pausedSummary(v)}</span></button>
-    {open ? <div class="pkw-variable-detail"><div class="pkw-value-note">Valor observado en esta pausa</div><pre>{v.text}</pre>
-      {runtimeCapped(v.valueBag?.data, v.text) ? <div class="pkw-value-note">Vista del runtime truncada. Expande el árbol para el detalle disponible.</div> : null}
-      {v.valueBag ? <ValueTree node={v.valueBag.data} name={v.name} debug={inspector} /> : null}
+    {expandable ? <button class="pkw-observed-summary" aria-expanded={open} title={v.text} onClick={() => onToggle(v.name)}><span aria-hidden="true">{open ? '▾' : '▸'}</span> {contents}</button>
+      : <span class="pkw-observed-scalar" title={v.text}>{contents}</span>}
+    {open && expandable ? <div class="pkw-variable-detail">
+      {tree ? <ValueTree node={node!} name={v.name} debug={inspector} root /> : <pre>{v.text}</pre>}
+      {runtimeCapped(node, v.text) ? <div class="pkw-value-note">Vista del runtime truncada{node?.expandable ? '; el árbol muestra el detalle disponible.' : '; no hay más detalle disponible.'}</div> : null}
     </div> : null}
   </div>;
 }
@@ -51,13 +59,17 @@ export function ObservedBindings({ locals, inspector, expanded, onToggle }: { ex
 }
 
 function Variable({ v, debug }: { v: { name: string; text: string; valueBag?: { data: ValueNode } }; debug: Inspector }) {
-  return <details class="pkw-variable">
+  const [open, setOpen] = useState(false);
+  const node = v.valueBag?.data;
+  const tree = !!node && (!!node.props?.length || !!node.expandable);
+  if (!tree && v.text.length <= 24 && !v.text.includes('\n')) return <div class="pkw-debug-row"><span class="pkw-debug-name">{v.name}</span><span class="pkw-debug-value">{v.text}</span></div>;
+  return <details class="pkw-variable" onToggle={e => setOpen(e.currentTarget.open)}>
     <summary class="pkw-debug-row" title="Expand the value from this paused frame">
       <span class="pkw-debug-name">{v.name}</span><span class="pkw-debug-value">{v.text}</span>
     </summary>
-    <div class="pkw-variable-detail"><pre>{v.text}</pre>
-      {runtimeCapped(v.valueBag?.data, v.text) ? <div class="pkw-value-note">Runtime text is truncated. The tree below contains the available detail.</div> : null}
-      {v.valueBag ? <ValueTree node={v.valueBag.data} name={v.name} debug={debug} /> : null}
+    <div class="pkw-variable-detail">
+      {open ? tree ? <ValueTree node={node!} name={v.name} debug={debug} root /> : <pre>{v.text}</pre> : null}
+      {runtimeCapped(node, v.text) ? <div class="pkw-value-note">Runtime preview is truncated. The tree contains the available detail.</div> : null}
     </div>
   </details>;
 }

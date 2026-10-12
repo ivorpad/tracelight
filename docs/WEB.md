@@ -222,3 +222,17 @@ and `POST /api/command` must be `application/json`, which a cross-site page cann
 preflight the bridge never approves. The page can read only files a run instrumented and the HTTP
 recording the run wrote.
 Anyone with a shell on the machine can drive it, as with the runtime itself.
+
+## Learning layout
+
+Aprender wraps long source lines to the code pane's width. Values below the pause show a disclosure
+arrow only when there is detail to open. Opening a container shows its properties once, with child
+containers collapsed; simple scalars remain visible in full. Empty strings in a tree appear as `""`.
+A runtime truncation marker still describes the runtime's preview, not a complete captured value.
+
+Notes keep the requested file and line. Replacing the same note ID updates that location and text.
+A note written at a different run, step or frame is labelled `contexto anterior`; a note deliberately
+placed on another line says `fuera de la pausa actual`. Neither label removes the explanation.
+Notes and value rows measure their rendered height after wrapping. Resizing preserves open child
+values and keyboard focus within the current pause. A new pause resets expansions to avoid showing
+a tree fetched from a previous frame.

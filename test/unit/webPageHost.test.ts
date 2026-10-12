@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOG_PATH, PageHost, PROFILE_PATH, type CodeDecorations, type CodeView, type Link } from '../../web/pageHost';
+import { LOG_PATH, PageHost, PROFILE_PATH, type CodeDecorations, type CodeView, type Link, type PresentedNote } from '../../web/pageHost';
 import { STORY_PATH } from '../../web/story';
 import { runAgentCommand, webMcpTools } from '../../web/agent';
 import { packSteps } from '../../src/timeMachine/traceModel';
@@ -17,6 +17,7 @@ class FakeCode implements CodeView {
     if (!this.last?.liveValues?.locals.some(v => v.name === name)) throw new Error('hidden binding');
     return { name, open, visible: true };
   }
+  setNotes?: (notes: PresentedNote[]) => void;
   shown: string | undefined;
   last: CodeDecorations | undefined;
   narration: { text: string; line: number } | null = null;
@@ -143,6 +144,28 @@ describe('PageHost', () => {
     await tick();
     link.replies.push({ type: 'error', id: 2, message: 'runtime refused step' });
     await expect(runAgentCommand(host, link, { action: 'debug', op: 'step', kind: 'over' })).rejects.toThrow('runtime refused step');
+  });
+
+  it('marks a note as belonging to its pause and replaces the same ID at the new pause', async () => {
+    const { host, code, feed } = setup();
+    let notes: PresentedNote[] = [];
+    code.setNotes = (next) => { notes = next; };
+    feed({ type: 'debug.begin', runId: 'd-notes', content: SOURCE });
+    feed({ type: 'debug.event', event: runEvents('d-notes')[1]! });
+    const pause = (step: number) => feed({ type: 'debug.event', event: { runId: 'd-notes', seq: step + 10, type: 'debug.paused', step, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'add', fileId: 1, line: 2 }, { name: '<module>', fileId: 1, line: 5 }] } });
+    pause(3);
+    host.say('First pass', 2, { noteId: 'current' });
+    expect(notes).toEqual([expect.objectContaining({ text: 'First pass', current: true })]);
+    pause(4); // Same source line, different moment. It must not look current.
+    host.render();
+    expect(notes).toEqual([expect.objectContaining({ text: 'First pass', current: false })]);
+    host.say('Second pass', 3, { noteId: 'current' });
+    expect(notes).toEqual([expect.objectContaining({ line: 3, text: 'Second pass', current: true })]);
+    await host.debug.selectFrame(1);
+    host.render();
+    expect(notes).toEqual([expect.objectContaining({ text: 'Second pass', current: false })]);
+    host.say(null, undefined, { noteId: 'current' });
+    expect(notes).toEqual([]);
   });
 
   it('ignores locals and expansions arriving after a frame change or resume', async () => {

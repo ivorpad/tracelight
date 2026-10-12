@@ -53,11 +53,13 @@ export interface CodeDecorations {
 }
 
 /** What the page needs from the code pane (web/codePane.ts). */
+export type PresentedNote = TeachingNote & { current?: boolean };
+
 export interface CodeView {
   inspectValue?(name: string, open: boolean): { name: string; open: boolean; visible: boolean };
   valueUiState?(): { name: string; open: boolean; visible: boolean }[];
   presentationReady?(): Promise<void>;
-  setNotes?(notes: TeachingNote[]): void;
+  setNotes?(notes: PresentedNote[]): void;
   noteUiState?(): { noteId: string; file: string; line: number; rendered: boolean; visible: boolean }[];
   showFile(file: BridgeFile, opts?: { keepDirty?: boolean }): void;
   shownPath(): string | undefined;
@@ -1245,12 +1247,19 @@ export class PageHost {
 
   render(): void {
     this.code.render(this.decorations());
-    if (this.code.setNotes) this.code.setNotes([...this.notes.values()].filter((n) => n.file === this.code.shownPath()));
+    if (this.code.setNotes) this.code.setNotes([...this.notes.values()].filter((n) => n.file === this.code.shownPath()).map(n => ({ ...n, ...(this.noteMoments.has(n.noteId) ? { current: this.noteMoments.get(n.noteId) === this.noteMoment() } : {}) })));
     else if (this.narration && this.narration.path === this.code.shownPath()) this.code.setNarration({ text: this.narration.text, line: this.narration.line });
     else this.code.setNarration(null);
   }
 
   readonly notes = new Map<string, TeachingNote>();
+  private readonly noteMoments = new Map<string, string>();
+
+  private noteMoment(): string {
+    const p = this.debug.paused;
+    if (this.debug.active) return JSON.stringify(['live', this.debug.run?.runId, p?.step, this.debug.selectedFrame]);
+    return JSON.stringify(['recording', this.run?.runId, this.nav.active ? this.nav.step : null]);
+  }
   private valuePresentation: { mode: 'selected' | 'all' | 'none'; names: string[]; file: string; line?: number; runId: string; frame: number } | null = null;
 
   async inspectValue(name: string, open: boolean): Promise<unknown> {
@@ -1311,8 +1320,8 @@ export class PageHost {
   /** Show an explanation bubble under `line` of the shown file (null clears it). */
   say(text: string | null, line?: number, opts: { file?: string; noteId?: string; kind?: 'explanation' | 'prediction' } = {}): void {
     if (text === null) {
-      if (opts.noteId) this.notes.delete(opts.noteId);
-      else this.notes.clear();
+      if (opts.noteId) { this.notes.delete(opts.noteId); this.noteMoments.delete(opts.noteId); }
+      else { this.notes.clear(); this.noteMoments.clear(); }
       const last = [...this.notes.values()].at(-1);
       this.narration = last ? { text: last.text, line: last.line, path: last.file } : null;
     }
@@ -1326,6 +1335,7 @@ export class PageHost {
       if (opts.kind && !['explanation', 'prediction'].includes(opts.kind)) throw new Error('note kind must be explanation or prediction');
       const context = this.state().context;
       this.notes.set(opts.noteId ?? 'main', { observed: { source: context.source, runId: context.runId ?? undefined, step: context.step, frame: context.frame, file: context.file }, noteId: opts.noteId ?? 'main', file: path, line: at, text, kind: opts.kind ?? 'explanation' });
+      this.noteMoments.set(opts.noteId ?? 'main', this.noteMoment());
       this.narration = { text, line: at, path };
     }
     this.render();
