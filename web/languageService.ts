@@ -32,16 +32,22 @@ export function configureLanguageService(): void {
 }
 
 const sources = new Map<string, string>();
+const runtimeLibraries = new Map<string, string>();
+export function registerRuntimeLibraries(libraries: {filePath:string;content:string}[]): void {
+  for (const library of libraries) runtimeLibraries.set(library.filePath,library.content);
+  refreshLibraries();
+}
+function refreshLibraries(): void {
+  const libraries = [...runtimeLibraries,...sources].map(([filePath, content]) => ({filePath,content}));
+  for (const defaults of [monaco.languages.typescript.typescriptDefaults, monaco.languages.typescript.javascriptDefaults]) defaults.setExtraLibs(libraries);
+}
 /** Supply real project sources even when their editor tabs have never been opened. */
 export function registerLanguageSource(path: string, content: string): void {
   if (!/\.[cm]?[jt]sx?$/.test(path)) return;
   const uri = monaco.Uri.file(path).toString();
   if (sources.get(uri) === content) return;
   sources.set(uri, content);
-  const libraries = [...sources].map(([filePath, content]) => ({ filePath, content }));
-  for (const defaults of [monaco.languages.typescript.typescriptDefaults, monaco.languages.typescript.javascriptDefaults]) {
-    defaults.setExtraLibs(libraries);
-  }
+  refreshLibraries();
 }
 
 export async function staticHover(model: monaco.editor.ITextModel, position: monaco.Position): Promise<monaco.languages.Hover | undefined> {

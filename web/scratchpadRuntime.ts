@@ -2,8 +2,9 @@ import * as ts from 'typescript';
 import * as esbuild from 'esbuild';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { builtinModules } from 'node:module';
-import { Worker } from 'node:worker_threads';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { scratchProcess } from './scratchpadProcess';
 import { scratchEnvironment } from './scratchpadEnvironment';
 
 export interface ScratchRequest { file: string; code: string; inputs: Record<string, unknown>; mocks: Record<string, unknown> }
@@ -137,7 +138,7 @@ export function captureScratch(code: string): string {
   return code;
 }
 
-export async function runScratch(request: ScratchRequest): Promise<ScratchResult> {
+export async function runScratch(request: ScratchRequest, executable = process.execPath): Promise<ScratchResult> {
   if (!request.file || typeof request.code !== 'string' || request.code.length > 100_000) throw new Error('Invalid scratchpad source');
   const inputs = request.inputs ?? {}, mocks = request.mocks ?? {};
   const names = [...Object.keys(inputs), ...Object.keys(mocks).filter(n => !n.startsWith('http:') && !n.includes('.'))];
@@ -150,49 +151,29 @@ export async function runScratch(request: ScratchRequest): Promise<ScratchResult
   const moduleMarkers = edited.statements.filter(s => ts.isExportDeclaration(s) && !s.moduleSpecifier && s.exportClause && ts.isNamedExports(s.exportClause) && !s.exportClause.elements.length);
   let body = request.code;
   for (const statement of [...imports, ...moduleMarkers].sort((a, b) => b.pos - a.pos)) body = body.slice(0, statement.getStart(edited)) + statement.getText(edited).replace(/[^\n]/g, ' ') + body.slice(statement.end);
-  const built = await esbuild.build({ stdin: { contents: `${deps}\n${imports.map(s => s.getText(edited)).join('\n')}\nexport async function __run(){${bindings}\n${captureScratch(body)}\n}`, resolveDir: path.dirname(request.file), sourcefile: 'scratch.ts', loader: 'ts' }, bundle: true, write: false, format: 'iife', globalName: '__scratch', platform: 'browser', target: 'es2022', logLevel: 'silent', plugins: [{ name: 'scratch-no-node', setup(b) { b.onResolve({ filter: /.*/ }, args => builtinModules.includes(args.path.replace(/^node:/, '')) || args.path.startsWith('node:') ? { errors: [{ text: `Scratchpad cannot import ${args.path}. Provide a mock instead.` }] } : undefined); } }] });
-  const bundle = built.outputFiles[0]!.text;
-  // Standard APIs bridge through JSON. Host objects and the bridge stay inaccessible to scratch code.
+  const built = await esbuild.transform(`${deps}\n${imports.map(s => s.getText(edited)).join('\n')}\nasync function __run(){${bindings}\n${captureScratch(body)}\n${own.has("result") ? "return result;" : ""}\n}\ntry {const value=await __run();__finish(undefined,value);}catch(e){__finish(String(e.message||e));}`, {format:'esm',loader:'ts',target:'esnext',sourcefile:request.file,define:{'import.meta.url':JSON.stringify(pathToFileURL(request.file).href)}});
   const payload = JSON.stringify({ inputs, mocks });
-  const worker = new Worker(`
-    const {parentPort,workerData}=require('node:worker_threads');
-    const vm=require('node:vm');
-    const context=vm.createContext(Object.create(null),{codeGeneration:{strings:false,wasm:false}});
-    const decoders=new Map();let decoderId=0;
-    context.__nativeEncoding=encoded=>{try{const r=JSON.parse(encoded);let value;
-      if(r.op==='clock')value={now:performance.now(),timeOrigin:performance.timeOrigin};
-      else if(r.op==='encode')value=Array.from(new TextEncoder().encode(r.text));
-      else if(r.op==='decoder'){const d=new TextDecoder(r.label,r.options);const id=++decoderId;decoders.set(id,d);value={id,encoding:d.encoding,fatal:d.fatal,ignoreBOM:d.ignoreBOM};}
-      else if(r.op==='decode')value=decoders.get(r.id).decode(new Uint8Array(r.bytes),r.options);
-      else if(r.op==='url'){const u=new URL(r.input,r.base);if(r.key)u[r.key]=r.value;value=Object.fromEntries(['href','origin','protocol','username','password','host','hostname','port','pathname','search','hash'].map(k=>[k,u[k]]));}
-      else if(r.op==='params'){const p=new URLSearchParams(r.input);let result;if(r.method){if(!['append','delete','get','getAll','has','set','sort'].includes(r.method))throw Error('Unknown URLSearchParams operation');result=p[r.method](...r.args);}value={text:p.toString(),entries:Array.from(p),result};}
-      else throw Error('Unknown encoding operation');return JSON.stringify({value});
-    }catch(e){return JSON.stringify({error:String(e.message||e)});}};
-    context.__scratchPayload=workerData.payload;
-    const setup=workerData.setup;
-    (async()=>{try{vm.runInContext(setup,context,{timeout:1000});vm.runInContext(workerData.bundle,context,{timeout:1000});
-      await vm.runInContext('__scratch.__run()',context,{timeout:1000});
-      const json=vm.runInContext('JSON.stringify({values:__values,output:__output,missingMocks:__missingMocks,caps:__caps})',context,{timeout:1000});parentPort.postMessage(JSON.parse(json));
-    }catch(e){let partial={values:[],output:[]};try{partial=JSON.parse(vm.runInContext('JSON.stringify({values:__values,output:__output,missingMocks:__missingMocks,caps:__caps})',context,{timeout:100}));}catch{}parentPort.postMessage({...partial,error:String(e.message||e)});}})();
-  `, { eval: true, workerData: { payload, bundle, setup: scratchEnvironment }, resourceLimits: { maxOldGenerationSizeMb: 64 } });
-  return new Promise(resolve => {
-    const timer = setTimeout(() => { void worker.terminate(); resolve({ values: [], output: [], error: 'Scratchpad exceeded 3 seconds' }); }, 3000);
-    worker.once('message', (result: ScratchResult) => {
-      clearTimeout(timer); void worker.terminate();
-      result.result = result.values.filter(v => v.name === 'result').at(-1)?.value;
-      result.applicationErrors = [];
-      const inspect = (value: unknown, at: string): void => {
-        if (!value || typeof value !== 'object') return;
-        for (const [key, child] of Object.entries(value)) {
-          if (/^(error|errors|isError)$/.test(key) && child && (!Array.isArray(child) || child.length)) result.applicationErrors!.push({ path: `${at}.${key}`, value: child });
-          else inspect(child, `${at}.${key}`);
-        }
-      };
-      inspect(result.result, 'result');
-      for (const [name, value] of new Map(result.values.filter(v => v.name !== 'result').map(v => [v.name, v.value]))) inspect(value, `values.${name}`);
-      result.output.forEach((entry, index) => inspect(entry, `output.${index}`));
-      resolve(result);
-    });
-    worker.once('error', error => { clearTimeout(timer); void worker.terminate(); resolve({ values: [], output: [], error: error.message }); });
-  });
+  const compiler = createRequire(typeof __filename === 'string' ? __filename : fileURLToPath(import.meta.url)).resolve('esbuild');
+  const loader = `if(!process.versions.bun){
+    const {registerHooks}=require('node:module'),fs=require('node:fs'),{fileURLToPath}=require('node:url');
+    const compiler=require(${JSON.stringify(compiler)});
+    registerHooks({resolve(specifier,context,next){try{return next(specifier,context);}catch(error){if(error.code!=='ERR_MODULE_NOT_FOUND'||!specifier.startsWith('.'))throw error;for(const extension of ['.ts','.tsx','.mts','.js','.mjs','/index.ts','/index.js']){try{return next(specifier+extension,context);}catch{}}throw error;}},load(url,context,next){if(!/^file:.*\\.[cm]?tsx?$/.test(url))return next(url,context);const source=fs.readFileSync(fileURLToPath(url),'utf8');return {shortCircuit:true,format:'module',source:compiler.transformSync(source,{loader:url.endsWith('tsx')?'tsx':'ts',format:'esm',target:'esnext'}).code};}});
+  }`;
+  const setup = `${loader}\nconst __scratchPayload=${JSON.stringify(payload)};\n${scratchEnvironment}`;
+  let result: ScratchResult;
+  try { result = JSON.parse(await scratchProcess(executable,built.code,3000,{cwd:path.dirname(request.file),setup})); }
+  catch (error) { return {values:[],output:[],error:error instanceof Error ? error.message : String(error)}; }
+  result.result ??= result.values.filter(v => v.name === 'result').at(-1)?.value;
+  result.applicationErrors = [];
+  const inspect = (value: unknown, at: string): void => {
+    if (!value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) {
+      if (/^(error|errors|isError)$/.test(key) && child && (!Array.isArray(child) || child.length)) result.applicationErrors!.push({path:`${at}.${key}`,value:child});
+      else inspect(child,`${at}.${key}`);
+    }
+  };
+  inspect(result.result, 'result');
+  for (const [name, value] of new Map(result.values.filter(v => v.name !== 'result').map(v => [v.name, v.value]))) inspect(value, `values.${name}`);
+  result.output.forEach((entry, index) => inspect(entry, `output.${index}`));
+  return result;
 }

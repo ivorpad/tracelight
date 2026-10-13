@@ -266,6 +266,30 @@ CLI: `ctl scratchpad open [--line N]`, `close`, `state`, `run`, `restore`, or
 `update --data /absolute/experiment.json`. The JSON file contains the update fields above.
 See `skills/tracelight/references/scratchpad.md` for the preparation and explanation workflow.
 
+Scratchpad experiments use the lesson's selected Node or Bun executable in a separate
+process. Native globals, built-in modules and runtime versions are preserved. Node's source
+loader prepares TypeScript imports and extensionless local imports; Bun uses its own loader.
+The copied declarations execute independently, without running the original entry module or
+sharing the live application's frame. The process starts in the selected source directory,
+so filesystem and process APIs have real effects, including relative paths.
+
+The process receives no inherited credentials. A preloaded `fetch` boundary requires an explicit
+`http:URL` fixture and returns a native `Response`. All other real network access, including
+from imported modules and subprocesses, is denied by macOS `sandbox-exec`. Other hosts fail
+with an explicit unsupported-sandbox error rather than running with an incomplete network
+boundary. Execution lasts at most three seconds; output and returned values are bounded.
+The process group is stopped on completion, error or timeout. Explicitly detached services
+are outside the supported scratchpad model.
+
+`GET /api/scratchpad/environment` inventories the selected executable's globals, constructor
+and prototype members, public built-in module exports and Bun namespace. It supplies the
+editor with the installed Node/Bun declarations and lists declaration gaps. This is a shape
+comparison, not a proof of behavior or a promise that every native API is implemented by the
+runtime. The regression fixtures exercise Streams, encoding, timers, crypto, URLs, Buffer,
+filesystem imports and `Bun.file` independently on Node 24.19.0 and Bun 1.4.0. Bun's 1.4
+constructor declaration for `ReadableStream.from` is supplemented with the Node Streams
+signature only when native inventory confirms the method exists. No runtime polyfill is added.
+
 Named scratchpads autosave creation, edits, names and completed results under
 `$TRACELIGHT_HOME/scratchpads` (default `~/.tracelight/scratchpads`). `create` makes a
 separate experiment, `list` finds saved copies, `history` reads immutable versions,

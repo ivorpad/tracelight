@@ -1,3 +1,4 @@
+import { scratchCompatibility } from './scratchpadCompatibility';
 /**
  * Tracelight in a browser: a local bridge between one runtime (`<runtime> serve`, NDJSON on stdio,
  * docs/PROTOCOL.md) and the panel page over a WebSocket. The bridge runs the file, re-runs it when
@@ -164,6 +165,10 @@ export class BridgeServer {
       () => ({ run: this.runData, mainPath: this.file.path }),
       (m) => this.broadcast(m),
     );
+  }
+
+  private scratchExecutable(): string {
+    return this.opts.node ?? (this.opts.runtime === 'bun' ? 'bun' : this.opts.runtime === 'node' ? process.execPath : process.env.TRACELIGHT_NODE ?? process.execPath);
   }
 
   get url(): string {
@@ -663,6 +668,10 @@ export class BridgeServer {
         return json(res, 200, targets);
       } catch (e) { return json(res, 400, { error: e instanceof Error ? e.message : String(e) }); }
     }
+    if (url.pathname === '/api/scratchpad/environment' && req.method === 'GET') {
+      try { return json(res, 200, await scratchCompatibility(this.scratchExecutable(), path.dirname(this.opts.distDir))); }
+      catch (e) { return json(res, 500, {error:e instanceof Error ? e.message : String(e)}); }
+    }
     if (url.pathname.startsWith('/api/scratchpad/') && req.method === 'POST') {
       if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return reply(res, 415, 'send application/json');
       try {
@@ -679,7 +688,7 @@ export class BridgeServer {
         if (url.pathname === '/api/scratchpad/prepare') {
           return json(res, 200, scratchFunction(fs.readFileSync(String(body.file), 'utf8'), Number(body.line)));
         }
-        if (url.pathname === '/api/scratchpad/run') return json(res, 200, await runScratch(body as ScratchRequest));
+        if (url.pathname === '/api/scratchpad/run') return json(res, 200, await runScratch(body as ScratchRequest, this.scratchExecutable()));
         return reply(res, 404, 'not found');
       } catch (e) { return json(res, 400, { error: e instanceof Error ? e.message : String(e) }); }
     }

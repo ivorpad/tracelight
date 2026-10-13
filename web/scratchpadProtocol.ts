@@ -18,6 +18,7 @@ export interface ScratchCommand {
   autoRun?: boolean;
 }
 export interface ScratchState {
+  diagnostics?: {code?:string;message:string;line:number;severity:number}[];
   id: string | null;
   title: string;
   savedVersion: number;

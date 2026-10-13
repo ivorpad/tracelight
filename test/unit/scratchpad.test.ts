@@ -61,9 +61,10 @@ const instance = await ModelRuntime.create();`;
     const r = await runScratch({ file, code: 'const callback = emit(); const body = await (await fetch("https://invalid.test")).json();', inputs: { emit: { __scratchUnavailable: 'function' } }, mocks: { emit: 'mock', 'http:https://invalid.test': { ok: true } } });
     expect(r.error).toBeUndefined(); expect(r.values.map(v => v.value)).toEqual(['mock', { ok: true }]);
   });
-  it('rejects missing mocks and Node IO imports', async () => {
+  it('requires HTTP mocks and supports native Node filesystem imports', async () => {
     expect((await runScratch({ file, code: 'await fetch("https://invalid.test");', inputs: {}, mocks: {} })).error).toContain('No HTTP mock');
-    await expect(runScratch({ file, code: 'import fs from "node:fs"; fs.writeFileSync("/tmp/oops", "x");', inputs: {}, mocks: {} })).rejects.toThrow('cannot import node:fs');
+    const r = await runScratch({file,code:'import {writeFile,readFile} from "node:fs/promises"; await writeFile("fixture.txt","native"); const result=await readFile("fixture.txt","utf8");',inputs:{},mocks:{}});
+    expect(r.error).toBeUndefined(); expect(r.result).toBe('native');
   });
   it('starts with encoding, URL and clone APIs before imported dependencies initialize', async () => {
     fs.writeFileSync(path.join(dir, 'standard.ts'), `
@@ -89,10 +90,15 @@ const instance = await ModelRuntime.create();`;
     const r = await runScratch({ file, code, inputs: {}, mocks: {} });
     expect(r.error).toBeUndefined(); expect(r.values.find(v => v.name === 'answer')?.value).toBe(true);
   });
-  it('does not expose the host or permit dynamic code while standard APIs work', async () => {
-    const r = await runScratch({ file, code: 'const answer = [typeof globalThis.process, typeof globalThis.require, typeof __nativeEncoding]; new TextEncoder().encode.constructor("return process")();', inputs: {}, mocks: {} });
-    expect(r.values.find(v => v.name === 'answer')?.value).toEqual(['undefined', 'undefined', 'undefined']);
-    expect(r.error).toMatch(/Code generation from strings disallowed/);
+  it('runs with its own process and no inherited credential environment', async () => {
+    process.env.TRACELIGHT_SCRATCH_TEST_SECRET = 'fixture-only';
+    try {
+      const r = await runScratch({ file, code: 'const result = {pid:process.pid, secret:process.env.TRACELIGHT_SCRATCH_TEST_SECRET, encoding:new TextEncoder().encode("hi").length};', inputs: {}, mocks: {} });
+      expect(r.error).toBeUndefined();
+      expect(r.result).toMatchObject({encoding:2});
+      expect((r.result as any).pid).not.toBe(process.pid);
+      expect((r.result as any).secret).toBeUndefined();
+    } finally { delete process.env.TRACELIGHT_SCRATCH_TEST_SECRET; }
   });
   it('terminates synchronous loops', async () => {
     expect((await runScratch({ file, code: 'while(true) {}', inputs: {}, mocks: {} })).error).toMatch(/timed out|exceeded/);
