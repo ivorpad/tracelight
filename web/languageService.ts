@@ -9,9 +9,26 @@ export function configureLanguageService(): void {
     defaults.setCompilerOptions({ target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.NodeJs, allowNonTsExtensions: true, allowImportingTsExtensions: true, noEmit: true, strict: true, allowJs: true, checkJs: true });
     defaults.setEagerModelSync(true);
     // One hover combines the captured value with static type information, in that order.
-    defaults.setModeConfiguration({ ...defaults.modeConfiguration, hovers: false });
+    defaults.setModeConfiguration({ ...defaults.modeConfiguration, hovers: false, definitions: false });
     defaults.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false });
   }
+  for (const language of ['javascript', 'typescript']) monaco.languages.registerDefinitionProvider(language, {
+    async provideDefinition(model, position, token) {
+      if (model.uri.scheme !== 'file') return null;
+      const version = model.getVersionId();
+      const response = await fetch('/api/definitions', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: model.uri.fsPath, content: model.getValue(), offset: model.getOffsetAt(position) }) });
+      if (!response.ok) return null;
+      const targets: { path: string; content: string; range: monaco.IRange }[] = await response.json();
+      if (token.isCancellationRequested || model.isDisposed() || version !== model.getVersionId()) return null;
+      return targets.map(target => {
+        const uri = monaco.Uri.file(target.path);
+        // Monaco needs a target model to render its definition preview and follow the link.
+        if (!monaco.editor.getModel(uri)) monaco.editor.createModel(target.content, /\.[cm]?tsx?$/.test(target.path) ? 'typescript' : 'javascript', uri);
+        return { uri, range: target.range };
+      });
+    },
+  });
 }
 
 const sources = new Map<string, string>();

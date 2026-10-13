@@ -10,6 +10,7 @@ import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution'
 import 'monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution';
 import 'monaco-editor/esm/vs/language/typescript/monaco.contribution';
 import 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/goToCommands';
+import 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/link/goToDefinitionAtPosition';
 import 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/peek/referencesController';
 import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController';
 import 'monaco-editor/esm/vs/editor/contrib/parameterHints/browser/parameterHints';
@@ -201,6 +202,9 @@ export class CodePane implements CodeView {
       scrollBeyondLastLine: true,
       quickSuggestions: { other: true, comments: false, strings: false },
       parameterHints: { enabled: true },
+      // Classes can resolve to both their declaration and constructor. Cmd-click should
+      // open the implementation even when there is more than one definition.
+      gotoLocation: { multipleDefinitions: 'goto' },
       matchBrackets: 'always',
       occurrencesHighlight: 'singleFile',
       hover: { enabled: true, delay: 250, above: true, sticky: true },
@@ -236,7 +240,7 @@ export class CodePane implements CodeView {
       },
     }));
     const opener = monaco.editor.registerEditorOpener({ openCodeEditor: (_source, resource, selection) => {
-      if (resource.scheme !== 'file') return false;
+      if (_source !== this.editor || resource.scheme !== 'file') return false;
       const line = selection ? 'startLineNumber' in selection ? selection.startLineNumber : selection.lineNumber : 1;
       const column = selection ? 'startColumn' in selection ? selection.startColumn : selection.column : 1;
       this.pendingNavigation = { path: resource.fsPath, line, column };
@@ -317,7 +321,8 @@ export class CodePane implements CodeView {
     if (!this.mainPath) this.mainPath = file.path;
     let model = this.models.get(file.path);
     if (!model) {
-      model = monaco.editor.createModel(file.content, file.language, monaco.Uri.file(file.path));
+      model = monaco.editor.getModel(monaco.Uri.file(file.path)) ?? monaco.editor.createModel(file.content, file.language, monaco.Uri.file(file.path));
+      if (model.getValue() !== file.content) model.setValue(file.content);
       this.models.set(file.path, model);
       this.loaded.set(file.path, file.content);
     } else if (model.getValue() !== file.content && !(opts.keepDirty && file.path === this.mainPath && this.dirty)) {

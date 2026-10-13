@@ -288,6 +288,9 @@ line the person may not be looking at.
   `{"action": "debug", "op": "step", "kind": "into"}`, and `start`, `stop`, `clear`, `run`, `story`,
   `profile` with no other field. 200 with `{result}`, 409 with `{result: null, error}`.
 - `GET /api/profile`: the last profile's `.cpuprofile` as a download, 404 before one ran.
+- `POST /api/definitions` with JSON `{file, content, offset}` resolves a known source file's
+  symbol to implementation paths, source text and editor ranges without executing imports.
+  Unknown source files are refused; resolved targets can then be opened through `file.read`.
 
 The bridge listens on 127.0.0.1 only and answers 403 to a request whose `Host` is not
 `127.0.0.1`, `localhost` or `[::1]` on its port, or whose `Origin` is another site; a POST that is

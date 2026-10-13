@@ -278,6 +278,33 @@ describe('BridgeServer', () => {
     page.ws.close();
   });
 
+  it('opens a resolved dependency before a run and rejects unknown definition sources', async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tl-navigation-')));
+    const file = path.join(dir, 'main.ts');
+    const helper = path.join(dir, 'helper.ts');
+    const content = 'import { helper } from "./helper.js";\nhelper();';
+    fs.writeFileSync(file, content);
+    fs.writeFileSync(helper, 'export function helper() { return 1; }');
+    server = new BridgeServer({ file, port: 0, host: '127.0.0.1', runtime: `"${process.execPath}" "${fake}"`, watch: false, initialRun: false, open: false, distDir: dir, stateDir: dir });
+    await server.start();
+    const page = await connect(Number(new URL(server.url).port));
+    const request = (source: string) => fetch(new URL('/api/definitions', server!.url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: source, content, offset: content.lastIndexOf('helper') }) });
+    try {
+      expect((await request(helper)).status).toBe(403);
+      const response = await request(file);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject([{ path: helper }]);
+      page.ws.send(JSON.stringify({ type: 'file.read', path: helper }));
+      expect(await page.next(m => m.type === 'file' && m.file.path === helper)).toMatchObject({ file: { content: 'export function helper() { return 1; }' } });
+      expect(page.messages.some(m => m.type === 'run.begin')).toBe(false);
+    } finally {
+      page.ws.close();
+      await server.close();
+      server = undefined;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('refreshes source on disk writes and atomic replacements without executing under --no-watch', async () => {
     const { port, file } = await start(false);
     const page = await connect(port);
