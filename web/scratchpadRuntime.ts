@@ -7,10 +7,26 @@ import { Worker } from 'node:worker_threads';
 import { scratchEnvironment } from './scratchpadEnvironment';
 
 export interface ScratchRequest { file: string; code: string; inputs: Record<string, unknown>; mocks: Record<string, unknown> }
-export interface ScratchResult { values: { name: string; line: number; value: unknown }[]; output: unknown[]; result?: unknown; error?: string }
+export interface ScratchResult { values: { name: string; line: number; value: unknown }[]; output: unknown[]; result?: unknown; error?: string; missingMocks?: string[]; caps?: { values: boolean; output: boolean }; applicationErrors?: { path: string; value: unknown }[] }
+
+export function formatScratchCode(code: string): string {
+  if (typeof code !== 'string' || code.length > 100000) throw new Error('Invalid scratchpad code');
+  const checked = ts.transpileModule(code, { reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } });
+  const errors = checked.diagnostics?.filter(d => d.category === ts.DiagnosticCategory.Error) ?? [];
+  if (errors.length) throw new Error(ts.flattenDiagnosticMessageText(errors[0]!.messageText, '\n'));
+  const source = ts.createSourceFile('scratch.ts', code, ts.ScriptTarget.Latest, true);
+  const formatted = ts.transform(source, [context => root => {
+    const visit: ts.Visitor = node => ts.isBlock(node)
+      ? ts.factory.createBlock(ts.visitNodes(node.statements, visit, ts.isStatement), true)
+      : ts.visitEachChild(node, visit, context);
+    return ts.visitNode(root, visit) as ts.SourceFile;
+  }]);
+  try { return ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(formatted.transformed[0]!); }
+  finally { formatted.dispose(); }
+}
 
 /** Find a function without running the module's initialization. */
-export function scratchFunction(source: string, line: number): { code: string; name?: string; parameters: string[]; helpers?: string[] } {
+export function scratchFunction(source: string, line: number): { code: string; name?: string; parameters: string[]; helpers?: string[]; requiresReceiver?: boolean } {
   const sf = ts.createSourceFile('scratch.ts', source, ts.ScriptTarget.Latest, true);
   let found: ts.FunctionLikeDeclaration | undefined;
   function visit(node: ts.Node): void {
@@ -36,8 +52,14 @@ export function scratchFunction(source: string, line: number): { code: string; n
   typed.dispose();
   if (binding && (ts.isArrowFunction(found) || ts.isFunctionExpression(found))) code = `const ${binding} = ${code};`;
   if (ts.isMethodDeclaration(found)) code = code.replace(/^(async\s+)?/, '$1function ');
+  let requiresReceiver = false;
+  const receiver = (node: ts.Node): void => {
+    if (node.kind === ts.SyntaxKind.ThisKeyword || node.kind === ts.SyntaxKind.SuperKeyword) requiresReceiver = true;
+    ts.forEachChild(node, receiver);
+  };
+  if (found.body) receiver(found.body);
   const helpers = sf.statements.filter(ts.isFunctionDeclaration).flatMap(s => s.name && s.name.text !== name ? [s.name.text] : []);
-  return { code, ...(name ? { name } : {}), parameters: found.parameters.map(p => `${p.dotDotDotToken ? '...' : ''}${p.name.getText(sf)}`), helpers };
+  return { code, ...(name ? { name } : {}), parameters: found.parameters.map(p => `${p.dotDotDotToken ? '...' : ''}${p.name.getText(sf)}`), helpers, ...(requiresReceiver ? { requiresReceiver } : {}) };
 }
 
 /** Names explicitly declared by the edited copy override captured bindings. */
@@ -147,12 +169,27 @@ export async function runScratch(request: ScratchRequest): Promise<ScratchResult
     const setup=workerData.setup;
     (async()=>{try{vm.runInContext(setup,context,{timeout:1000});vm.runInContext(workerData.bundle,context,{timeout:1000});
       await vm.runInContext('__scratch.__run()',context,{timeout:1000});
-      const json=vm.runInContext('JSON.stringify({values:__values,output:__output})',context,{timeout:1000});parentPort.postMessage(JSON.parse(json));
-    }catch(e){let partial={values:[],output:[]};try{partial=JSON.parse(vm.runInContext('JSON.stringify({values:__values,output:__output})',context,{timeout:100}));}catch{}parentPort.postMessage({...partial,error:String(e.message||e)});}})();
+      const json=vm.runInContext('JSON.stringify({values:__values,output:__output,missingMocks:__missingMocks,caps:__caps})',context,{timeout:1000});parentPort.postMessage(JSON.parse(json));
+    }catch(e){let partial={values:[],output:[]};try{partial=JSON.parse(vm.runInContext('JSON.stringify({values:__values,output:__output,missingMocks:__missingMocks,caps:__caps})',context,{timeout:100}));}catch{}parentPort.postMessage({...partial,error:String(e.message||e)});}})();
   `, { eval: true, workerData: { payload, bundle, setup: scratchEnvironment }, resourceLimits: { maxOldGenerationSizeMb: 64 } });
   return new Promise(resolve => {
     const timer = setTimeout(() => { void worker.terminate(); resolve({ values: [], output: [], error: 'Scratchpad exceeded 3 seconds' }); }, 3000);
-    worker.once('message', (result: ScratchResult) => { clearTimeout(timer); void worker.terminate(); resolve(result); });
+    worker.once('message', (result: ScratchResult) => {
+      clearTimeout(timer); void worker.terminate();
+      result.result = result.values.filter(v => v.name === 'result').at(-1)?.value;
+      result.applicationErrors = [];
+      const inspect = (value: unknown, at: string): void => {
+        if (!value || typeof value !== 'object') return;
+        for (const [key, child] of Object.entries(value)) {
+          if (/^(error|errors|isError)$/.test(key) && child && (!Array.isArray(child) || child.length)) result.applicationErrors!.push({ path: `${at}.${key}`, value: child });
+          else inspect(child, `${at}.${key}`);
+        }
+      };
+      inspect(result.result, 'result');
+      for (const [name, value] of new Map(result.values.filter(v => v.name !== 'result').map(v => [v.name, v.value]))) inspect(value, `values.${name}`);
+      result.output.forEach((entry, index) => inspect(entry, `output.${index}`));
+      resolve(result);
+    });
     worker.once('error', error => { clearTimeout(timer); void worker.terminate(); resolve({ values: [], output: [], error: error.message }); });
   });
 }

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Browser navigation confirms the rendered source and highlight after presentation, reports live
+  and recorded positions separately, and refuses ambiguous control across multiple pages.
+- Scratchpad experiments prepare formatted code, copied inputs, receivers and labelled fixtures
+  in one call, execute once, and return completed values, output and runtime/application errors.
+  Named scratchpads persist with autosaved versions, a saved list and reopenable history.
+- Learning instructions require pause listening when a browser connects, source-position checks
+  before narration, and repair of incomplete scratch experiments before teaching.
 - Scratchpad bootstrap is passed as data, fixing the escaping error that prevented startup.
   Encoding, URL, cloning and performance APIs are available before dependencies initialize.
   Copied functions, arrows and explicit imports avoid captured-name collisions; external calls

@@ -18,7 +18,7 @@ Tracelight is not on the Marketplace. Build the vsix from this checkout and inst
 npm ci
 npm ci --prefix node      # the runtime's own dependencies (oxc-parser carries a platform binary)
 npm run package           # writes tracelight-<version>.vsix
-code --install-extension tracelight-0.3.0.vsix
+code --install-extension tracelight-0.4.0-darwin-arm64.vsix
 ```
 
 Two things catch people out. Installing a vsix whose version is already installed changes nothing

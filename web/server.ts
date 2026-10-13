@@ -4,7 +4,7 @@
  * it changes on disk (save in VS Code or any editor), relays requests from the page, and lets an
  * agent drive the page over HTTP (`/api/state`, `/api/command`, the `ctl` subcommand).
  *
- *   node dist/web/server.js FILE [--port 4777] [--runtime js|"CMD ARGS"] [--open] [--no-watch]
+ *   node dist/web/server.js FILE [--port 4777] [--runtime js|"CMD ARGS"] [--open] [--no-run] [--no-watch]
  *   node dist/web/server.js ctl state | goto N | step into|over|out|back|backOver|backOut | line N | say TEXT [--line N] | clear | run | eval EXPR
  *
  * Binds 127.0.0.1 only. A WebSocket or API call whose Origin or Host is not this server's is
@@ -24,7 +24,9 @@ import { upgrade, type WebSocketConnection } from './ws';
 import { applyEvent, emptyRun, type RunData } from './runState';
 import { ServerViews } from './serverViews';
 import { runtimeRoot } from './runtimeRoot';
-import { scratchFunction, runScratch, type ScratchRequest } from './scratchpadRuntime';
+import { ScratchpadStore } from './scratchpadStore';
+import { tracelightHome } from '../src/util/paths';
+import { scratchFunction, runScratch, formatScratchCode, type ScratchRequest } from './scratchpadRuntime';
 
 export const DEFAULT_PORT = 4777;
 /** the virtual file `file.read` answers with the bridge's log (Show Logs) */
@@ -38,6 +40,8 @@ export interface ServerOptions {
   /** `js`, or a whole command line that speaks the protocol on stdio (`node path/to/runtime.js serve`) */
   runtime: string;
   watch: boolean;
+  /** false opens the source without an initial execution; explicit runs still work */
+  initialRun?: boolean;
   only?: string[];
   open: boolean;
   /** dist/: where the page, the panel bundle and the runtime (`dist/node`) were built to */
@@ -177,7 +181,7 @@ export class BridgeServer {
     const addr = this.server.address();
     if (addr && typeof addr === 'object') this.opts.port = addr.port;
     if (this.opts.watch) this.watchFile();
-    void this.run('start');
+    if (this.opts.initialRun !== false) void this.run('start');
   }
 
   async close(): Promise<void> {
@@ -567,9 +571,18 @@ export class BridgeServer {
     for (const p of this.pages) p.send(text);
   }
 
-  /** Hand a command to the open page(s) and wait for the first answer. */
+  /** A command must have exactly one recipient; broadcasting a step executes it more than once. */
   agent(command: AgentCommand, timeoutMs = 10_000): Promise<{ result: unknown; error?: string }> {
+    if (!this.pages.size && command.action === 'scratchpad' && (command.op === 'list' || command.op === 'history')) {
+      try {
+        const store = new ScratchpadStore(path.join(this.opts.stateDir ?? tracelightHome(), 'scratchpads'));
+        if (command.op === 'list') return Promise.resolve({ result: { scratchpads: store.list(), liveExecutionChanged: false } });
+        if (!command.id) throw new Error('history needs a scratchpad id');
+        return Promise.resolve({ result: { history: store.history(command.id), ...(command.version !== undefined ? { entry: store.get(command.id, command.version) } : {}), liveExecutionChanged: false } });
+      } catch (error) { return Promise.resolve({ result: null, error: error instanceof Error ? error.message : String(error) }); }
+    }
     if (!this.pages.size) return Promise.resolve({ result: null, error: `no page is open: open ${this.url} first` });
+    if (this.pages.size > 1) return Promise.resolve({ result: null, error: `${this.pages.size} pages are connected. Use tab-bound WebMCP or close duplicate pages before CLI/HTTP control; no command was sent.` });
     const id = this.nextAgentId++;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -593,6 +606,15 @@ export class BridgeServer {
       if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return reply(res, 415, 'send application/json');
       try {
         const body = JSON.parse(await readBody(req));
+        if (url.pathname === '/api/scratchpad/format') return json(res, 200, { code: formatScratchCode(body.code) });
+        if (url.pathname === '/api/scratchpad/library') {
+          const store = new ScratchpadStore(path.join(this.opts.stateDir ?? tracelightHome(), 'scratchpads'));
+          if (body.op === 'list') return json(res, 200, store.list());
+          if (body.op === 'get') return json(res, 200, store.get(body.id, body.version));
+          if (body.op === 'history') return json(res, 200, store.history(body.id));
+          if (body.op === 'save') return json(res, 200, store.save(body.entry));
+          throw new Error('Unknown scratchpad library operation');
+        }
         if (url.pathname === '/api/scratchpad/prepare') {
           return json(res, 200, scratchFunction(fs.readFileSync(String(body.file), 'utf8'), Number(body.line)));
         }
@@ -601,8 +623,8 @@ export class BridgeServer {
       } catch (e) { return json(res, 400, { error: e instanceof Error ? e.message : String(e) }); }
     }
     if (url.pathname === '/api/state' && req.method === 'GET') {
-      const state = this.pages.size ? ((await this.agent({ action: 'state' })).result as PageState | null) ?? this.lastState : this.lastState;
-      return json(res, 200, { url: this.url, file: this.file.path, runtime: this.runtimeInfo, pages: this.pages.size, state });
+      const reply = this.pages.size ? await this.agent({ action: 'state' }) : { result: null, error: 'No connected page can confirm visible position' };
+      return json(res, reply.error ? 409 : 200, { url: this.url, file: this.file.path, runtime: this.runtimeInfo, pages: this.pages.size, state: reply.result, ...(reply.error ? { error: reply.error } : {}) });
     }
     if (url.pathname === '/api/command' && req.method === 'POST') {
       // a JSON body forces a CORS preflight in any browser, which this server never approves
@@ -729,11 +751,12 @@ function loadRecent(file: string | undefined): RecentFile[] {
 /* ---------- command line ---------- */
 
 const USAGE = `usage:
-  tracelight-web FILE [--port N] [--runtime js|"CMD ARGS"] [--open] [--no-watch] [--verbose] [--only PATTERN]
+  tracelight-web FILE [--port N] [--runtime js|"CMD ARGS"] [--open] [--no-run] [--no-watch] [--verbose] [--only PATTERN]
   tracelight-web ctl [--port N] state | goto STEP | step into|over|out|back|backOver|backOut | line N
+                 | position live|recorded|visible [--focus true|false]
                  | say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kind explanation|prediction]
                  | clear [--id ID] | values NAME... [--file FILE] [--line N] | values --all|--hide | peek NAME | peek --hide | inspect open|close NAME
-                 | scratchpad open|close [--line N]
+                 | scratchpad experiment|open|close|state|update|run|restore|create|save|list|load|history [--id ID] [--version N] [--title NAME] [--line N] [--data FILE]
                  | start | stop | run | eval EXPR
                  | var NAME | why NAME [--step N] | watch EXPR [--remove]
                  | break LINE [on|off] [--file FILE] [--if COND] | debug start|restart|continue|step [into|over|out]|pause|stop|state
@@ -758,6 +781,11 @@ export function parseCtl(args: string[]): AgentCommand {
     return n;
   };
   switch (action) {
+    case 'position': {
+      const mode = words[0] ?? 'visible';
+      if (!['live', 'recorded', 'visible'].includes(mode)) throw new Error('position needs live|recorded|visible');
+      return { action, mode: mode as 'live' | 'recorded' | 'visible', ...(flags.has('focus') ? { focus: flags.get('focus') !== 'false' } : {}) };
+    }
     case 'state':
     case 'start':
     case 'stop':
@@ -771,8 +799,8 @@ export function parseCtl(args: string[]): AgentCommand {
       if (!words.length && !flags.has('hide')) throw new Error('peek needs NAME or --hide');
       return { action, name: flags.has('hide') ? '' : words.join(' ') };
     case 'scratchpad':
-      if (!['open', 'close'].includes(words[0] ?? '')) throw new Error('scratchpad needs open|close');
-      return { action, open: words[0] === 'open', ...(flags.has('line') ? { line: int(flags.get('line'), '--line') } : {}) };
+      if (!['experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'].includes(words[0] ?? '')) throw new Error('scratchpad needs experiment|open|close|state|update|run|restore|create|save|list|load|history');
+      return { ...(flags.has('data') ? JSON.parse(fs.readFileSync(flags.get('data')!, 'utf8')) : {}), action, op: words[0], ...(flags.has('id') ? { id: flags.get('id') } : {}), ...(flags.has('title') ? { title: flags.get('title') } : {}), ...(flags.has('version') ? { version: int(flags.get('version'), '--version') } : {}), ...(flags.has('line') ? { line: int(flags.get('line'), '--line') } : {}) };
     case 'inspect':
       if (!['open', 'close'].includes(words[0] ?? '') || !words[1]) throw new Error('inspect needs open|close NAME');
       return { action, name: words[1]!, ...(words.length > 2 ? { names: words.slice(1) } : {}), open: words[0] === 'open' };
@@ -821,6 +849,30 @@ export function parseCtl(args: string[]): AgentCommand {
   }
 }
 
+/** Transport success alone does not establish that a teaching operation succeeded. */
+export function ctlExitCode(command: AgentCommand, httpOk: boolean, reply: unknown): number {
+  if (!httpOk || !reply || typeof reply !== 'object') return 1;
+  const envelope = reply as Record<string, any>;
+  if (envelope.error) return 1;
+  const result = envelope.result as Record<string, any> | null | undefined;
+  if (command.action === 'scratchpad' && (command.op === 'experiment' || command.op === 'run')) {
+    return result?.status === 'completed' && !result.error && result.liveExecutionChanged === false
+      && result.result && !result.result.error && !result.result.missingMocks?.length
+      && !result.result.applicationErrors?.length ? 0 : 1;
+  }
+  if (command.action === 'position') return result?.ready === true ? 0 : 1;
+  const navigation = ['goto', 'step', 'line', 'start'].includes(command.action)
+    || (command.action === 'say' && command.step !== undefined)
+    || (command.action === 'debug' && !['state', 'stop'].includes(command.op));
+  if (navigation) {
+    // Reaching the end of an actual live run is a successful control operation,
+    // but provides no paused position from which to teach source or locals.
+    if (command.action === 'debug' && result?.runId && result.running === false && result.paused === false) return 0;
+    return (result?.position ?? result?.state?.position)?.ready === true ? 0 : 1;
+  }
+  return 0;
+}
+
 async function ctl(args: string[]): Promise<number> {
   let port = Number(process.env['TRACELIGHT_PORT'] ?? DEFAULT_PORT);
   const i = args.indexOf('--port');
@@ -839,7 +891,9 @@ async function ctl(args: string[]): Promise<number> {
   await new Promise<void>((resolve, reject) => {
     process.stdout.write(formatJson(body) + '\n', (error) => error ? reject(error) : resolve());
   });
-  return res.ok ? 0 : 1;
+  let reply: unknown;
+  try { reply = JSON.parse(body); } catch { return 1; }
+  return ctlExitCode(command, res.ok, reply);
 }
 
 function formatJson(text: string): string {
@@ -881,6 +935,7 @@ export async function main(argv: string[]): Promise<number> {
     else if (a === '--runtime') opts.runtime = argv[++i] ?? '';
     else if (a === '--only') (opts.only ??= []).push(argv[++i] ?? '');
     else if (a === '--open') opts.open = true;
+    else if (a === '--no-run') opts.initialRun = false;
     else if (a === '--no-watch') opts.watch = false;
     else if (a === '--verbose') verbose = true;
     else if (a === '-h' || a === '--help') {

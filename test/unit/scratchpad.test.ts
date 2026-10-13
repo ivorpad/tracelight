@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { runScratch, scratchFunction, scratchDependencies } from '../../web/scratchpadRuntime';
+import { runScratch, scratchFunction, scratchDependencies, formatScratchCode } from '../../web/scratchpadRuntime';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -11,6 +11,20 @@ describe('isolated scratchpad', () => {
   it('extracts the containing function', () => { expect(scratchFunction(fs.readFileSync(file, 'utf8'), 3)).toMatchObject({ name: 'target', parameters: ['x'] }); });
   it('starts from the enclosing function when paused on an array callback', () => {
     expect(scratchFunction('async function target(input) {\n const calls = input.filter(c => c.type === "toolCall");\n}', 2).name).toBe('target');
+  });
+  it('flags copied receiver-dependent methods before automatic execution', () => {
+    const source = 'class Agent {\n prompt(input) {\n return this.normalizePromptInput(input);\n }\n}';
+    expect(scratchFunction(source, 3)).toMatchObject({ name: 'prompt', requiresReceiver: true });
+    expect(scratchFunction('function normalize(input) { return [input]; }', 1).requiresReceiver).toBeUndefined();
+  });
+  it('formats unindented blocks before display and preserves the prepared receiver behavior', async () => {
+    const code = formatScratchCode('function normalize(input){return [{role:"user",content:input}];} function prompt(input){return this.normalizePromptInput(input);} const receiver={normalizePromptInput:normalize}; const result=prompt.call(receiver,input);');
+    expect(code).toContain('\n    return [{ role: "user", content: input }];');
+    expect(code).toContain('\n    return this.normalizePromptInput(input);');
+    const r = await runScratch({ file, code, inputs: { input: 'captured demo input' }, mocks: {} });
+    expect(r.error).toBeUndefined();
+    expect(r.result).toEqual([{ role: 'user', content: 'captured demo input' }]);
+    expect(() => formatScratchCode('function broken( {')).toThrow();
   });
   it('includes helpers without unrelated module initialization', async () => {
     const r = await runScratch({ file, code: 'const answer: number = twice(x);', inputs: { x: 4 }, mocks: {} });
@@ -127,4 +141,31 @@ async function target(input: { text: string }, emit: (v: string) => unknown) {
     const r = await runScratch({ file: target, code: "import { plus } from './helper';\nconst answer = plus(4);", inputs: {}, mocks: {} });
     expect(r.error).toBeUndefined(); expect(r.values.at(-1)?.value).toBe(5);
   });
+});
+
+
+describe('agent scratch evidence', () => {
+  it('does not require irrelevant unavailable callbacks for a small experiment', async () => {
+    const inputs = { x: 4, callback: { __scratchUnavailable: 'function' } };
+    const r = await runScratch({ file, code: 'const result = twice(x);', inputs, mocks: {} });
+    expect(r).toMatchObject({ result: 8, missingMocks: [], applicationErrors: [], caps: { values: false, output: false } });
+    expect(inputs.callback).toEqual({ __scratchUnavailable: 'function' });
+  });
+  it('reports the exact missing path and recovers with an explicit fixture', async () => {
+    const request = { file, code: 'const result = await tool.execute();', inputs: { tool: { execute: { __scratchUnavailable: 'function' } } }, mocks: {} };
+    expect(await runScratch(request)).toMatchObject({ missingMocks: ['tool.execute'], error: expect.stringContaining('tool.execute') });
+    expect(await runScratch({ ...request, mocks: { 'tool.execute': { isError: true, error: 'synthetic failure' } } })).toMatchObject({ result: { isError: true, error: 'synthetic failure' }, applicationErrors: [{ path: 'result.isError', value: true }, { path: 'result.error', value: 'synthetic failure' }] });
+  });
+  it('reports capped output and declaration capture rather than silently truncating', async () => {
+    const r = await runScratch({ file, code: 'for(let i=0;i<210;i++){ const x=i; console.log(x); }', inputs: {}, mocks: {} });
+    expect(r.caps).toEqual({ values: true, output: true });
+  });
+});
+
+
+it('reports application error fields in named values and logs without requiring a result binding', async () => {
+  const r = await runScratch({ file, code: 'const response = { isError: true }; console.log({ error: "fixture failure" });', inputs: {}, mocks: {} });
+  expect(r.applicationErrors).toEqual([{ path: 'values.response.isError', value: true }, { path: 'output.0.0.error', value: 'fixture failure' }]);
+  const ok = await runScratch({ file, code: 'const result = { errors: [], isError: false };', inputs: {}, mocks: {} });
+  expect(ok.applicationErrors).toEqual([]);
 });

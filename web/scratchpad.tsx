@@ -6,7 +6,9 @@ import type { CodePane } from './codePane';
 import type { ValueNode } from '../src/shared/protocol';
 import type { ScratchResult } from './scratchpadRuntime';
 
+import type { ScratchBaseline, ScratchCommand, ScratchEntry, ScratchState, ScratchSummary } from './scratchpadProtocol';
 import { scratchInput } from './scratchpadValues';
+import { scratchExperiment, validateScratchUpdate } from './scratchpadExperiment';
 function valueNode(value: unknown, id = 'scratch'): ValueNode {
   if (value === null || value === undefined) return { id, queryPath: [], type: 'None', value: String(value) };
   if (typeof value !== 'object') return { id, queryPath: [], type: typeof value === 'string' ? 'str' : typeof value === 'boolean' ? 'bool' : 'number', value: String(value) };
@@ -33,10 +35,207 @@ export class Scratchpad {
   private helperNames: string[] = [];
   private capturedValues: ScratchResult['values'] = [];
 
+  private runStatus: ScratchState['status'] = 'empty';
+  private result: ScratchResult | null = null;
+  private error: string | null = null;
+  private provenance: ScratchState['provenance'] = null;
+  private mockLabels: Record<string, string> = {};
+  private updating = false;
+  private requiresReceiver = false;
+  private id: string | null = null;
+  private title = '';
+  private versions = new Map<string, number>();
+  private saveError: string | null = null;
+  private saveTimer?: ReturnType<typeof setTimeout>;
+  private pendingSaveReason = 'edit';
+  private pendingSaves = 0;
+  private loadedVersion: number | null = null;
+  private saves: Promise<void> = Promise.resolve();
+  private initialMockLabels: Record<string, string> = {};
+
+  private baseline(): ScratchBaseline { return { code: this.original, inputsText: this.initialInputs, mocksText: this.initialMocks, mockLabels: this.initialMockLabels, helperNames: this.helperNames, requiresReceiver: this.requiresReceiver }; }
+  private async library<T>(op: string, data: Record<string, unknown> = {}): Promise<T> {
+    const response = await fetch('/api/scratchpad/library', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...data, op }) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error ?? 'Cannot access saved scratchpads');
+    return result;
+  }
+  private persist(reason: string): void {
+    if (!this.id) return;
+    const id = this.id, title = this.title;
+    const state = JSON.parse(JSON.stringify(this.state())) as ScratchState;
+    const baseline = JSON.parse(JSON.stringify(this.baseline())) as ScratchBaseline;
+    ++this.pendingSaves; this.saveStatus();
+    this.saves = this.saves.then(async () => {
+      try {
+        const entry = await this.library<ScratchEntry>('save', { entry: { id, title, reason, state, baseline, expectedVersion: this.versions.get(id) ?? 0 } });
+        this.versions.set(id, entry.version);
+        if (this.id === id) { this.saveError = null; if (state.revision === this.revision) this.loadedVersion = entry.version; await this.refreshLibrary(); }
+      } catch (error) {
+        if (this.id === id) { this.saveError = String(error instanceof Error ? error.message : error); this.status(`Not saved: ${this.saveError}`); }
+      } finally { --this.pendingSaves; this.saveStatus(); }
+    });
+  }
+  private saveStatus(): void {
+    const node = this.pane.querySelector('.pkw-scratch-autosave');
+    if (node) node.textContent = this.saveError ? `Not saved: ${this.saveError}` : this.saveTimer || this.pendingSaves ? 'Autosaving…' : this.id ? `Autosaved · v${this.versions.get(this.id) ?? 0}` : 'Autosave on';
+  }
+  private async flushSave(): Promise<void> {
+    if (this.saveTimer) { clearTimeout(this.saveTimer); this.saveTimer = undefined; this.persist(this.pendingSaveReason); }
+    await this.saves;
+  }
+  private async refreshLibrary(): Promise<void> {
+    const entries = await this.library<ScratchSummary[]>('list');
+    const select = this.pane.querySelector<HTMLSelectElement>('.pkw-scratch-list')!;
+    select.replaceChildren(new Option('Saved scratchpads', ''));
+    for (const item of entries) select.add(new Option(`${item.title} · v${item.version}`, item.id));
+    select.value = this.id ?? '';
+    if (this.id) {
+      const history = await this.library<ScratchSummary[]>('history', { id: this.id });
+      const versions = this.pane.querySelector<HTMLSelectElement>('.pkw-scratch-history')!;
+      versions.replaceChildren(new Option('Scratchpad history', ''));
+      for (const item of history) versions.add(new Option(`v${item.version} · ${item.reason} · ${new Date(item.updatedAt).toLocaleString()}`, String(item.version)));
+      versions.value = this.loadedVersion === null ? '' : String(this.loadedVersion);
+    }
+    this.pane.querySelector<HTMLInputElement>('.pkw-scratch-title')!.value = this.title;
+  }
+  async showLibrary(): Promise<void> {
+    await this.flushSave();
+    if (!this.id) {
+      const entries = await this.library<ScratchSummary[]>('list');
+      if (entries[0]) { await this.load(entries[0].id); return; }
+      if (this.host.debug.paused) { await this.open(); return; }
+      await this.create({}); return;
+    }
+    this.pane.hidden = false; document.body.classList.add('pkw-scratch-open'); this.onLayout();
+    await this.refreshLibrary();
+  }
+  private async load(id: string, version?: number): Promise<void> {
+    await this.flushSave();
+    const latest = await this.library<ScratchEntry>('get', { id });
+    const entry = version === undefined ? latest : await this.library<ScratchEntry>('get', { id, version });
+    if (this.timer) clearTimeout(this.timer);
+    ++this.revision; this.activeRequest?.abort();
+    this.updating = true;
+    try {
+      this.id = id; this.loadedVersion = entry.version; this.title = entry.title; this.versions.set(id, latest.version); this.saveError = null;
+      this.file = entry.state.file; this.provenance = entry.state.provenance; this.requiresReceiver = entry.baseline.requiresReceiver ?? entry.state.preparation?.requiresReceiver ?? false;
+      this.original = entry.baseline.code; this.initialInputs = entry.baseline.inputsText; this.initialMocks = entry.baseline.mocksText;
+      this.initialMockLabels = entry.baseline.mockLabels; this.helperNames = entry.baseline.helperNames;
+      this.model.setValue(entry.state.code); this.inputs.setValue(entry.state.inputsText); this.mocks.setValue(entry.state.mocksText);
+      this.mockLabels = entry.state.mockLabels; this.auto.checked = entry.state.autoRun;
+      this.inputNames = Object.keys(entry.state.inputs ?? {}).filter(n => /^[A-Za-z_$][\w$]*$/.test(n));
+      this.result = entry.state.result; this.error = entry.state.error;
+      this.runStatus = this.error ? 'error' : this.result ? 'completed' : entry.state.status === 'needsPreparation' ? 'needsPreparation' : 'dirty';
+      this.capturedValues = this.result?.values ?? [];
+    } finally { this.updating = false; }
+    this.pane.hidden = false; document.body.classList.add('pkw-scratch-open'); this.onLayout(); this.editor.layout();
+    this.pane.querySelector('.pkw-scratch-file')!.textContent = `${this.file.split('/').pop()} · saved v${entry.version} · no execution on reopen`;
+    this.status(this.error ?? ''); this.renderResult(this.result ?? { values: [], output: [] }); this.fixtureLabels();
+    await this.refreshLibrary(); this.saveStatus();
+  }
+  private async create(command: ScratchCommand): Promise<void> {
+    await this.flushSave();
+    this.validateEdit(command);
+    const file = command.file ?? this.host.main?.path;
+    if (!file) throw new Error('A scratchpad needs a source file for resolving dependencies');
+    if (this.timer) clearTimeout(this.timer); ++this.revision; this.activeRequest?.abort();
+    this.updating = true;
+    try {
+      this.id = crypto.randomUUID(); this.title = command.title?.trim() || 'Untitled experiment'; this.saveError = null;
+      this.file = file; this.provenance = null; this.helperNames = []; this.requiresReceiver = false;
+      this.original = command.code ?? '// Write your experiment here.\nexport {};';
+      this.initialInputs = JSON.stringify(command.inputs ?? {}, null, 2); this.initialMocks = JSON.stringify(command.mocks ?? {}, null, 2);
+      this.initialMockLabels = command.mockLabels ?? {}; this.mockLabels = { ...this.initialMockLabels };
+      this.model.setValue(this.original); this.inputs.setValue(this.initialInputs); this.mocks.setValue(this.initialMocks);
+      this.inputNames = Object.keys(command.inputs ?? {}); this.auto.checked = command.autoRun ?? true;
+    } finally { this.updating = false; }
+    this.pane.querySelector('.pkw-scratch-file')!.textContent = `${file.split('/').pop()} · supplied experiment`;
+    this.pane.hidden = false; document.body.classList.add('pkw-scratch-open'); this.onLayout(); this.editor.layout(); this.schedule('create');
+    await this.flushSave();
+  }
+  private validateEdit(command: ScratchCommand): void {
+    if (command.title !== undefined && (typeof command.title !== 'string' || !command.title.trim() || command.title.length > 200)) throw new Error('Scratchpad title must contain 1–200 characters');
+    validateScratchUpdate(command);
+  }
+
+  state(): ScratchState {
+    const parse = (text: string): Record<string, unknown> | null => { try { const value = JSON.parse(text); return value && typeof value === 'object' && !Array.isArray(value) ? value : null; } catch { return null; } };
+    const mocks = parse(this.mocks.getValue());
+    return { id: this.id, title: this.title, loadedVersion: this.loadedVersion, saving: Boolean(this.saveTimer || this.pendingSaves), savedVersion: this.id ? this.versions.get(this.id) ?? 0 : 0, saveError: this.saveError, open: !this.pane.hidden, file: this.file, code: this.model.getValue(), inputs: parse(this.inputs.getValue()), mocks, inputsText: this.inputs.getValue(), mocksText: this.mocks.getValue(), mockLabels: Object.fromEntries(Object.keys(mocks ?? {}).map(path => [path, this.mockLabels[path] ?? 'manual synthetic fixture'])), autoRun: this.auto.checked, revision: this.revision, status: this.runStatus, preparation: this.provenance ? { requiresReceiver: this.requiresReceiver } : null, result: this.result, error: this.error, provenance: this.provenance, liveExecutionChanged: false };
+  }
+  async control(command: ScratchCommand): Promise<ScratchState> {
+    const op = command.op ?? (typeof command.open === 'boolean' ? command.open ? 'open' : 'close' : 'state');
+    if (!['experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'].includes(op)) throw new Error('Unknown scratchpad operation');
+    if (op === 'experiment') {
+      this.validateEdit(command);
+      await this.flushSave();
+      return scratchExperiment(command, {
+      format: async code => {
+        const response = await fetch('/api/scratchpad/format', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) });
+        const value = await response.json() as { code?: string; error?: string };
+        if (!response.ok || value.error || typeof value.code !== 'string') throw new Error(value.error ?? 'Cannot format scratchpad code');
+        return value.code;
+      },
+      begin: () => { this.updating = true; this.activeRequest?.abort(); if (this.timer) clearTimeout(this.timer); this.pane.hidden = true; },
+      open: (line, publish) => this.open(line, publish),
+      replace: update => this.replace(update),
+      publish: () => this.publish(),
+      finish: () => { this.updating = false; },
+      run: () => this.run(), state: () => this.state(),
+    });
+    }
+    if (op === 'list') { await this.flushSave(); return { ...this.state(), scratchpads: await this.library<ScratchSummary[]>('list') }; }
+    if (op === 'history') { await this.flushSave(); const id = command.id ?? this.id; if (!id) throw new Error('Choose a scratchpad id'); return { ...this.state(), history: await this.library<ScratchSummary[]>('history', { id }), ...(command.version !== undefined ? { entry: await this.library<ScratchEntry>('get', { id, version: command.version }) } : {}) }; }
+    if (op === 'load') { if (!command.id) throw new Error('load needs a scratchpad id'); await this.load(command.id, command.version); }
+    else if (op === 'create') await this.create(command);
+    else if (op === 'save') { if (!this.id) throw new Error('Create or open a scratchpad before saving'); this.validateEdit(command); if (command.title !== undefined) this.title = command.title.trim(); await this.flushSave(); this.persist('save'); }
+    else if (op === 'open') await this.open(command.line);
+    else if (op === 'close') this.close();
+    else if (op === 'update') {
+      if (this.pane.hidden) throw new Error('Open scratchpad before editing');
+      this.validateEdit(command);
+      this.updating = true;
+      try {
+        if (command.title !== undefined) this.title = command.title.trim();
+        if (command.autoRun !== undefined) this.auto.checked = command.autoRun;
+        if (command.code !== undefined) this.model.setValue(command.code);
+        if (command.inputs !== undefined) { this.inputs.setValue(JSON.stringify(command.inputs, null, 2)); this.inputNames = Object.keys(command.inputs).filter(n => /^[A-Za-z_$][\w$]*$/.test(n)); }
+        if (command.mocks !== undefined) this.mocks.setValue(JSON.stringify(command.mocks, null, 2));
+        if (command.mockLabels !== undefined || command.mocks !== undefined) this.mockLabels = { ...command.mockLabels };
+      } finally { this.updating = false; }
+      this.schedule();
+    } else if (op === 'run') {
+      if (this.pane.hidden) throw new Error('Open scratchpad before running');
+      await this.run();
+    } else if (op === 'restore') this.restore();
+    await this.flushSave();
+    return this.state();
+  }
+  private replace(command: ScratchCommand): void {
+    if (command.title !== undefined) this.title = command.title.trim();
+    if (command.autoRun !== undefined) this.auto.checked = command.autoRun;
+    if (command.code !== undefined) this.model.setValue(command.code);
+    if (command.inputs !== undefined) { this.inputs.setValue(JSON.stringify(command.inputs, null, 2)); this.inputNames = Object.keys(command.inputs).filter(n => /^[A-Za-z_$][\w$]*$/.test(n)); }
+    if (command.mocks !== undefined) { this.mocks.setValue(JSON.stringify(command.mocks, null, 2)); this.mockLabels = { ...command.mockLabels }; }
+    this.result = null; this.error = null; this.capturedValues = []; this.values.clear();
+    render(null, this.pane.querySelector('.pkw-scratch-results')!); this.status('');
+    this.fixtureLabels();
+  }
+  private publish(): void {
+    this.pane.hidden = false; document.body.classList.add('pkw-scratch-open');
+    this.onLayout(); this.editor.layout(); this.editor.focus();
+  }
+  private restore(): void {
+    this.updating = true;
+    try { this.model.setValue(this.original); this.inputs.setValue(this.initialInputs); this.mocks.setValue(this.initialMocks); this.mockLabels = { ...this.initialMockLabels }; } finally { this.updating = false; }
+    this.inputNames = Object.keys(JSON.parse(this.initialInputs || '{}'));
+    this.schedule('restore');
+  }
   constructor(private pane: HTMLElement, private host: PageHost, private code: CodePane, private onLayout: () => void) {
     monaco.languages.register({ id: 'json' });
     monaco.languages.setMonarchTokensProvider('json', { tokenizer: { root: [[/"([^"\\]|\\.)*"(?=\s*:)/, 'string.key'], [/"([^"\\]|\\.)*"/, 'string'], [/-?\d+(\.\d+)?([eE][+-]?\d+)?/, 'number'], [/\b(true|false|null)\b/, 'keyword'], [/[{}\[\],:]/, 'delimiter']] } });
-    pane.innerHTML = `<header><span>Scratchpad</span><label><input type="checkbox" checked> Auto run</label><button type="button" class="pkw-btn" aria-label="Close scratchpad"><i class="codicon codicon-close"></i></button></header><div class="pkw-scratch-file"></div><div class="pkw-scratch-editor" aria-label="TypeScript scratchpad"></div><div class="pkw-scratch-results" aria-live="polite"></div><details><summary>Inputs · copied at pause</summary><textarea class="pkw-scratch-inputs" aria-label="Editable copied inputs" spellcheck="false"></textarea></details><details><summary>Mocks · external calls</summary><textarea class="pkw-scratch-mocks" aria-label="Mock response fixtures" spellcheck="false">{}</textarea></details><footer><button type="button" class="pkw-text-btn pkw-scratch-run">Run</button><button type="button" class="pkw-text-btn pkw-scratch-reset">Restore copy</button><span class="pkw-scratch-state" role="status"></span></footer>`;
+    pane.innerHTML = `<header><span>Scratchpad</span><label><input type="checkbox" checked> Auto run</label><button type="button" class="pkw-btn" aria-label="Close scratchpad"><i class="codicon codicon-close"></i></button></header><div class="pkw-scratch-library"><select class="pkw-scratch-list" aria-label="Saved scratchpads"><option value="">Saved scratchpads</option></select><button type="button" class="pkw-text-btn pkw-scratch-new">New scratchpad</button><input class="pkw-scratch-title" aria-label="Scratchpad name" placeholder="Scratchpad name"><button type="button" class="pkw-text-btn pkw-scratch-save">Save checkpoint</button><span class="pkw-scratch-autosave" role="status">Autosave on</span><select class="pkw-scratch-history" aria-label="Scratchpad history"><option value="">Scratchpad history</option></select></div><div class="pkw-scratch-file"></div><div class="pkw-scratch-editor" aria-label="TypeScript scratchpad"></div><div class="pkw-scratch-results" aria-live="polite"></div><details><summary>Inputs · copied at pause</summary><textarea class="pkw-scratch-inputs" aria-label="Editable copied inputs" spellcheck="false"></textarea></details><details><summary>Mocks · external calls</summary><textarea class="pkw-scratch-mocks" aria-label="Mock response fixtures" spellcheck="false">{}</textarea></details><footer><button type="button" class="pkw-text-btn pkw-scratch-run">Run</button><button type="button" class="pkw-text-btn pkw-scratch-reset">Restore copy</button><span class="pkw-scratch-state" role="status"></span></footer>`;
     for (const name of ['inputs', 'mocks']) {
       const old = pane.querySelector(`.pkw-scratch-${name}`)!;
       const container = document.createElement('div'); container.className = `pkw-scratch-${name} pkw-scratch-json`;
@@ -58,7 +257,7 @@ export class Scratchpad {
       return { range: new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn), contents: [{ value: `Scratchpad value\n\n\`\`\`json\n${JSON.stringify(observed.value, null, 2)}\n\`\`\`` }] };
     } });
     this.model.onDidChangeContent(() => this.schedule());
-    this.inputs.onDidChangeModelContent(() => this.schedule()); this.mocks.onDidChangeModelContent(() => this.schedule());
+    this.inputs.onDidChangeModelContent(() => this.schedule()); this.mocks.onDidChangeModelContent(() => { if (!this.updating) this.mockLabels = {}; this.schedule(); });
     this.auto.onchange = () => this.schedule();
     pane.querySelector('[aria-label="Close scratchpad"]')!.addEventListener('click', () => this.close());
     const addFunction = document.createElement('button');
@@ -67,13 +266,29 @@ export class Scratchpad {
     addFunction.addEventListener('click', () => void this.open(this.code.cursorLine() ?? undefined).catch(error => this.status(String(error))));
     pane.querySelector('header')!.insertBefore(addFunction, pane.querySelector('[aria-label="Close scratchpad"]'));
     pane.querySelector('.pkw-scratch-run')!.addEventListener('click', () => void this.run());
-    pane.querySelector('.pkw-scratch-reset')!.addEventListener('click', () => { this.model.setValue(this.original); this.inputs.setValue(this.initialInputs); this.mocks.setValue(this.initialMocks); this.schedule(); });
+    pane.querySelector('.pkw-scratch-reset')!.addEventListener('click', () => this.restore());
+    const report = (error: unknown) => this.status(String(error));
+    pane.querySelector<HTMLSelectElement>('.pkw-scratch-list')!.onchange = event => { const id = (event.target as HTMLSelectElement).value; if (id) void this.load(id).catch(report); };
+    pane.querySelector<HTMLSelectElement>('.pkw-scratch-history')!.onchange = event => { const version = Number((event.target as HTMLSelectElement).value); if (this.id && version) void this.load(this.id, version).catch(report); };
+    pane.querySelector('.pkw-scratch-new')!.addEventListener('click', () => void this.create({}).catch(report));
+    pane.querySelector('.pkw-scratch-save')!.addEventListener('click', () => void this.control({ op: 'save', title: pane.querySelector<HTMLInputElement>('.pkw-scratch-title')!.value }).catch(report));
+    pane.querySelector<HTMLInputElement>('.pkw-scratch-title')!.oninput = event => {
+      const title = (event.target as HTMLInputElement).value.trim();
+      if (!title || title.length > 200) return;
+      this.title = title;
+      if (this.saveTimer) clearTimeout(this.saveTimer);
+      this.pendingSaveReason = 'rename';
+      this.saveTimer = setTimeout(() => { this.saveTimer = undefined; this.persist('rename'); }, 200);
+      this.saveStatus();
+    };
+    void this.refreshLibrary().catch(report);
     this.resize = new ResizeObserver(() => { this.editor.layout(); this.onLayout(); });
     this.resize.observe(pane);
   }
-  close(): void { ++this.revision; this.activeRequest?.abort(); if (this.timer) clearTimeout(this.timer); this.pane.hidden = true; document.body.classList.remove('pkw-scratch-open'); this.onLayout(); }
+  close(): void { if (this.saveTimer) { clearTimeout(this.saveTimer); this.saveTimer = undefined; } this.runStatus = 'closed'; this.persist('close'); ++this.revision; this.activeRequest?.abort(); if (this.timer) clearTimeout(this.timer); this.pane.hidden = true; document.body.classList.remove('pkw-scratch-open'); this.onLayout(); }
   private status(text: string): void { this.pane.querySelector('.pkw-scratch-state')!.textContent = text; }
-  async open(line?: number): Promise<void> {
+  async open(line?: number, publish = true): Promise<void> {
+    await this.flushSave();
     const paused = this.host.debug.paused, state = this.host.debug.state();
     if (!paused || !state) throw new Error('Start scratchpad at a live pause to copy its inputs.');
     const frame = paused.stack[this.host.debug.selectedFrame];
@@ -81,7 +296,7 @@ export class Scratchpad {
     const pausedPath = this.host.debug.pathOf(frame?.fileId ?? paused.fileId);
     const targetLine = line ?? (this.file === pausedPath ? frame?.line ?? paused.line : this.code.cursorLine() ?? 1);
     const response = await fetch('/api/scratchpad/prepare', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file: this.file, line: targetLine }) });
-    const fn = await response.json() as { code: string; name?: string; parameters: string[]; helpers?: string[]; error?: string };
+    const fn = await response.json() as { code: string; name?: string; parameters: string[]; helpers?: string[]; requiresReceiver?: boolean; error?: string };
     if (!response.ok || fn.error) throw new Error(fn.error ?? 'Cannot prepare scratchpad');
     if (this.host.debug.paused !== paused) throw new Error('Pause changed while copying scratchpad inputs.');
     this.inputNames = state.locals.map(v => v.name).filter(name => /^[A-Za-z_$][\w$]*$/.test(name));
@@ -95,24 +310,60 @@ export class Scratchpad {
     const inputs: Record<string, unknown> = {};
     for (const v of state.locals.filter(v => this.inputNames.includes(v.name))) { remaining = 80; inputs[v.name] = v.valueBag ? scratchInput(await copy(v.valueBag.data)) : { __scratchUnavailable: 'not captured' }; }
     if (this.host.debug.paused !== paused) throw new Error('Pause changed while copying scratchpad inputs.');
+    this.id = crypto.randomUUID(); this.title = fn.name ?? `${this.file.split('/').pop()} experiment`; this.saveError = null;
+    const wasUpdating = this.updating;
+    this.updating = true;
+    this.initialMockLabels = {};
     this.initialInputs = JSON.stringify(inputs, null, 2);
-    this.initialMocks = JSON.stringify('emit' in inputs ? { emit: null } : {}, null, 2);
+    this.initialMocks = '{}';
+    this.requiresReceiver = fn.requiresReceiver === true;
+    this.mockLabels = {};
+    this.provenance = { file: this.file, line: frame?.line ?? paused.line, runId: this.host.state().live?.runId ?? null, frame: this.host.debug.selectedFrame, capturedInputs: JSON.parse(this.initialInputs) };
     this.inputs.setValue(this.initialInputs); this.mocks.setValue(this.initialMocks);
     this.original = (fn.name ? `${fn.code}\n\nconst result = await ${fn.name}(${fn.parameters.join(', ')});` : this.code.selectedText() || `// Use the copied variables below.\n`) + '\n\nexport {};';
     this.model.setValue(this.original);
     this.pane.querySelector('.pkw-scratch-file')!.textContent = `${this.file.split('/').pop()} · copy at line ${frame?.line ?? paused.line}`;
-    this.pane.hidden = false; document.body.classList.add('pkw-scratch-open');
-    this.onLayout(); this.editor.layout(); this.editor.focus(); this.schedule();
+    this.updating = wasUpdating;
+    if (publish) { this.publish(); this.schedule('create'); await this.flushSave(); }
   }
-  private schedule(): void {
+  private fixtureLabels(): void {
+    const labels = this.pane.querySelector('.pkw-scratch-labels') ?? (() => {
+      const node = document.createElement('p'); node.className = 'pkw-scratch-labels';
+      node.setAttribute('aria-label', 'Synthetic fixture labels');
+      node.style.cssText = 'margin:0;padding:0 12px 8px;overflow-wrap:anywhere';
+      this.pane.querySelector('.pkw-scratch-file')!.after(node);
+      return node;
+    })();
+    let fixtures: Record<string, unknown> = {};
+    try { fixtures = JSON.parse(this.mocks.getValue()); } catch { /* The run reports invalid JSON. */ }
+    labels.textContent = fixtures && typeof fixtures === 'object' ? Object.keys(fixtures).map(path => `${path}: ${this.mockLabels[path] ?? 'manual synthetic fixture'}`).join(' · ') : '';
+    (labels as HTMLElement).hidden = !labels.textContent;
+  }
+  private schedule(reason = 'edit'): void {
+    if (this.updating) return;
+    this.fixtureLabels();
+    this.loadedVersion = null;
+    this.runStatus = 'dirty'; this.result = null; this.error = null;
     this.capturedValues = [];
     ++this.revision; this.activeRequest?.abort(); this.values.clear(); render(null, this.pane.querySelector('.pkw-scratch-results')!);
     if (this.timer) clearTimeout(this.timer);
+    this.status('');
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.pendingSaveReason = reason;
+    this.saveTimer = setTimeout(() => { this.saveTimer = undefined; this.persist(reason); }, 200);
+    this.saveStatus();
+    if (!this.pane.hidden && this.requiresReceiver && this.model.getValue() === this.original) {
+      this.runStatus = 'needsPreparation';
+      this.status('This method needs its copied receiver before automatic execution.');
+      return;
+    }
     if (!this.auto.checked || this.pane.hidden) return;
-    this.status(''); this.timer = setTimeout(() => void this.run(), 150);
+    this.runStatus = 'scheduled'; this.status(''); this.timer = setTimeout(() => void this.run(), 150);
   }
   private async run(): Promise<void> {
     if (this.pane.hidden) return;
+    if (this.timer) clearTimeout(this.timer);
+    this.runStatus = 'running'; this.result = null; this.error = null;
     const revision = ++this.revision;
     this.activeRequest?.abort(); this.activeRequest = new AbortController();
     this.status('Running…');
@@ -124,13 +375,18 @@ export class Scratchpad {
       const response = await fetch('/api/scratchpad/run', { method: 'POST', headers: { 'content-type': 'application/json' }, signal: this.activeRequest.signal, body: JSON.stringify({ file: this.file, code: this.model.getValue(), inputs, mocks }) });
       const data = await response.json() as ScratchResult;
       if (revision !== this.revision) return;
+      this.result = data; this.error = data.error ?? null; this.runStatus = data.error ? 'error' : 'completed';
       this.status(data.error ?? '');
       data.values ??= []; data.output ??= [];
-      this.capturedValues = data.values;
+      this.renderResult(data);
+      await this.flushSave(); this.persist('run'); await this.saves;
+    } catch (e) { if (revision === this.revision) { this.error = e instanceof Error ? e.message : String(e); this.runStatus = 'error'; this.status(this.error); await this.flushSave(); this.persist('run'); await this.saves; } }
+  }
+  private renderResult(data: ScratchResult): void {
+    this.capturedValues = data.values;
       this.values.set(data.values.filter(v => v.line <= this.model.getLineCount()).map(v => ({ range: new monaco.Range(v.line, this.model.getLineMaxColumn(v.line), v.line, this.model.getLineMaxColumn(v.line)), options: { after: { content: `  ${v.name} = ${JSON.stringify(v.value)?.slice(0, 90)}`, inlineClassName: 'pkw-inline-value' } } })));
       const latest = [...new Map(data.values.map(v => [v.name, v])).values()];
       const inspector = { expandNode: async (n: ValueNode) => n };
-      render(<>{latest.map(v => <ValueTree key={`${revision}:${v.name}`} node={valueNode(v.value)} name={v.name} debug={inspector} initialOpen={v.name === 'result'} />)}{data.output.length ? <section aria-label="Console output">{data.output.map((entry, i) => <div class="pkw-scratch-console-row" key={i}>{(Array.isArray(entry) ? entry : [entry]).map((arg, j) => typeof arg === 'object' && arg !== null ? <ValueTree key={j} node={valueNode(arg)} name="" debug={inspector} /> : <span key={j}><ValueSyntax text={String(arg)} /></span>)}</div>)}</section> : null}</>, this.pane.querySelector('.pkw-scratch-results')!);
-    } catch (e) { if (revision === this.revision) this.status(e instanceof Error ? e.message : String(e)); }
+      render(<>{latest.map(v => <ValueTree key={`${this.revision}:${v.name}`} node={valueNode(v.value)} name={v.name} debug={inspector} initialOpen={v.name === 'result'} />)}{data.output.length ? <section aria-label="Console output">{data.output.map((entry, i) => <div class="pkw-scratch-console-row" key={i}>{(Array.isArray(entry) ? entry : [entry]).map((arg, j) => typeof arg === 'object' && arg !== null ? <ValueTree key={j} node={valueNode(arg)} name="" debug={inspector} /> : <span key={j}><ValueSyntax text={String(arg)} /></span>)}</div>)}</section> : null}</>, this.pane.querySelector('.pkw-scratch-results')!);
   }
 }

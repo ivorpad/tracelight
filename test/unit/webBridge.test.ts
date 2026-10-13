@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { BridgeServer, LOG_PATH, languageFor, parseCtl, pickConfig, pickWatches, runConfig, runtimeCommand, sameOrigin, splitCommand } from '../../web/server';
+import { BridgeServer, LOG_PATH, ctlExitCode, languageFor, parseCtl, pickConfig, pickWatches, runConfig, runtimeCommand, sameOrigin, splitCommand } from '../../web/server';
 import { ServerViews } from '../../web/serverViews';
 import { applyEvent, emptyRun } from '../../web/runState';
 import { packSteps } from '../../src/timeMachine/traceModel';
@@ -13,6 +13,48 @@ import * as pathShim from '../../web/pathShim';
 import { runtimeLabelText } from '../../web/pageHost';
 
 const fake = path.join(__dirname, 'fixtures', 'fakeRunner.cjs');
+
+describe('CLI teaching operation exit status', () => {
+  it('rejects transport and structured failures without requiring a failed HTTP status', () => {
+    const command = parseCtl(['state']);
+    expect(ctlExitCode(command, false, { result: {} })).toBe(1);
+    expect(ctlExitCode(command, true, { result: null, error: 'duplicate pages' })).toBe(1);
+    expect(ctlExitCode(command, true, null)).toBe(1);
+  });
+
+  it('requires a rendered position for moves, including nested step replies', () => {
+    for (const words of [['position', 'live'], ['goto', '2'], ['step', 'into'], ['debug', 'step', 'into']]) {
+      const command = parseCtl(words);
+      expect(ctlExitCode(command, true, { result: {} })).toBe(1);
+      const position = { ready: false, blockers: ['wrong source'] };
+      expect(ctlExitCode(command, true, { result: command.action === 'position' ? position : { position } })).toBe(1);
+    }
+    expect(ctlExitCode(parseCtl(['step', 'into']), true, { result: { state: { position: { ready: true } } } })).toBe(0);
+    expect(ctlExitCode(parseCtl(['position', 'live']), true, { result: { ready: true } })).toBe(0);
+  });
+
+  it('allows informational state reads and normal live completion, but not an unstarted run', () => {
+    expect(ctlExitCode(parseCtl(['debug', 'state']), true, { result: { position: { ready: false } } })).toBe(0);
+    const command = parseCtl(['debug', 'continue']);
+    expect(ctlExitCode(command, true, { result: { runId: 'run-1', running: false, paused: false, position: { ready: false } } })).toBe(0);
+    expect(ctlExitCode(command, true, { result: { running: false } })).toBe(1);
+  });
+
+  it('rejects every unsuccessful scratch execution while permitting successful output', () => {
+    const good = { status: 'completed', liveExecutionChanged: false, result: { values: [], output: [] } };
+    for (const op of ['experiment', 'run'] as const) {
+      const command = { action: 'scratchpad' as const, op };
+      expect(ctlExitCode(command, true, { result: good })).toBe(0);
+      for (const patch of [
+        { status: 'needsPreparation' }, { status: 'running' }, { error: 'invalid JSON' },
+        { liveExecutionChanged: true }, { result: null },
+        { result: { error: 'normalizePromptInput is not a function' } },
+        { result: { missingMocks: ['receiver'] } },
+        { result: { applicationErrors: [{ path: '$.error', value: 'tool failed' }] } },
+      ]) expect(ctlExitCode(command, true, { result: { ...good, ...patch } })).toBe(1);
+    }
+  });
+});
 
 describe('web bridge helpers', () => {
   it('splits a runtime command line, keeping quoted parts whole', () => {
@@ -179,11 +221,11 @@ describe('BridgeServer', () => {
     server = undefined;
   });
 
-  async function start(): Promise<{ url: string; port: number; file: string }> {
+  async function start(initialRun = true): Promise<{ url: string; port: number; file: string }> {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pkw-'));
     const file = path.join(dir, 'scratch.py');
     fs.writeFileSync(file, 'print("ok")\n');
-    server = new BridgeServer({ file, port: 0, host: '127.0.0.1', runtime: `"${process.execPath}" "${fake}"`, watch: false, open: false, distDir: dir, stateDir: dir });
+    server = new BridgeServer({ file, port: 0, host: '127.0.0.1', runtime: `"${process.execPath}" "${fake}"`, watch: false, initialRun, open: false, distDir: dir, stateDir: dir });
     await server.start();
     const port = Number(new URL(server.url).port);
     return { url: server.url, port, file };
@@ -212,6 +254,39 @@ describe('BridgeServer', () => {
       ws.onerror = () => reject(new Error('websocket failed'));
     });
   }
+
+  it('opens without executing and can start the debugger before any recording', async () => {
+    const { port, file } = await start(false);
+    const page = await connect(port);
+    expect(await page.next(m => m.type === 'hello')).toMatchObject({ file: { path: file } });
+    page.ws.send(JSON.stringify({ type: 'debug.start', breakpoints: [{ path: file, line: 2 }], exceptions: 'uncaught' }));
+    const begin = await page.next(m => m.type === 'debug.begin') as Extract<BridgeToPage, { type: 'debug.begin' }>;
+    await page.next(m => m.type === 'debug.event' && m.event.type === 'debug.paused');
+    expect(page.messages.some(m => m.type === 'run.begin' || m.type === 'event')).toBe(false);
+    page.ws.send(JSON.stringify({ type: 'debug.request', id: 1, body: { type: 'debug', runId: begin.runId, action: 'continue' } }));
+    await page.next(m => m.type === 'debug.end');
+    page.ws.send(JSON.stringify({ type: 'run' }));
+    expect(await page.next(m => m.type === 'run.begin')).toMatchObject({ runId: 'w-1', reason: 'page' });
+    await page.next(m => m.type === 'event' && m.event.type === 'run.finished');
+    page.ws.close();
+  });
+
+  it('refuses ambiguous multi-page state and commands without broadcasting a step', async () => {
+    const { port, url } = await start(false);
+    const first = await connect(port);
+    const second = await connect(port);
+    await first.next(m => m.type === 'hello');
+    await second.next(m => m.type === 'hello');
+    const command = await fetch(new URL('/api/command', url), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'debug', op: 'step' }) });
+    expect(command.status).toBe(409);
+    expect(await command.json()).toMatchObject({ result: null, error: expect.stringContaining('2 pages are connected') });
+    const state = await fetch(new URL('/api/state', url));
+    expect(state.status).toBe(409);
+    expect(await state.json()).toMatchObject({ pages: 2, state: null, error: expect.stringContaining('2 pages') });
+    expect(first.messages.some(m => m.type === 'agent')).toBe(false);
+    expect(second.messages.some(m => m.type === 'agent')).toBe(false);
+    first.ws.close(); second.ws.close();
+  });
 
   it('relays a run of any runtime to the page, replies to requests, and refuses other origins', async () => {
     const { port, file } = await start();
@@ -318,4 +393,18 @@ describe('BridgeServer', () => {
     expect(JSON.parse(fs.readFileSync(path.join(path.dirname(file), 'recent.json'), 'utf8'))).toHaveLength(2);
     page.ws.close();
   });
+});
+
+
+it('parses complete scratch controls and atomic JSON updates', () => {
+  for (const op of ['state', 'run', 'restore', 'close']) expect(parseCtl(['scratchpad', op])).toEqual({ action: 'scratchpad', op });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tl-scratch-ctl-'));
+  try {
+    const file = path.join(dir, 'edit.json');
+    fs.writeFileSync(file, JSON.stringify({ code: 'const result = x;', inputs: { x: 2 }, mocks: {}, autoRun: false, action: 'debug', op: 'start' }));
+    expect(parseCtl(['scratchpad', 'update', '--data', file])).toEqual({ action: 'scratchpad', op: 'update', code: 'const result = x;', inputs: { x: 2 }, mocks: {}, autoRun: false });
+    expect(parseCtl(['scratchpad', 'experiment', '--data', file])).toEqual({ action: 'scratchpad', op: 'experiment', code: 'const result = x;', inputs: { x: 2 }, mocks: {}, autoRun: false });
+  expect(parseCtl(['scratchpad', 'history', '--id', 'saved-1', '--version', '2'])).toEqual({ action: 'scratchpad', op: 'history', id: 'saved-1', version: 2 });
+  expect(parseCtl(['scratchpad', 'create', '--title', 'Filter calls'])).toEqual({ action: 'scratchpad', op: 'create', title: 'Filter calls' });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

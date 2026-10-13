@@ -1,12 +1,81 @@
 ---
 name: tracelight
 description: >-
-  See what JavaScript or TypeScript code does with the `tracelight` CLI, the user's VS Code window and the browser page, in one of four modes given as the first argument. `ask` answers a question about code from a recording of it running, in chat: how it works, why a value is what it is, what it swallowed, what an edit changed, where the time goes. `debug` pauses a running Node program at a function or line, steps it and reads the frame, in VS Code or in the browser page. `explain` walks a person through a run in their editor or in the browser page, reaching requested stops and explaining new evidence at their pace. `show` hands over a page where every value comes from a command: a tour of the whole run, or a code-history page around chosen steps. Use when asked to ask about, learn, debug, step, break, pause, explain, teach, walk through, review a change in, or "show me" what a JavaScript or TypeScript program did.
+  See what JavaScript or TypeScript code does with the `tracelight` CLI, the user's VS Code window and the browser page, in one of four modes given as the first argument. `ask` answers a question about code from a recording of it running, in chat: how it works, why a value is what it is, what it swallowed, what an edit changed, where the time goes. `debug` pauses a running Node program at a function or line, steps it and reads the frame, in VS Code or in the browser page. `explain` helps a person understand code interactively: inspect source, plan in memory, propose breakpoints and start a session, then jump by question or explain manual steps, with guided teaching when requested. `show` hands over a page where every value comes from a command: a tour of the whole run, or a code-history page around chosen steps. Use when asked to ask about, learn, debug, step, break, pause, explain, teach, walk through, review a change in, or "show me" what a JavaScript or TypeScript program did.
 argument-hint: ask | debug | explain | show [what to look at]
 disable-model-invocation: true
 ---
 
 # Tracelight
+
+## HARD gate: confirm the visible position before teaching
+
+After each browser navigation, use its returned `position` or `tracelight_position` and require
+`ready: true` before explaining source or values. It confirms the rendered source file, line,
+highlight and active pane after presentation. Keep `recorded` selection and `live` pause separate.
+For a live lesson use debugger moves and live captured values. For a past moment explicitly
+say it is recorded, focus `mode: "recorded"`, and use recorded evidence. Focusing a recording
+does not rewind the live program. Never substitute `nav.step` or a CLI location for the editor's
+visible highlight. Repair a hidden/Story pane, stale source, changed frame or duplicate page
+before narrating; if `ready` stays false, state the concrete blocker. Follow
+[the visible-position gate](references/browser.md#hard-gate-confirm-visible-position).
+
+## HARD rule: listen before manual stepping
+
+Every agent, including Codex and Claude Code, must establish pause-event listening before
+handing controls to a user who will step during interactive learning. Browser startup and
+attachment must automatically establish listening as soon as the page connects, including
+`--no-run` sessions, before `debug start` or any handover. No separate request or manual-stepping
+mode is required. Keep that listener through pauses, resumes and debugger restarts on the same
+page. Use a verified connected
+host pause-event subscription if available. Otherwise obtain a `tracelight_wait_pause` cursor
+and keep a bounded wait loop armed in the active turn. Explain each new pause once from its
+matching source and captured values, then re-arm. Timeouts are not steps. Never advance
+execution on the user's behalf during manual stepping. In a guided walkthrough, perform
+the navigation the user authorized and keep the listener attached.
+
+An active wait ends with the turn. Never end the turn or claim to be following manual steps
+while relying only on that wait. Without a genuine idle-chat wake subscription, state that
+limit explicitly and keep listening until the user ends manual-step teaching or redirects work.
+If event listening is unavailable, disclose it before handing over controls; never silently
+substitute "tell me after you step". Follow [the listening loop](references/explain.md#hard-rule-listen-before-manual-stepping)
+on every host and surface.
+
+## HARD gate: prepare and execute learning experiments
+
+Every agent owns scratchpad preparation and repair without waiting for the learner. Use ONE
+`tracelight_scratchpad` call with `op: "experiment"` and the complete code, bindings/receiver,
+inputs, dependencies, mocks/labels and auto-run policy. It formats, opens and awaits execution
+without running an intermediate copy. Never use open → update → run to prepare a lesson.
+Resolve receiver `this`, absent helpers/callbacks, JSON/syntax errors, incomplete fixtures and
+uncaptured/capped bindings. Recover real pure implementations; mock only external boundaries
+with explicit labels. Repair and rerun until completed visible output and runtime/application
+errors support the lesson, or state the concrete limit. Verify readable indentation, copied-input
+provenance and unchanged live pause. Never silently change meaning, invent provider output,
+narrate an unexecuted result or leave an error for the learner to discover. Follow
+[the preparation gate](references/scratchpad.md#hard-gate-prepare-before-teaching).
+Do not ask the learner questions or give quizzes unless they explicitly request them.
+
+## HARD rule: act before narrating progress
+
+When the learner says continue, step into, restart or demonstrate, perform the next authorized
+operation in the same turn. Acknowledgements, plans, delegation messages and claims that setup
+is ready do not satisfy that request. For each teaching transition: move, confirm the visible
+position, inspect the matching values, then explain the observed behavior. Step into a requested
+function and its relevant decisions; do not skip its implementation and narrate only its result.
+Keep preparation and coordination out of the lesson unless a concrete blocker affects it.
+Name a blocker once, repair it when possible, and never imply that an unperformed action happened.
+Do not wait for another agent's final report when its available changes can already be tested
+locally without interfering with its work. Verify the runtime and frontend actually serving the
+learner; a successful build in another worktree does not update this session.
+
+Before demonstrating a feature, configure a runnable example that exercises it. An undefined
+hook is an absent hook, not an active permission check. A steering lesson must actually enqueue
+and consume a steering message. Plan checkpoints around the requested harness responsibilities,
+including loop decisions, tool batches, context, steering, persistence and execution controls.
+Identify which the example exercises and which require another example. Use exact variable
+names and inspect the values that drive each decision. Respect a request to wait for readiness;
+otherwise continue the authorized route without quizzes or repeated confirmation requests.
 
 ## Pick the mode
 
@@ -17,20 +86,30 @@ The first word after the skill name is the mode: `/tracelight ask why is Ben's t
 |---|---|---|---|
 | `ask` | a question about what code does or did, answered from a recording | a short answer in chat with `file:line` and `#step`, the page offered in one line | [references/ask.md](references/ask.md) |
 | `debug` | pause a running program, step it, read or set the frame, check a breakpoint | the stops you saw, in chat, then clean up | [references/debug.md](references/debug.md) |
-| `explain` | teach a person a file while they watch their editor or the browser page | lead through meaningful stops with brief observed evidence; honor their pace and explicit moves | [references/explain.md](references/explain.md) |
+| `explain` | understand code interactively in the editor or browser, with optional guided teaching | a plan, proposed breakpoints and a live session; jump by question or explain as the user steps | [references/explain.md](references/explain.md) |
 | `show` | evidence someone will read, keep or send on | a tour or a code-history page, plus a short finding in chat | [references/show.md](references/show.md) |
 
-With no mode, pick by the verb the user used. "How does", "why is", "what does it do with",
-"what changed", "did my fix work", "why is it slow" is `ask`. "Step", "break", "pause", "run to",
-"does it stop in" is `debug`. "Walk me through", "teach me", "explain as we go" with the person
-watching is `explain`. "Show me", "make me a page", "something I can send" is `show`. A request to
-see stepping gets real pauses, through `debug`. If two fit, ask which.
+With no mode, choose by intent and context. A question answered in chat ("why is", "what changed",
+"did my fix work", "why is it slow") is `ask`. "Step", "break", "pause", "run to", "does it stop
+in" is `debug`. "Understand how the Pi harness works", "let me jump around and learn", "walk me
+through", or "explain as I step" asks for interactive learning through `explain`. A standalone
+factual question can stay in `ask`; do not route interactive learning into a prerequisite
+recording. "Show me", "make me a page", "something I can send" is `show`. Honor an explicit mode.
+
+Learning does not require a guided lesson. In `explain`, inspect relevant source, make a short
+plan in memory, propose the breakpoints with the question each answers, then start the session
+at the first useful stop. Do not wait for plan approval unless requested. Voice or chat can
+direct jumps; manual steps use pause events for explanations without agent-driven movement.
+Guided teaching is optional. A debugging request does not imply a lesson. In `debug`, inspect source to
+choose a stop that tests a hypothesis. Neither needs a preliminary recording. Source inspection
+guides the next observation; claims about what executed still need runtime evidence.
 
 Jobs that are not modes, and where each lives:
 
 | the job | mode | read |
 |---|---|---|
-| learn an unfamiliar file or module from one run of it | `ask` | [ask.md, "Learning code"](references/ask.md#learning-code) |
+| understand a module interactively, jump to what matters, or explain manual steps | `explain` | [references/explain.md](references/explain.md) |
+| understand a module from a recorded run, answered in chat | `ask` | [ask.md, "Learning code"](references/ask.md#learning-code) |
 | what a program swallowed, where a bad value came from, what never ran | `ask` | [ask.md, "Hidden failures"](references/ask.md#hidden-failures) |
 | what an edit changed, whether a fix took | `ask` | [ask.md, "Review an edit"](references/ask.md#review-an-edit) |
 | rerun code that calls an API without the network | any | [ask.md, "Offline"](references/ask.md#offline-record-and-replay-http) |
@@ -44,12 +123,12 @@ Jobs that are not modes, and where each lives:
 recording; nothing re-executes and nothing can be changed. It answers questions about what
 already happened.
 
-**The Debugger** runs a program at full speed and pauses at a breakpoint or an exception. You
-step, read the frame, run a statement in it, continue. Nothing is recorded, and when the program
-exits the session is gone. It answers what the program does next, and it is the one when the bug
-needs a real port, real input or a real API. `--record` does both at one pause. A debug session
-without `--record` has no history at all, even after it finishes; `references/debug.md`, "History
-while debugging", says what to use instead.
+**The Debugger** runs a program and pauses at a breakpoint or an exception. You step, read the
+frame and continue. It answers what the program does next, including real input and API calls.
+Plain VS Code debugging records nothing; `--record` also captures that execution. The browser's
+debugger captures the same execution as it pauses for Code history. Neither requires a prior
+run. Reviewing history does not rewind the live program. See `references/debug.md`, "History
+while debugging", for the available forms.
 
 They reach you on three surfaces; a saved run is a recording only, the other two have both:
 
@@ -67,7 +146,39 @@ The debugger's full contract: [references/live-debugger.md](references/live-debu
 
 ## Before the first command: find the runtime and the editor
 
-Find the runtime fresh on this machine, each session. Extension folders carry a version
+### Find the target without a search detour
+
+Separate the code the user wants to understand from the Tracelight runtime used to inspect it.
+Being in the Tracelight repository does not mean the target library or scratch driver lives there.
+Choose the mode from the request before reading its reference; interactive learning starts with
+`explain.md`, not `ask.md`. Load other references only for the controls needed next. Reuse loaded
+instructions within the session.
+
+Follow the strongest available lead, stopping discovery when the target is established:
+
+1. Reuse paths, package names, browser URLs and session identifiers already supplied in this
+   conversation. Check that a named file exists; read a known session's state once for its entry
+   file, source paths and pause. Do not rediscover an open target through repository searches.
+2. For a named file without a path, use a scoped filename search (`rg --files -g '*harness*'`)
+   in the likely project or known scratch directory. For a library, follow the caller's imports
+   and package metadata. For an installed CLI such as `pi`, locate its executable, resolve its
+   symlink or inspect its launcher, then follow that package's dependencies to the implementation.
+   Use the matching package manager's installation root only if the launcher does not resolve it.
+3. Expand scope only after a concrete miss, and record what that miss ruled out. An empty search
+   of the Tracelight checkout says nothing about a globally installed Pi package. Do not cycle
+   through spelling variants, list the whole home directory, or scan unrelated package stores.
+   If no concrete lead remains, ask for the missing location instead of guessing more roots.
+
+Batch independent path checks and small metadata reads. Keep resolved entry, package and runtime
+paths in working memory. Once the caller and owning implementation are found, inspect enough to
+propose stops and launch; further source discovery can follow the user's questions. Screen
+inspection is for relevant visible state through the permitted UI tools, not a filesystem locator.
+
+### Resolve the control runtime once
+
+Reuse a verified runtime or connected browser control surface within this session. A working
+WebMCP session does not require CLI or editor-launcher discovery. For a new CLI session, resolve
+the runtime on this machine. Extension folders carry a version
 (`ivor.tracelight-0.3.0`), so a path saved in a note or another session goes stale on the next
 update and fails as `Cannot find module`. Look in this order:
 
@@ -84,8 +195,8 @@ update and fails as `Cannot find module`. Look in this order:
 
 The CLI needs Node 22.18 or newer, since it runs its own TypeScript sources (`node --version`;
 `$TRACELIGHT_CLI_NODE` picks the one the `~/.local/bin` script uses). The program it runs needs
-22.15 or newer and may use another Node (`run --node PATH`, `$TRACELIGHT_NODE`). Verify before
-going on: `tracelight debug -h` prints that verb's usage and exits 0 (bare `tracelight -h` prints
+22.15 or newer and may use another Node (`run --node PATH`, `$TRACELIGHT_NODE`). Verify a newly
+resolved CLI once: `tracelight debug -h` prints that verb's usage and exits 0 (bare `tracelight -h` prints
 the verb list and exits 2). If none of the three gives that, stop there and tell the user which
 step failed.
 
@@ -129,12 +240,15 @@ Make it your first command: nothing is running until it starts the session, so a
 sent before it answers `no live session`. Every `--live` command after the first stop drives that
 session.
 
-**A recording session (`ask`, `show`, `explain`) is the user's.** It exists only when the user
+**A recording session (`ask`, `show`, or a lesson using a recording) is the user's.** It exists only when the user
 started Tracelight on the file in VS Code ("Start on Current File", or a smart-start rule); having
 the file open is not enough, and `tracelight.agentAccess` only lets you reach a session, it starts
 none. Check with `state --live`, which moves nothing. On `no live session`, move on at once: record
 it yourself with `tracelight run FILE --save run.json` and use `run.json` instead of `--live`, or
 ask the user to start Tracelight on the file if they want the editor to follow along.
+This recording fallback does not apply to live learning or debugging. Start or reuse the
+debugger for those; a new browser exploration uses `web FILE --no-run --no-watch` before setting
+breakpoints and issuing `web ctl debug start`.
 
 The CLI finds a live session by the file the command names, by the current directory's workspace,
 or by `--session demo.ts`; when two windows show the same file, `--session

@@ -19,7 +19,7 @@ Contents: [Start it](#start-it) Â· [A page must be open](#a-page-must-be-open) Â
 ## Start it
 
 ```
-tracelight web FILE [--port N] [--open] [--no-watch] [--verbose] [--runtime js|"CMD ARGS"]
+tracelight web FILE [--port N] [--open] [--no-run] [--no-watch] [--verbose] [--runtime js|"CMD ARGS"]
 tracelight web -h | --help
 ```
 
@@ -36,6 +36,10 @@ It serves until it is stopped, so start it in the background (your harness's bac
   says `port 4777 is taken` and `tracelight web ctl --port 4777 state` names that page's file. Pick
   a free port and pass the same `--port` to every `ctl`.
 - `--open`: open the page in the default browser, for a person at this machine.
+- `--no-run`: serve the source without executing it on startup. For live teaching or debugging,
+  combine it with `--no-watch`, open the page, set breakpoints, then issue `debug start`.
+  The normal startup behavior stays unchanged when this flag is omitted. This flag skips only
+  the initial run; explicit Run and page edits under Automatic mode can still execute code.
 - `--no-watch`: do not re-run when the file changes on disk. Without it a save in any editor
   re-runs the file and refreshes the page; typing in the page's code pane runs the edited buffer
   without saving, and Ctrl/Cmd+S in the page writes the file.
@@ -71,13 +75,42 @@ until tracelight web ctl --port 4790 state | grep -q '"pages": 1'; do sleep 0.2;
 
 Two pages on one bridge both receive every command, and the first answer wins. Keep one.
 
+## HARD gate: confirm visible position
+
+Navigation replies include `position`, confirmed after rendering from Monaco's actual model,
+highlight and visible ranges. Require `ready: true` before narrating source or values. `source`
+is the editor's visible file/line/code/highlight; `activePane` distinguishes source from Story.
+`recorded` and `live` each carry run, step, frame, file, line, function and source text. A selected
+recording step does not describe the live pause. `recordedDiffersFromLive` makes that difference
+explicit. `sourceMatches` compares the editor with the run's source, and `blockers` identify
+hidden/out-of-view, edited/stale, changed-position or mismatched presentation.
+
+`tracelight_position({mode: "live", focus: true})` reveals the paused frame; use debugger moves
+and captured live values for a live lesson. `mode: "recorded"` reveals the selected recording's
+source and highlight, closes Story without stopping navigation, and hides live value overlays.
+Declare that this is a recorded moment and use recorded values. The live program stays paused
+where it was. `mode: "visible"` checks the current presentation without changing its selection.
+CLI uses `position live|recorded|visible --focus true|false`. Do not teach until a blocked
+position is repaired and confirmed. Never infer visible source from legacy `location` or `step`.
+
+The HTTP/CLI bridge refuses control when multiple pages are connected, before dispatching any
+command. State returns 409 with the page count and a blocker instead of guessing from cached
+state. Use tab-bound WebMCP or close duplicate pages. A connected page is required to confirm
+visible position.
+
 ## Commands
 
 Every command prints the bridge's JSON reply and exits 0, or 1 when the page answered an error,
 or 2 for a usage error or when nothing is served on the port. `--port N` goes on every one.
+Exit 1 also covers an unconfirmed position after navigation or explicit position confirmation,
+and scratchpad experiment/run replies with incomplete execution, missing mocks, runtime or
+application errors, or a changed live execution. The full reply remains on stdout for repair.
+State reads remain informational; a live control that reaches the end of a run succeeds but
+does not establish a paused position suitable for teaching.
 
 ```
 tracelight web ctl [--port N] state
+tracelight web ctl position live|recorded|visible [--focus true|false]
 tracelight web ctl start
 tracelight web ctl stop
 tracelight web ctl goto STEP [--say TEXT]
@@ -94,7 +127,7 @@ tracelight web ctl eval EXPR
 tracelight web ctl var NAME
 tracelight web ctl why NAME [--step N]
 tracelight web ctl watch EXPR [--remove]
-tracelight web ctl break LINE [on|off] [--if COND]
+tracelight web ctl break LINE [on|off] [--file FILE] [--if COND]
 tracelight web ctl debug start|restart|continue|pause|stop|state [--say TEXT]
 tracelight web ctl debug step [into|over|out] [--say TEXT]
 tracelight web ctl story
@@ -116,7 +149,7 @@ tracelight web ctl profile
 | `var NAME` | every recorded change of NAME, and opens the Variable History view for the person |
 | `why NAME` | where NAME's value came from after `--step N` (default: the Time Machine's step); an empty NAME explains the statement |
 | `watch EXPR` | adds a Time Machine watch, starting it if needed; `--remove` drops the watch with that text |
-| `break LINE` | toggles a breakpoint on a line of the main file for the page's debugger; `on` or `off` sets it, `--if COND` makes it conditional (`breakpoint` is the same command) |
+| `break LINE` | toggles a breakpoint in the main file or a known imported source named with `--file FILE`; `on` or `off` sets it, `--if COND` makes it conditional (`breakpoint` is the same command) |
 | `debug OP` | the page's live debugger: `start`, `continue`, `step` (`over` by default, or `into`, `out`), `pause`, `stop`, `state` |
 | `story` | opens the Code Story in the code pane and returns its text |
 | `profile` | one run under the profiler, on a runtime of its own; returns the hottest functions |
@@ -170,9 +203,11 @@ tracelight web ctl --port 4790 debug continue | node -e 'let s="";process.stdin.
 
 ## The live debugger on the page
 
-`debug start` runs the file for real on a second runtime process: nothing is recorded, and the
-recorded run and its Time Machine stay as they were. Breakpoints come from `break LINE` (or the
-person's clicks in the gutter, F9), stay set across debug runs, and belong to the main file.
+`debug start` runs the file for real on its debugger runtime and captures that same execution
+for Code history. It needs no preliminary recording. Breakpoints come from `break LINE` (or
+gutter clicks, F9), stay set across debug runs, and can target a known imported source with
+`--file FILE`. Set several before starting, then use `debug continue` to resume between them.
+Check the returned location: an earlier breakpoint or exception may intercept the route.
 
 ```sh
 tracelight web ctl --port 4790 break 32 on
@@ -241,7 +276,7 @@ recording the run wrote.
 
 An agent that works inside the browser gets the same commands as WebMCP tools when the browser
 offers `document.modelContext` (with a fallback for older navigator APIs) (the header then shows a WebMCP chip): `tracelight_state`,
-`tracelight_goto`, `tracelight_step`, `tracelight_wait_pause`, `tracelight_line`, `tracelight_say`, `tracelight_values`, `tracelight_peek`, `tracelight_inspect`, `tracelight_run`,
+`tracelight_goto`, `tracelight_step`, `tracelight_wait_pause`, `tracelight_position`, `tracelight_line`, `tracelight_say`, `tracelight_values`, `tracelight_peek`, `tracelight_inspect`, `tracelight_run`,
 `tracelight_eval`, `tracelight_var`, `tracelight_why`, `tracelight_watch`, `tracelight_breakpoint`,
 `tracelight_story`, `tracelight_profile`, `tracelight_debug`. A browser-automation agent can also
 call `window.tracelight`, the page's host object, directly.
@@ -283,7 +318,8 @@ web` has no flags for these; a person sets them in the page.
   directory.
 - The page's run records locals at every step, with HTTP off, unless the page's Settings say
   otherwise.
-- `break` sets breakpoints in the main file only.
+- `break --file FILE` targets a source known to the page. Library code must be instrumented
+  for its breakpoints to pause. An unknown source cannot yet be a browser breakpoint target.
 
 ## Stop it
 
@@ -307,22 +343,39 @@ carry a debug summary with `runId`, `step`, `frame`, nearby source, and each loc
 and unavailable markers. Extra inspection calls are needed only for relevant missing detail or
 a user-requested visible inspector. Explain a changed pause, then re-arm with its cursor.
 The tool does not advance execution or open an overlay. It is an active wait, not an integration
-that wakes idle or ended chats.
+that wakes idle or ended chats. Apply the [HARD listening rule](explain.md#hard-rule-listen-before-manual-stepping)
+automatically as soon as a started or attached browser page connects, including `--no-run`
+sessions, before `debug start` or handing over controls. No separate listening request or
+manual-stepping mode is required. Establish a verified host subscription or keep the bounded
+active wait loop armed through pauses, resumes and debugger restarts. Reconnecting requires a
+fresh cursor and wait. Disclose idle-chat limits.
 
 `scratchpad open [--line N]` opens a TypeScript scratchpad beside the source. WebMCP
-`tracelight_scratchpad` accepts `open` and optional `line`. It copies the containing function
-and captured inputs. Code and JSON input edits auto-run in a separate worker. Local helpers
+`tracelight_scratchpad` accepts `op: experiment|open|close|state|update|run|restore|create|save|list|load|history`, optional `line`,
+and atomic `code`, `inputs`, `mocks`, `mockLabels`, `autoRun` updates. It copies the containing
+function and captured inputs, returns current editor state and completed structured results. Code and JSON input edits auto-run in a separate worker. Local helpers
 and imports resolve from the source file; external calls need explicit mock fixtures.
 The live program remains paused. Missing captured data stays marked unavailable.
+For teaching, use ONE `experiment` command with the complete prepared package. It formats code,
+publishes no intermediate copy, and awaits one scratch execution. Apply the
+[HARD preparation gate](scratchpad.md#hard-gate-prepare-before-teaching); verify visible indentation
+and errors before teaching. Bare receiver-dependent copies wait with `needsPreparation`.
 `scratchpad close` dismisses the pane without advancing execution.
 For the full editing, inspection, mock and verification workflow, read
 [scratchpad.md](scratchpad.md).
 
 ```sh
 tracelight web FILE [--only PATTERN]
-tracelight web ctl scratchpad open|close [--line N]
+tracelight web ctl scratchpad experiment|open|close|state|update|run|restore|create|save|list|load|history [--line N] [--data FILE] [--id ID] [--title TITLE] [--version N]
 ```
 
 `--only` can be repeated to select project files to instrument.
 WebMCP `tracelight_start` starts navigating the recording from its beginning;
 `tracelight_stop` stops navigating it. Neither executes the program.
+
+Scratchpads autosave as named experiments with stable IDs and version history. Use
+`tracelight_scratchpad` with `create`, `list`, `save`, `load` (`id`, optional `version`) or
+`history` (`id`, optional `version`). Creation, edits and completed results persist on the
+server under `$TRACELIGHT_HOME/scratchpads` (default `~/.tracelight/scratchpads`). Reopening
+never runs code. The pane has saved-scratchpad and history selectors and an autosave status.
+`Save checkpoint` adds an optional version. See the scratchpad reference for exact fields.

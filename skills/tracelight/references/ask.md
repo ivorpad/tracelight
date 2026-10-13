@@ -76,8 +76,10 @@ Tracelight on the file and wants the editor to follow; `state --live` says wheth
 
 ## Learning code
 
-When the user is learning a file or module, build the explanation from the run's shape outward,
-in this order:
+For a chat answer based on a recording, build the explanation from the run's shape outward,
+in this order. If the user wants to explore, jump between functions, inspect live values or
+experiment as they learn, use [explain.md](explain.md) instead. Inspect source, plan, propose
+breakpoints and start the session; interactive learning needs no preliminary recording.
 
 1. `graph RUN --no-statements`: the modules, functions and packages, who called whom and how often,
    with `⇢` where a value made by one function went into another. That is the outline.
@@ -88,9 +90,9 @@ in this order:
    reading guide even when you are not building a tour page.
 4. `step RUN N --into` and `why RUN N NAME` on the two or three steps that carry the idea.
 
-Teach behaviour before terms ("adds 1/(60+rank) for every list the document is in", then "that is
-reciprocal rank fusion"), with the recorded numbers, not adjectives. To teach while the person
-watches, line by line, switch to [explain.md](explain.md).
+Explain behaviour before terms ("adds 1/(60+rank) for every list the document is in", then "that is
+reciprocal rank fusion"), with the recorded numbers, not adjectives. Interactive exploration and
+optional guided teaching live in [explain.md](explain.md); neither requires visiting every line.
 
 ## Hidden failures
 

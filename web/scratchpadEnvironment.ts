@@ -27,16 +27,17 @@ delete globalThis.__scratchPayload;
       for(const key of ['href','origin','protocol','username','password','host','hostname','port','pathname','search','hash'])Object.defineProperty(URL.prototype,key,{get(){return this._data[key];},...(key==='origin'?{}:{set(value){this._update(key,value);}})});
       })(globalThis.__nativeEncoding);
       function structuredClone(value){const seen=new Map();function copy(x){if(typeof x==='function'||typeof x==='symbol')throw Error('DataCloneError: value cannot be cloned');if(x===null||typeof x!=='object')return x;if(seen.has(x))return seen.get(x);let out;if(x instanceof Date)out=new Date(x);else if(x instanceof RegExp)out=new RegExp(x.source,x.flags);else if(x instanceof ArrayBuffer)out=x.slice(0);else if(ArrayBuffer.isView(x))out=x instanceof DataView?new DataView(copy(x.buffer),x.byteOffset,x.byteLength):new x.constructor(copy(x.buffer),x.byteOffset,x.length);else out=x instanceof Map?new Map():x instanceof Set?new Set():Array.isArray(x)?[]:{};seen.set(x,out);if(x instanceof Map)for(const [k,v]of x)out.set(copy(k),copy(v));else if(x instanceof Set)for(const v of x)out.add(copy(v));else if(!(x instanceof Date||x instanceof RegExp||x instanceof ArrayBuffer||ArrayBuffer.isView(x)))for(const k of Object.keys(x))out[k]=copy(x[k]);return out;}return copy(value);}
-      const __inputs=__data.inputs,__mocks=__data.mocks,__values=[],__output=[];
+      const __inputs=__data.inputs,__mocks=__data.mocks,__values=[],__output=[],__missingMocks=[],__caps={values:false,output:false};
+      function __missing(path,message){if(!__missingMocks.includes(path))__missingMocks.push(path);throw Error(message);}
       const __clone=x=>{const seen=new WeakSet();return x===undefined?undefined:JSON.parse(JSON.stringify(x,(key,value)=>{if(typeof value==='function')return {__scratchUnavailable:'function'};if(typeof value==='bigint')return String(value)+'n';if(value&&typeof value==='object'){if(seen.has(value))return {__scratchUnavailable:'circular'};seen.add(value);}return value;}));};
-      const __capture=(name,line,value)=>{if(__values.length<200)__values.push({name,line,value:__clone(value)});};
-      const console={log:(...xs)=>{if(__output.length<100)__output.push(__clone(xs));},error:(...xs)=>console.log(...xs)};
+      const __capture=(name,line,value)=>{if(__values.length<200)__values.push({name,line,value:__clone(value)});else __caps.values=true;};
+      const console={log:(...xs)=>{if(__output.length<100)__output.push(__clone(xs));else __caps.output=true;},error:(...xs)=>console.log(...xs)};
       function __hydrate(x,name){
-        if(x&&x.__scratchUnavailable){if(name in __mocks)return (...args)=>__clone(__mocks[name]);return new Proxy(function(){},{get(){throw Error('Unavailable captured value: '+name+'. Add a mock.');},apply(){throw Error('Unavailable captured function: '+name+'. Add a mock.');}});}
+        if(x&&x.__scratchUnavailable){if(name in __mocks)return x.__scratchUnavailable==='function'?(...args)=>__clone(__mocks[name]):__clone(__mocks[name]);return new Proxy(function(){},{get(){return __missing(name,'Unavailable captured value: '+name+'. Add a mock.');},apply(){return __missing(name,'Unavailable captured function: '+name+'. Add a mock.');}});}
         if(Array.isArray(x))return x.map((v,i)=>__hydrate(v,name+'.'+i));
-        if(x&&typeof x==='object'){for(const k of Object.keys(x))x[k]=__hydrate(x[k],name+'.'+k);if(x.__scratchMissing){delete x.__scratchMissing;return new Proxy(x,{get(target,key){if(!(key in target))throw Error('Unavailable captured property: '+name+'.'+String(key));return target[key];}});}}
+        if(x&&typeof x==='object'){for(const k of Object.keys(x))x[k]=__hydrate(x[k],name+'.'+k);if(x.__scratchMissing){delete x.__scratchMissing;return new Proxy(x,{get(target,key){if(!(key in target))return __missing(name+'.'+String(key),'Unavailable captured property: '+name+'.'+String(key));return target[key];}});}}
         return x;
       }
-      const fetch=async(url)=>{const key='http:'+String(url);if(!(key in __mocks))throw Error('No HTTP mock for '+url);const body=__clone(__mocks[key]);return {ok:true,status:200,json:async()=>__clone(body),text:async()=>JSON.stringify(body)};};
+      const fetch=async(url)=>{const key='http:'+String(url);if(!(key in __mocks))return __missing(key,'No HTTP mock for '+url);const body=__clone(__mocks[key]);return {ok:true,status:200,json:async()=>__clone(body),text:async()=>JSON.stringify(body)};};
       Object.assign(globalThis,{fetch,console,structuredClone});
 `;
