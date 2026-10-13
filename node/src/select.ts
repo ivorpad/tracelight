@@ -85,9 +85,9 @@ export function kindOf(path: string, sel: Selection): Kind | null {
   if (path.startsWith(RUNTIME_DEPS + sep)) return null;
   const library = path.split(sep).includes('node_modules');
   const inProject = path.startsWith(sel.root + sep) || path.startsWith(resolve(sel.mainPath, '..') + sep);
-  if (!library && !inProject) return null;
   if (sel.exclude.some((p) => matches(p, path, sel.root))) return null;
   if (sel.only.length) return sel.only.some((p) => matches(p, path, sel.root)) ? (library ? 'library' : 'project') : null;
+  if (!library && !inProject) return null;
   if (!library) return 'project';
   if (!sel.libraryCode) return null;
   if (sel.libraryPackages.length && !sel.libraryPackages.some((p) => matches(p, path, sel.root))) return null;

@@ -343,6 +343,8 @@ web` has no flags for these; a person sets them in the page.
   otherwise.
 - `break --file FILE` targets a source known to the page. Library code must be instrumented
   for its breakpoints to pause. An unknown source cannot yet be a browser breakpoint target.
+  For imported sources outside the caller's directory, include their directory with `--only`
+  alongside the caller's directory. Once imports load, their source paths become breakpoint targets.
 
 ## Stop it
 

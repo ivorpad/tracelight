@@ -208,7 +208,13 @@ export function stripTypes(source: string): string {
   }
   if (process.versions.bun) {
     const result = spawnSync(process.env.TRACELIGHT_HOST_NODE || 'node', [fileURLToPath(new URL('./stripForBun.mjs', import.meta.url))], { input: source, encoding: 'utf8', timeout: 10000, maxBuffer: 32 * 1024 * 1024 });
-    if (result.error || result.status !== 0) throw new Error(`Bun source preparation failed: ${result.error?.message ?? result.stderr.trim()}`);
+    if (result.error) throw new Error(`Bun source preparation failed: ${result.error.message}`);
+    if (result.status !== 0) {
+      let failure: {message: string; code?: string};
+      try { failure = JSON.parse(result.stdout); }
+      catch { throw new Error(`Bun source preparation failed: ${result.stderr.trim()}`); }
+      throw Object.assign(new Error(failure.message), {code:failure.code});
+    }
     return result.stdout;
   }
   return nodeModule.stripTypeScriptTypes(source, { mode: 'strip' });

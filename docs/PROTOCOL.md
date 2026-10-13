@@ -1417,7 +1417,8 @@ Nothing a recording leaves out is dropped silently.
   the workspace root, where a directory covers what is under it (`pkg/flash`, `*/parser.py`); a
   bare file or directory name matches anywhere. An excluded module is not instrumented: it runs at
   full speed and records no steps, values or coverage. With `only`, just the matching modules are
-  instrumented, library ones included without `libraryCode`. `exclude` wins over `only`, and
+  instrumented, including matching imported sources outside the workspace and library sources
+  without `libraryCode`. `exclude` wins over `only`, and
   neither applies to the program file itself. VS Code: `tracelight.timeMachine.exclude`.
 - **Value text.** A `log` text, a `locals` change text and a scope's `returned` are bounded `repr`s:
   `config.maxValueChars` characters (unset: 120 for a local or a return, 200 for a logged value; 0, or more
