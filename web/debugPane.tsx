@@ -114,9 +114,9 @@ export function DebugPane({ debug, onShowView, onLayout = () => {}, learning = f
           {learning ? paused ? `Pausa · ${state.location}` : live ? 'En ejecución' : 'Finalizado' : paused ? `${state.reasonText} · ${state.location}` : state.reasonText}
         </span>
         <span class="pkw-spacer" />
-        <button type="button" class="pkw-text-btn" title="Next executed statement, including calls" aria-label="Step" disabled={!paused} onClick={() => act('stepInto')}><i class="codicon codicon-chevron-right" /> Step</button>
         {learning ? <>
           {live && !paused ? <Btn icon="debug-pause" title="Pause" onClick={() => act('pause')} /> : <Btn icon="debug-continue" title="Continue (F5)" disabled={!paused} onClick={() => act('continue')} />}
+          <button type="button" class="pkw-btn" title="Step: next executed statement, including calls" aria-label="Step" disabled={!paused} onClick={() => act('stepInto')}><i class="codicon codicon-chevron-right" /></button>
           <Btn icon="debug-step-over" title="Step over (F10)" disabled={!paused} onClick={() => act('stepOver')} />
           <Btn icon="debug-step-into" title="Step into (F11)" disabled={!paused} onClick={() => act('stepInto')} />
           <Btn icon="debug-step-out" title="Step out (Shift+F11)" disabled={!paused} onClick={() => act('stepOut')} />
@@ -126,6 +126,7 @@ export function DebugPane({ debug, onShowView, onLayout = () => {}, learning = f
           {expanded ? <button class="pkw-text-btn" onClick={onShowView}>Puntos de pausa</button> : null}
         </> : <>
           {live && !paused ? <Btn icon="debug-pause" title="Pause" onClick={() => act('pause')} /> : <Btn icon="debug-continue" title="Continue (F5)" disabled={!paused} onClick={() => act('continue')} />}
+          <button type="button" class="pkw-btn" title="Step: next executed statement, including calls" aria-label="Step" disabled={!paused} onClick={() => act('stepInto')}><i class="codicon codicon-chevron-right" /></button>
           <Btn icon="debug-step-over" title="Step over (F10)" disabled={!paused} onClick={() => act('stepOver')} />
           <Btn icon="debug-step-into" title="Step into (F11)" disabled={!paused} onClick={() => act('stepInto')} />
           <Btn icon="debug-step-out" title="Step out (Shift+F11)" disabled={!paused} onClick={() => act('stepOut')} />
