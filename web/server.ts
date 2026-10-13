@@ -27,6 +27,7 @@ import { runtimeRoot } from './runtimeRoot';
 import { ScratchpadStore } from './scratchpadStore';
 import { tracelightHome } from '../src/util/paths';
 import { scratchFunction, runScratch, formatScratchCode, type ScratchRequest } from './scratchpadRuntime';
+import { definitions } from './definitions';
 
 export const DEFAULT_PORT = 4777;
 /** the virtual file `file.read` answers with the bridge's log (Show Logs) */
@@ -100,6 +101,7 @@ export function sameOrigin(headers: http.IncomingHttpHeaders, port: number): boo
 const MIME: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.ttf': 'font/ttf', '.map': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
 export class BridgeServer {
+  private readonly definitionFiles = new Set<string>();
   private readonly runner: RunnerClient;
   private readonly runtimeInfo: RuntimeInfo;
   private readonly pages = new Set<WebSocketConnection>();
@@ -399,6 +401,7 @@ export class BridgeServer {
     await this.stopDebug();
     if (this.current) await this.runner.stop(this.current.runId).catch(() => undefined);
     this.file = readBridgeFile(file);
+    this.definitionFiles.clear();
     this.buffer = undefined;
     this.lastWritten = undefined;
     this.remember(this.file);
@@ -543,9 +546,9 @@ export class BridgeServer {
           this.sendTo(ws, { type: 'file', file: { path: LOG_PATH, displayName: 'Tracelight logs', language: 'log', content: LOG_LINES.join('\n') + '\n' } });
           return;
         }
-        // only files a run instrumented, and the HTTP recording it wrote: the page cannot read arbitrary paths
+        // Allow recorded files and definition targets discovered from a known source file.
         const known = [...this.events, ...(this.debugRun?.events ?? [])].some((e) => (e.type === 'file.instrumented' && e.path === msg.path) || (e.type === 'run.finished' && e.http?.file === msg.path));
-        if (!known) return;
+        if (!known && !this.definitionFiles.has(msg.path)) return;
         try {
           this.sendTo(ws, { type: 'file', file: readBridgeFile(msg.path) });
         } catch {
@@ -608,6 +611,19 @@ export class BridgeServer {
   private async onHttp(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     if (!sameOrigin(req.headers, this.opts.port)) return reply(res, 403, 'forbidden');
     const url = new URL(req.url ?? '/', this.url);
+    if (url.pathname === '/api/definitions' && req.method === 'POST') {
+      if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return reply(res, 415, 'send application/json');
+      try {
+        const body = JSON.parse(await readBody(req));
+        if (typeof body.file !== 'string' || typeof body.content !== 'string') throw new Error('Invalid source');
+        const known = body.file === this.file.path || this.definitionFiles.has(body.file)
+          || [...this.events, ...(this.debugRun?.events ?? [])].some(e => e.type === 'file.instrumented' && e.path === body.file);
+        if (!known) return reply(res, 403, 'unknown source file');
+        const targets = definitions(body.file, body.content, body.offset);
+        for (const target of targets) this.definitionFiles.add(target.path);
+        return json(res, 200, targets);
+      } catch (e) { return json(res, 400, { error: e instanceof Error ? e.message : String(e) }); }
+    }
     if (url.pathname.startsWith('/api/scratchpad/') && req.method === 'POST') {
       if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return reply(res, 415, 'send application/json');
       try {
