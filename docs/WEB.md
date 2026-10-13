@@ -16,8 +16,10 @@ ships `dist/web`), and `tracelight web ctl ...` takes every `ctl` command below.
 Open http://127.0.0.1:4777/. The left side is the file in Monaco with values after their lines,
 coverage in the gutter and the exception on its line; the right side is the same panel the
 extension shows. The bridge re-runs the file whenever it changes on disk, so saving in VS Code
-or any other editor updates the page. Typing in the page's code pane runs the edited buffer
-without saving it, Quokka-style; Ctrl/Cmd+S writes it to disk.
+or any other editor updates the page. While the page's debugger has a run, paused or running, a
+save or a settings change only refreshes the page: the paused program keeps the code it started
+with, and Run, Restart or the next save after the debug run executes the new text. Typing in the
+page's code pane runs the edited buffer without saving it, Quokka-style; Ctrl/Cmd+S writes it to disk.
 
 The default **Aprender** presentation gives the code the full width. At a live pause its compact
 bar offers Siguiente (step over), Entrar (step into), and Variables y pila. That last button opens
@@ -89,7 +91,7 @@ main file at a time, of one runtime's language.
 | `--runtime "CMD ARGS"` | any command that speaks the protocol on stdio, started in the file's directory (`TRACELIGHT_RUNTIME`); the only way to run a file of another language |
 | `--open` | open the page in the default browser |
 | `--no-run` | serve the source without executing it on startup; explicit Run and Automatic page edits still execute it |
-| `--no-watch` | refresh source on disk changes without re-running; agent sessions always leave watching enabled |
+| `--no-watch` | optional: a change on disk refreshes the page's source but never runs the file; Run, `debug start` and Automatic page edits still execute it. Agent sessions start with watching enabled |
 | `--verbose` | log the runtime's spawn, stderr and exits |
 
 Bun executes the actual program with `Bun.plugin` instrumentation and its JavaScriptCore
@@ -114,7 +116,10 @@ through the three. A window narrower than 760px stacks the code over the panel.
 
 For live learning or debugging without a preliminary run, start with
 `tracelight web FILE --no-run`, open the page, set breakpoints, then issue
-`tracelight web ctl debug start`. Use `debug continue` to resume between stages, including
+`tracelight web ctl debug start`. Watching stays enabled: saves from VS Code or another agent
+refresh the page, and while the debugger has a run they execute nothing. Between debug runs a save
+runs the file under the page's run mode; `--no-watch` is optional, for a person who wants saves
+never to run it. Use `debug continue` to resume between stages, including
 known imported files targeted by `break LINE on --file FILE`. The debugger captures the same
 execution as it pauses for Code history. Recording navigation does not resume the live program.
 

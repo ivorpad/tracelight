@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The skill's `explain` mode is a shorter core method plus five worked investigations
+  (`references/learning-patterns.md`) on a new multi-file example, `examples/js/checkout`: the
+  implementation behind an interface call, a value's provenance, the branch that decides, an
+  async handoff and a real-path contrast. The Pi harness guidance moved to an optional example.
+  Manual-step listening is described as the bounded, in-turn wait it is, and scratchpad results
+  are labelled as complementing a second real run. `node/test/learning-scenarios.test.ts` runs the
+  patterns' routes; the skill evals no longer reward a recording or a page for live learning.
 - MCP now exposes saved-run investigations, explicit fix checks, session positions, recorded
   destinations and reopenable investigation checkpoints with recording identity checks.
 - Conditional breakpoints and expression watches report evaluation failures without changing
@@ -10,8 +17,11 @@
 - Recorded investigations use captured source and distinguish the statement that changed a value
   from the step where its new value was observed. Runtime pipe errors reject pending requests.
 
-- Browser source refreshes after disk changes even when automatic execution is disabled.
-  The skill always starts browser sessions with watching enabled, including debug and learning.
+- Browser source refreshes after disk changes even when automatic execution is disabled
+  (`--no-watch`, On Demand). While the page's debugger has a run, a save or a settings change
+  refreshes the page without starting a second execution beside the paused one, as VS Code
+  already did; Run, Restart and saves after the debug run still execute. The skill always starts
+  browser sessions with watching enabled, including debug and learning; `--no-watch` is optional.
 
 - VS Code On Save sessions rerun when the entry file or an open imported file reloads after
   another editor or agent changes it on disk, including files outside the workspace. Unsaved

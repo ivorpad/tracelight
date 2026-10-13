@@ -8,82 +8,37 @@ disable-model-invocation: true
 
 # Tracelight
 
-## HARD rule: always start with file watching
+Tracelight shows what JavaScript or TypeScript code does by running it: a recording of every
+statement and value, or a debugger paused in the running program, shown in the user's VS Code
+window, on a browser page, or in a saved run only you read. The four modes share a few habits.
 
-Always start browser sessions with file watching enabled, in every mode. Never pass
-`--no-watch`, including for learning or debugging. Watching is enabled by default. Use
-`--no-run` when startup must not execute the file; keep watching enabled so changes made
-in VS Code or by another agent appear in the open page. When reusing a session, verify
-that its source matches the file on disk and restart it with watching enabled if needed.
+Every claim rests on some kind of evidence: source you read, a live pause (the values before the
+highlighted statement), a value after a step, a recorded step of a named run, a scratchpad or
+mocked result, a prediction, or nothing at all (a value the runtime did not capture, a branch that
+did not run). Each supports different claims, listed in
+[explain.md](references/explain.md#at-a-stop-what-this-location-establishes). Say which one you
+have when it matters, never present one as another, and say when two disagree.
 
-## HARD gate: confirm the visible position before teaching
+A move the person asks for (continue, step into, restart, "show me") happens in the same turn,
+and the explanation comes after it, from what the move returned. Never imply a move that did not
+happen, and never advance execution while the person is stepping. Continue, a restart and a new
+run execute real code, side effects included. On the browser page, explain only after the
+navigation's returned `position` reports `ready: true`, repairing its `blockers` first. A recorded
+selection and the live pause are separate, and focusing a recording does not rewind the program
+([browser.md](references/browser.md#confirm-the-visible-position)).
 
-After each browser navigation, use its returned `position` or `tracelight_position` and require
-`ready: true` before explaining source or values. It confirms the rendered source file, line,
-highlight and active pane after presentation. Keep `recorded` selection and `live` pause separate.
-For a live lesson use debugger moves and live captured values. For a past moment explicitly
-say it is recorded, focus `mode: "recorded"`, and use recorded evidence. Focusing a recording
-does not rewind the live program. Never substitute `nav.step` or a CLI location for the editor's
-visible highlight. Repair a hidden/Story pane, stale source, changed frame or duplicate page
-before narrating; if `ready` stays false, state the concrete blocker. Follow
-[the visible-position gate](references/browser.md#hard-gate-confirm-visible-position).
+Always start browser sessions with file watching enabled. It is the default: saves from VS Code
+or another agent refresh the page, and while the page's debugger has a run they execute nothing.
+`--no-watch` is optional, for a person who wants saves never to run the file. `--no-run` skips the
+startup run.
 
-## HARD rule: listen before manual stepping
-
-Every agent, including Codex and Claude Code, must establish pause-event listening before
-handing controls to a user who will step during interactive learning. Browser startup and
-attachment must automatically establish listening as soon as the page connects, including
-`--no-run` sessions, before `debug start` or any handover. No separate request or manual-stepping
-mode is required. Keep that listener through pauses, resumes and debugger restarts on the same
-page. Use a verified connected
-host pause-event subscription if available. Otherwise obtain a `tracelight_wait_pause` cursor
-and keep a bounded wait loop armed in the active turn. Explain each new pause once from its
-matching source and captured values, then re-arm. Timeouts are not steps. Never advance
-execution on the user's behalf during manual stepping. In a guided walkthrough, perform
-the navigation the user authorized and keep the listener attached.
-
-An active wait ends with the turn. Never end the turn or claim to be following manual steps
-while relying only on that wait. Without a genuine idle-chat wake subscription, state that
-limit explicitly and keep listening until the user ends manual-step teaching or redirects work.
-If event listening is unavailable, disclose it before handing over controls; never silently
-substitute "tell me after you step". Follow [the listening loop](references/explain.md#hard-rule-listen-before-manual-stepping)
-on every host and surface.
-
-## HARD gate: prepare and execute learning experiments
-
-Every agent owns scratchpad preparation and repair without waiting for the learner. Use ONE
-`tracelight_scratchpad` call with `op: "experiment"` and the complete code, bindings/receiver,
-inputs, dependencies, mocks/labels and auto-run policy. It formats, opens and awaits execution
-without running an intermediate copy. Never use open → update → run to prepare a lesson.
-Resolve receiver `this`, absent helpers/callbacks, JSON/syntax errors, incomplete fixtures and
-uncaptured/capped bindings. Recover real pure implementations; mock only external boundaries
-with explicit labels. Repair and rerun until completed visible output and runtime/application
-errors support the lesson, or state the concrete limit. Verify readable indentation, copied-input
-provenance and unchanged live pause. Never silently change meaning, invent provider output,
-narrate an unexecuted result or leave an error for the learner to discover. Follow
-[the preparation gate](references/scratchpad.md#hard-gate-prepare-before-teaching).
-Do not ask the learner questions or give quizzes unless they explicitly request them.
-
-## HARD rule: act before narrating progress
-
-When the learner says continue, step into, restart or demonstrate, perform the next authorized
-operation in the same turn. Acknowledgements, plans, delegation messages and claims that setup
-is ready do not satisfy that request. For each teaching transition: move, confirm the visible
-position, inspect the matching values, then explain the observed behavior. Step into a requested
-function and its relevant decisions; do not skip its implementation and narrate only its result.
-Keep preparation and coordination out of the lesson unless a concrete blocker affects it.
-Name a blocker once, repair it when possible, and never imply that an unperformed action happened.
-Do not wait for another agent's final report when its available changes can already be tested
-locally without interfering with its work. Verify the runtime and frontend actually serving the
-learner; a successful build in another worktree does not update this session.
-
-Before demonstrating a feature, configure a runnable example that exercises it. An undefined
-hook is an absent hook, not an active permission check. A steering lesson must actually enqueue
-and consume a steering message. Plan checkpoints around the requested harness responsibilities,
-including loop decisions, tool batches, context, steering, persistence and execution controls.
-Identify which the example exercises and which require another example. Use exact variable
-names and inspect the values that drive each decision. Respect a request to wait for readiness;
-otherwise continue the authorized route without quizzes or repeated confirmation requests.
+Hearing a person's manual steps depends on the host. A `tracelight_wait_pause` wait lasts at most
+25 seconds and ends with your turn, so it cannot wake an idle chat. Say that instead of looping on
+waits ([explain.md](references/explain.md#when-the-learner-steps-by-hand)). A scratchpad
+experiment is yours to prepare and repair before you teach from it, in one `experiment` call with
+labelled mocks, and its result shows what copied code computes, not how the application wires it
+([scratchpad.md](references/scratchpad.md#prepare-before-teaching)). Ask the person no quiz or
+prediction questions unless they ask for them.
 
 ## Pick the mode
 
@@ -99,15 +54,15 @@ The first word after the skill name is the mode: `/tracelight ask why is Ben's t
 
 With no mode, choose by intent and context. A question answered in chat ("why is", "what changed",
 "did my fix work", "why is it slow") is `ask`. "Step", "break", "pause", "run to", "does it stop
-in" is `debug`. "Understand how the Pi harness works", "let me jump around and learn", "walk me
-through", or "explain as I step" asks for interactive learning through `explain`. A standalone
+in" is `debug`. "Help me understand how checkout works", "let me jump around and learn", "walk
+me through", or "explain as I step" asks for interactive learning through `explain`. A standalone
 factual question can stay in `ask`; do not route interactive learning into a prerequisite
 recording. "Show me", "make me a page", "something I can send" is `show`. Honor an explicit mode.
 
 Learning does not require a guided lesson. In `explain`, inspect relevant source, make a short
 plan in memory, propose the breakpoints with the question each answers, then start the session
 at the first useful stop. Do not wait for plan approval unless requested. Voice or chat can
-direct jumps; manual steps use pause events for explanations without agent-driven movement.
+direct jumps, and the person can step by hand while you explain the pauses the host lets you hear.
 Guided teaching is optional. A debugging request does not imply a lesson. In `debug`, inspect source to
 choose a stop that tests a hypothesis. Neither needs a preliminary recording. Source inspection
 guides the next observation; claims about what executed still need runtime evidence.
@@ -117,6 +72,8 @@ Jobs that are not modes, and where each lives:
 | the job | mode | read |
 |---|---|---|
 | understand a module interactively, jump to what matters, or explain manual steps | `explain` | [references/explain.md](references/explain.md) |
+| which implementation ran, where a value came from, who decides, an async handoff, a real-path contrast | `explain`, `ask` | [references/learning-patterns.md](references/learning-patterns.md) |
+| learn an LLM agent harness such as Pi (an optional example) | `explain` | [references/example-agent-harness.md](references/example-agent-harness.md) |
 | understand a module from a recorded run, answered in chat | `ask` | [ask.md, "Learning code"](references/ask.md#learning-code) |
 | what a program swallowed, where a bad value came from, what never ran | `ask` | [ask.md, "Hidden failures"](references/ask.md#hidden-failures) |
 | what an edit changed, whether a fix took | `ask` | [ask.md, "Review an edit"](references/ask.md#review-an-edit) |
@@ -167,13 +124,13 @@ Follow the strongest available lead, stopping discovery when the target is estab
 1. Reuse paths, package names, browser URLs and session identifiers already supplied in this
    conversation. Check that a named file exists; read a known session's state once for its entry
    file, source paths and pause. Do not rediscover an open target through repository searches.
-2. For a named file without a path, use a scoped filename search (`rg --files -g '*harness*'`)
+2. For a named file without a path, use a scoped filename search (`rg --files -g '*checkout*'`)
    in the likely project or known scratch directory. For a library, follow the caller's imports
-   and package metadata. For an installed CLI such as `pi`, locate its executable, resolve its
-   symlink or inspect its launcher, then follow that package's dependencies to the implementation.
+   and package metadata. For an installed CLI, locate its executable (`command -v NAME`), resolve
+   its symlink or inspect its launcher, then follow that package's dependencies to the implementation.
    Use the matching package manager's installation root only if the launcher does not resolve it.
 3. Expand scope only after a concrete miss, and record what that miss ruled out. An empty search
-   of the Tracelight checkout says nothing about a globally installed Pi package. Do not cycle
+   of the Tracelight checkout says nothing about a globally installed package. Do not cycle
    through spelling variants, list the whole home directory, or scan unrelated package stores.
    If no concrete lead remains, ask for the missing location instead of guessing more roots.
 

@@ -12,7 +12,7 @@ rl.on('line', (line) => {
       break;
     case 'run': {
       send({ type: 'ok', id: msg.id });
-      send({ type: 'run.started', runId: msg.runId, seq: 1, pid: 42, programNode: msg.node });
+      send({ type: 'run.started', runId: msg.runId, seq: 1, pid: 42, programNode: msg.node, autoLog: msg.config && msg.config.autoLog });
       if (msg.config && msg.config.debug) {
         // a live debug run: pause at the first statement until `debug continue`
         send({ type: 'debug.paused', runId: msg.runId, seq: 2, step: 0, rid: 0, fileId: 1, line: 1, scopeId: 0, depth: 0, reason: 'start', stack: [{ frameId: 0, name: '<module>', fileId: 1, line: 1 }] });

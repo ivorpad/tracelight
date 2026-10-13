@@ -9,6 +9,12 @@ or rule, then compare the visible result with the baseline. Label mock fixtures 
 other inputs fixed. Check application error fields before drawing a conclusion. Close or restore
 the copy and verify that the live pause is unchanged before resuming the lesson or investigation.
 
+A scratchpad result shows what the copied code computes from copied inputs and labelled mocks.
+It does not show that the application calls the function that way, injects those dependencies or
+handles its result like that. A second real run of the entry point with one changed condition
+does ([learning-patterns.md](learning-patterns.md#contrast)), so use the scratchpad next to it,
+not instead of it, and label its results as scratchpad results.
+
 ## Open the current function
 
 Start from an existing live pause. Reuse its returned source, frame and captured values;
@@ -86,7 +92,7 @@ export {};
 `export {}` makes the editor treat the copy as a module, allowing top-level `await`.
 The runtime handles it separately from the executable function body.
 
-## HARD gate: prepare before teaching
+## Prepare before teaching
 
 Every agent owns preparation and repair without waiting for the learner. Inspect source and
 captured-input provenance before sending the complete experiment in one call. Resolve a class

@@ -1,9 +1,9 @@
 # The browser page
 
 The Tracelight panel, a code pane and the Time Machine in a plain browser tab, outside VS Code. A
-small local bridge runs the file with the runtime, re-runs it when it changes on disk, and relays
-everything to the page over a WebSocket. An agent drives the page with `tracelight web ctl`, and
-every command answers with where the page is now.
+small local bridge runs the file with the runtime, re-runs it when it changes on disk (not while
+the page's debugger has a run), and relays everything to the page over a WebSocket. An agent
+drives the page with `tracelight web ctl`, and every command answers with where the page is now.
 
 Use it to teach a person who watches a browser rather than their editor (narration bubbles sit
 under the line being explained), next to VS Code in its Simple Browser, or to debug a program with
@@ -19,7 +19,7 @@ Contents: [Start it](#start-it) Â· [A page must be open](#a-page-must-be-open) Â
 ## Start it
 
 ```
-tracelight web FILE [--port N] [--open] [--no-run] [--verbose] [--runtime js|node|bun|"CMD ARGS"] [--node PATH]
+tracelight web FILE [--port N] [--open] [--no-run] [--no-watch] [--verbose] [--runtime js|node|bun|"CMD ARGS"] [--node PATH]
 tracelight web -h | --help
 ```
 
@@ -37,13 +37,18 @@ It serves until it is stopped, so start it in the background (your harness's bac
   a free port and pass the same `--port` to every `ctl`.
 - `--open`: open the page in the default browser, for a person at this machine.
 - `--no-run`: serve the source without executing it on startup. For live teaching or debugging,
-  leave watching enabled, open the page, set breakpoints, then issue `debug start`.
-  The normal startup behavior stays unchanged when this flag is omitted. This flag skips only
-  the initial run; explicit Run and page edits under Automatic mode can still execute code.
-- Always start with watching enabled. A save in any editor refreshes the source and executes
-  according to the page's run mode. Never use `--no-watch` in this skill. The CLI flag suppresses
-  disk-triggered execution but still refreshes source. Typing in the page's code pane runs the
-  edited buffer under Automatic mode; Ctrl/Cmd+S writes the file.
+  open the page, set breakpoints, then issue `debug start`. Without the flag, startup runs the
+  file once. It skips only that run: explicit Run and page edits under Automatic mode still
+  execute code.
+- Watching is on by default; always start with it. A save in any editor refreshes the page's
+  source. While the page's debugger has a run, paused or running, neither a save nor a settings
+  change executes anything: the paused program keeps the code it loaded, and `position` reports
+  the visible source as changed. Between debug runs a save runs the file under the page's run
+  mode (Automatic and On Save run it, On Demand does not). Typing in the page's code pane runs the
+  edited buffer under Automatic mode, and Ctrl/Cmd+S writes the file and runs it under On Save,
+  both even while the debugger is paused.
+- `--no-watch` is optional: a change on disk still refreshes the source but never runs the file.
+  Pass it when the person wants that. Run, `debug start` and `debug restart` still execute.
 - `--verbose`: log the runtime's spawn, stderr and exits to stderr.
 - `--runtime "CMD ARGS"` (or `$TRACELIGHT_RUNTIME`): any command that speaks the runtime's NDJSON
   protocol on stdio, started in the file's directory. `js`, the default for `.js`, `.mjs`, `.cjs`,
@@ -86,7 +91,7 @@ until tracelight web ctl --port 4790 state | grep -q '"pages": 1'; do sleep 0.2;
 The bridge requires exactly one page for control and state reads. Multiple pages, concurrent
 commands and a disconnected target return errors; no cached state is reported as a fresh reply.
 
-## HARD gate: confirm visible position
+## Confirm the visible position
 
 Navigation replies include `position`, confirmed after rendering from Monaco's actual model,
 highlight and visible ranges. Require `ready: true` before narrating source or values. `source`
@@ -367,13 +372,13 @@ carry a debug summary with `runId`, `step`, `frame`, nearby source, and each loc
 `valueBag`. Explain directly from the returned source and structured values, retaining capped
 and unavailable markers. Extra inspection calls are needed only for relevant missing detail or
 a user-requested visible inspector. Explain a changed pause, then re-arm with its cursor.
-The tool does not advance execution or open an overlay. It is an active wait, not an integration
-that wakes idle or ended chats. Apply the [HARD listening rule](explain.md#hard-rule-listen-before-manual-stepping)
-automatically as soon as a started or attached browser page connects, including `--no-run`
-sessions, before `debug start` or handing over controls. No separate listening request or
-manual-stepping mode is required. Establish a verified host subscription or keep the bounded
-active wait loop armed through pauses, resumes and debugger restarts. Reconnecting requires a
-fresh cursor and wait. Disclose idle-chat limits.
+The tool does not advance execution or open an overlay. It is a wait inside the agent's turn, not
+an integration that wakes an idle or ended chat. Take the first cursor when the page connects,
+including `--no-run` sessions, before `debug start` or handing over the controls, and take a fresh
+one after reconnecting. Arm a wait when a pause is about to happen, and otherwise tell the person
+that you explain the latest pause when they write
+([explain.md](explain.md#when-the-learner-steps-by-hand)). Chained waits do not make the agent
+listen between turns.
 
 `scratchpad open [--line N]` opens a TypeScript scratchpad beside the source. WebMCP
 `tracelight_scratchpad` accepts `op: experiment|open|close|state|update|run|restore|create|save|list|load|history`, optional `line`,
@@ -382,9 +387,10 @@ function and captured inputs, returns current editor state and completed structu
 and imports resolve from the source file; external calls need explicit mock fixtures.
 The live program remains paused. Missing captured data stays marked unavailable.
 For teaching, use ONE `experiment` command with the complete prepared package. It formats code,
-publishes no intermediate copy, and awaits one scratch execution. Apply the
-[HARD preparation gate](scratchpad.md#hard-gate-prepare-before-teaching); verify visible indentation
-and errors before teaching. Bare receiver-dependent copies wait with `needsPreparation`.
+publishes no intermediate copy, and awaits one scratch execution. Prepare and repair it before
+teaching ([scratchpad.md](scratchpad.md#prepare-before-teaching)), and verify visible indentation
+and errors first. Its results show what the copy computes, not how the application wires it.
+Bare receiver-dependent copies wait with `needsPreparation`.
 `scratchpad close` dismisses the pane without advancing execution.
 For the full editing, inspection, mock and verification workflow, read
 [scratchpad.md](scratchpad.md).

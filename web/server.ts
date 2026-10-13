@@ -1,8 +1,9 @@
 /**
  * Tracelight in a browser: a local bridge between one runtime (`<runtime> serve`, NDJSON on stdio,
  * docs/PROTOCOL.md) and the panel page over a WebSocket. The bridge runs the file, re-runs it when
- * it changes on disk (save in VS Code or any editor), relays requests from the page, and lets an
- * agent drive the page over HTTP (`/api/state`, `/api/command`, the `ctl` subcommand).
+ * it changes on disk (save in VS Code or any editor) unless the live debugger has a run, relays
+ * requests from the page, and lets an agent drive the page over HTTP (`/api/state`,
+ * `/api/command`, the `ctl` subcommand).
  *
  *   node dist/web/server.js FILE [--port 4777] [--runtime js|"CMD ARGS"] [--node PATH] [--open] [--no-run] [--no-watch]
  *   node dist/web/server.js ctl state | goto N | step into|over|out|back|backOver|backOut | line N | say TEXT [--line N] | clear | run | eval EXPR
@@ -28,6 +29,7 @@ import { ScratchpadStore } from './scratchpadStore';
 import { tracelightHome } from '../src/util/paths';
 import { scratchFunction, runScratch, formatScratchCode, type ScratchRequest } from './scratchpadRuntime';
 import { definitions } from './definitions';
+import { blocksBridgeRun } from './runPolicy';
 
 export const DEFAULT_PORT = 4777;
 /** the virtual file `file.read` answers with the bridge's log (Show Logs) */
@@ -202,6 +204,11 @@ export class BridgeServer {
   /* ---------- runs ---------- */
 
   async run(reason: string, content?: string): Promise<void> {
+    if (blocksBridgeRun(!!this.debugRun, reason)) {
+      // the page already has the new source or setting; Run, debug restart or a save after the debug run executes it
+      log(`${reason}: no run while debug run ${this.debugRun!.runId} is active`);
+      return;
+    }
     const runId = `w-${++this.runCounter}`;
     if (content !== undefined) this.buffer = content;
     const text = this.buffer ?? this.file.content;
