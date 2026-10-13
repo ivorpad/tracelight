@@ -133,7 +133,7 @@ export interface DebugPanelInfo {
   location?: string;
   breakpoint?: { line: number; condition?: string };
   conditionError?: string;
-  watch?: { id: string; exp: string; text: string; breakWhen?: 'change' | 'true' };
+  watch?: { id: string; exp: string; text: string; error?: string; breakWhen?: 'change' | 'true' };
   /** with reason `exception`: what was raised, and whether it reached the top */
   exception?: { type: string; message: string; uncaught: boolean };
   stack?: { name: string; scopeId: number; depth: number }[];

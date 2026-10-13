@@ -201,6 +201,285 @@ test('a break-when watch pauses when its value changes', async () => {
   }
 });
 
+test('invalid breakpoint conditions stay disabled and evaluation failures explain their stop', async () => {
+  const d = new Driver();
+  try {
+    const path = d.start({ 'main.js': 'let total = 0;\ntotal += 1;\ntotal += 2;\nconsole.log(total);\n' }, 'main.js');
+    await d.paused();
+    const set = await d.ask({ type: 'debug', action: 'breakpoints', set: [
+      { path, line: 2, condition: 'total +' },
+      { path, line: 3, condition: 'unknownName > 0' },
+    ] });
+    assert.match(set.breakpoints[0].error, /SyntaxError/);
+    await d.ask({ type: 'debug', action: 'continue' });
+    const stop = await d.paused();
+    assert.equal(stop.line, 3, 'an invalid condition does not become an unconditional stop');
+    assert.match(stop.conditionError, /ReferenceError.*unknownName/);
+    assert.equal((await d.ask({ type: 'evaluate', expression: 'total' })).text, '1');
+    await d.ask({ type: 'debug', action: 'breakpoints', set: [] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    assert.equal((await d.next(m => m.type === 'run.finished')).exitCode, 0);
+  } finally { d.close(); }
+});
+
+test('a conditional breakpoint refuses writes without changing its local', async () => {
+  const d = new Driver();
+  try {
+    const path = d.start({ 'main.js': 'let total = 0;\ntotal += 1;\nconsole.log(total);\n' }, 'main.js');
+    await d.paused();
+    await d.ask({ type: 'debug', action: 'breakpoints', set: [{ path, line: 2, condition: 'total++' }] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    const stop = await d.paused();
+    assert.equal(stop.line, 2);
+    assert.match(stop.conditionError, /side effect|side-effect/i);
+    assert.equal((await d.ask({ type: 'evaluate', expression: 'total' })).text, '0');
+    await d.ask({ type: 'debug', action: 'breakpoints', set: [] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    await d.next(m => m.type === 'run.finished');
+    assert.ok(d.seen.some(m => m.type === 'log' && m.text === '1'));
+  } finally { d.close(); }
+});
+
+test('truth watches stop on each false-to-true transition and reject unknown modes', async () => {
+  const d = new Driver();
+  try {
+    d.start({ 'main.js': 'let total = 0;\ntotal = 1;\ntotal = 2;\ntotal = 0;\ntotal = 1;\nconsole.log(total);\n' }, 'main.js');
+    await d.paused();
+    const set = await d.ask({ type: 'debug', action: 'watches', set: [
+      { id: 'bad', exp: 'total', breakWhen: 'sometimes' },
+      { id: 'truth', exp: 'total > 0', breakWhen: 'true' },
+    ] });
+    assert.match(set.watches[0].error, /unknown watch mode/);
+    await d.ask({ type: 'debug', action: 'continue' });
+    const first = await d.paused();
+    assert.equal(first.line, 3);
+    assert.equal(first.watch.id, 'truth');
+    assert.equal(first.watch.text, 'true');
+    await d.ask({ type: 'debug', action: 'continue' });
+    const second = await d.paused();
+    assert.equal(second.line, 6, 'remaining true does not cause repeated stops');
+    await d.ask({ type: 'debug', action: 'watches', set: [] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    await d.next(m => m.type === 'run.finished');
+  } finally { d.close(); }
+});
+
+test('watch evaluation errors stop once with a reason and never run a refused write', async () => {
+  const d = new Driver();
+  try {
+    d.start({ 'main.js': 'let total = 0;\ntotal += 1;\ntotal += 2;\nconsole.log(total);\n' }, 'main.js');
+    await d.paused();
+    await d.ask({ type: 'debug', action: 'watches', set: [{ id: 'write', exp: 'total++', breakWhen: 'change' }] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    const stop = await d.paused();
+    assert.equal(stop.reason, 'watch');
+    assert.equal(stop.watch.id, 'write');
+    assert.match(stop.watch.error, /side effect|side-effect/i);
+    assert.equal((await d.ask({ type: 'evaluate', expression: 'total' })).text, '0');
+    await d.ask({ type: 'debug', action: 'continue' });
+    const fin = await d.next(m => m.type === 'run.finished');
+    assert.equal(fin.exitCode, 0, 'the same failed watch does not stop repeatedly');
+    assert.ok(d.seen.some(m => m.type === 'log' && m.text === '3'));
+  } finally { d.close(); }
+});
+
+test('conditional logpoints interpolate pure expressions without stopping the program', async () => {
+  const d = new Driver();
+  try {
+    const src = 'let total = 0;\nfor (const n of [1, 2, 3]) {\n  total += n;\n}\nconsole.log("sum", total);\n';
+    const path = d.start({ 'main.js': src }, 'main.js');
+    await d.paused();
+    const set = await d.ask({ type: 'debug', action: 'breakpoints', set: [
+      { path, line: 3, condition: 'n > 1', logMessage: '{{total}}={total}, square={n * n}, nested={({ a: n }).a}' },
+      { path, line: 5, logMessage: 'invalid {total +}' },
+    ] });
+    assert.match(set.breakpoints[1].error, /SyntaxError.*logMessage/);
+    await d.ask({ type: 'debug', action: 'continue' });
+    assert.equal((await d.next(m => m.type === 'run.finished')).exitCode, 0);
+    const logs = d.seen.filter(m => m.type === 'output' && m.logpoint);
+    assert.deepEqual(logs.map(m => m.text), ['{total}=1, square=4, nested=2\n', '{total}=3, square=9, nested=3\n']);
+    assert.ok(logs.every(m => typeof m.step === 'number'));
+    assert.equal(d.seen.filter(m => m.type === 'debug.paused').length, 1, 'logpoints never add a successful pause');
+    assert.ok(d.seen.some(m => m.type === 'log' && m.text === 'sum 6'));
+  } finally { d.close(); }
+});
+
+test('a refused logpoint interpolation stops with an error instead of changing state', async () => {
+  const d = new Driver();
+  try {
+    const path = d.start({ 'main.js': 'let total = 0;\ntotal += 1;\nconsole.log(total);\n' }, 'main.js');
+    await d.paused();
+    await d.ask({ type: 'debug', action: 'breakpoints', set: [{ path, line: 2, logMessage: 'before {total++}' }] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    const stop = await d.paused();
+    assert.equal(stop.reason, 'breakpoint');
+    assert.match(stop.conditionError, /logpoint:.*side effect|logpoint:.*side-effect/i);
+    assert.equal((await d.ask({ type: 'evaluate', expression: 'total' })).text, '0');
+    assert.ok(!d.seen.some(m => m.logpoint));
+    await d.ask({ type: 'debug', action: 'breakpoints', set: [] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    await d.next(m => m.type === 'run.finished');
+    assert.ok(d.seen.some(m => m.type === 'log' && m.text === '1'));
+  } finally { d.close(); }
+});
+
+test('multiple logpoints coexist with a stopping breakpoint in both main-thread modes', async () => {
+  for (const record of [true, false]) {
+    const d = new Driver();
+    try {
+      const path = d.start({ 'main.js': 'let total = 0;\ntotal += 1;\nconsole.log(total);\n' }, 'main.js', { record });
+      await d.paused();
+      await d.ask({ type: 'debug', action: 'breakpoints', set: [
+        { path, line: 2, logMessage: 'first {total}' },
+        { path, line: 2, condition: 'total === 0' },
+        { path, line: 2, logMessage: 'second {total + 1}' },
+      ] });
+      await d.ask({ type: 'debug', action: 'continue' });
+      const stop = await d.paused();
+      assert.equal(stop.reason, 'breakpoint');
+      assert.equal(stop.line, 2);
+      assert.equal(stop.breakpoint.condition, 'total === 0');
+      assert.deepEqual(d.seen.filter(m => m.logpoint).map(m => m.text), ['first 0\n', 'second 1\n']);
+      await d.ask({ type: 'debug', action: 'continue' });
+      assert.equal((await d.next(m => m.type === 'run.finished')).exitCode, 0);
+      assert.equal(d.seen.filter(m => m.logpoint).length, 2, 'resume does not emit the same logpoints again');
+    } finally { d.close(); }
+  }
+});
+
+test('names-only and selected locals never inspect an unrequested object', async () => {
+  const d = new Driver();
+  try {
+    const src = 'let reads = 0;\nconst hidden = new Proxy({ value: 42 }, { ownKeys(target) { reads++; return Reflect.ownKeys(target); } });\nconst selected = 7;\nconsole.log(selected);\n';
+    const path = d.start({ 'main.js': src }, 'main.js', { record: false });
+    await d.paused();
+    await d.ask({ type: 'debug', action: 'breakpoints', set: [{ path, line: 4 }] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    await d.paused();
+    const names = await d.ask({ type: 'debug', action: 'locals', namesOnly: true });
+    assert.ok(names.locals.some((value: Msg) => value.name === 'hidden' && value.type === 'proxy'));
+    assert.ok(names.locals.every((value: Msg) => value.text === '' && !value.valueBag));
+    const chosen = await d.ask({ type: 'debug', action: 'locals', names: ['selected'] });
+    assert.deepEqual(chosen.locals.map((value: Msg) => [value.name, value.text]), [['selected', '7']]);
+    assert.equal((await d.ask({ type: 'evaluate', expression: 'reads' })).text, '0');
+    assert.deepEqual((await d.ask({ type: 'debug', action: 'locals', names: [] })).locals, []);
+    const invalid = await d.ask({ type: 'debug', action: 'locals', names: [1] });
+    assert.match(invalid.message, /names must be an array of strings/);
+    await d.ask({ type: 'debug', action: 'breakpoints', set: [] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    assert.equal((await d.next(m => m.type === 'run.finished')).exitCode, 0);
+  } finally { d.close(); }
+});
+
+test('worker line logpoints use their own frame and resume after a false condition', async () => {
+  const d = new Driver();
+  try {
+    const src = `import { Worker, isMainThread, parentPort } from 'node:worker_threads';
+function compute(n) {
+  return n * 2;
+}
+if (isMainThread) {
+  const worker = new Worker(new URL(import.meta.url));
+  worker.on('message', value => console.log('answer', value));
+} else {
+  const a = compute(1);
+  const b = compute(2);
+  parentPort.postMessage(a + b);
+}
+`;
+    const path = d.start({ 'main.mjs': src }, 'main.mjs');
+    await d.paused();
+    await d.ask({ type: 'debug', action: 'breakpoints', set: [{ path, line: 3, condition: 'n === 2', logMessage: 'result {n * 2}' }] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    assert.equal((await d.next(m => m.type === 'run.finished')).exitCode, 0);
+    const logs = d.seen.filter(m => m.type === 'output' && m.logpoint);
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0].text, 'result 4\n');
+    assert.ok(logs[0].thread.ident > 0);
+    assert.equal(d.seen.filter(m => m.type === 'debug.paused').length, 1);
+    assert.ok(d.seen.some(m => m.type === 'log' && m.text === 'answer 6'));
+  } finally { d.close(); }
+});
+
+test('worker logpoints coexist with stopping line and function breakpoints', async () => {
+  for (const functionBreakpoint of [false, true]) {
+    const d = new Driver();
+    try {
+      const src = `import { Worker, isMainThread, parentPort } from 'node:worker_threads';
+function compute(n) {
+  return n * 2;
+}
+if (isMainThread) {
+  const worker = new Worker(new URL(import.meta.url));
+  worker.on('message', value => console.log('answer', value));
+} else {
+  const a = compute(1);
+  const b = compute(2);
+  parentPort.postMessage(a + b);
+}
+`;
+      const path = d.start({ 'main.mjs': src }, 'main.mjs');
+      await d.paused();
+      const location = functionBreakpoint ? { path, function: 'compute' } : { path, line: 3 };
+      const set = await d.ask({ type: 'debug', action: 'breakpoints', set: [
+        { ...location, logMessage: 'first {n}' },
+        { ...location, condition: 'n === 2' },
+        { ...location, logMessage: 'second {n * 2}' },
+        { path, line: 11, logMessage: 'invalid {n +}' },
+      ] });
+      assert.match(set.breakpoints[3].error, /SyntaxError/);
+      await d.ask({ type: 'debug', action: 'continue' });
+      const stop = await d.paused();
+      assert.equal(stop.reason, 'breakpoint');
+      assert.ok(stop.thread.ident > 0);
+      assert.equal(stop.breakpoint.condition, 'n === 2');
+      assert.equal((await d.ask({ type: 'evaluate', expression: 'n' })).text, '2');
+      assert.deepEqual(d.seen.filter(m => m.logpoint).map(m => m.text), ['first 1\n', 'second 2\n', 'first 2\n', 'second 4\n']);
+      await d.ask({ type: 'debug', action: 'continue' });
+      assert.equal((await d.next(m => m.type === 'run.finished')).exitCode, 0);
+      assert.equal(d.seen.filter(m => m.type === 'debug.paused').length, 2);
+      assert.equal(d.seen.filter(m => m.logpoint).length, 4);
+    } finally { d.close(); }
+  }
+});
+
+test('worker function conditions skip false calls and report refused writes', async () => {
+  const src = `import { Worker, isMainThread, parentPort } from 'node:worker_threads';
+function compute(n) {
+  return n * 2;
+}
+if (isMainThread) {
+  const worker = new Worker(new URL(import.meta.url));
+  worker.on('message', value => console.log('answer', value));
+} else {
+  const a = compute(1);
+  const b = compute(2);
+  parentPort.postMessage(a + b);
+}
+`;
+  for (const condition of ['n === 2', 'n++']) {
+    const d = new Driver();
+    try {
+      d.start({ 'main.mjs': src }, 'main.mjs', { stopOnEntry: false }, { breakpoints: [{ function: 'compute', condition }] });
+      const stop = await d.paused();
+      assert.equal(stop.reason, 'breakpoint');
+      assert.ok(stop.thread.ident > 0);
+      const n = await d.ask({ type: 'evaluate', expression: 'n' });
+      if (condition === 'n === 2') {
+        assert.equal(n.text, '2');
+        assert.equal(stop.conditionError, undefined);
+      } else {
+        assert.equal(n.text, '1');
+        assert.match(stop.conditionError, /side effect|side-effect/i);
+      }
+      await d.ask({ type: 'debug', action: 'breakpoints', set: [] });
+      await d.ask({ type: 'debug', action: 'continue' });
+      assert.equal((await d.next(m => m.type === 'run.finished')).exitCode, 0);
+      assert.ok(d.seen.some(m => m.type === 'log' && m.text === 'answer 6'));
+    } finally { d.close(); }
+  }
+});
+
 test('after the run: evaluate and complete against the finished namespace, exec refused', async () => {
   const d = new Driver();
   try {

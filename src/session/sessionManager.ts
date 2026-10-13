@@ -10,6 +10,7 @@ import type { RecordFromSpec, RunMode as ProtocolRunMode } from '../shared/proto
 import { resolveNode, showInterpreterError, type Interpreter } from '../runtime/interpreter';
 import { brandLanguage, isRunnable, runtimeLanguage } from '../runtime/language';
 import { RecentFilesStore } from './recentFilesStore';
+import { isDiskReload } from './diskReload';
 import { setting } from '../config/settings';
 import { setContext } from '../util/context';
 import { log } from '../util/log';
@@ -57,6 +58,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   private preferredFolder: string | undefined;
   private readonly editStarted = new Set<string>();
   private readonly disposables: vscode.Disposable[] = [];
+  private readonly documentWatchers = new Map<string, vscode.FileSystemWatcher>();
   private startedAtLeastOnce = false;
   private trustPromptAnswer: boolean | undefined;
 
@@ -72,14 +74,22 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       vscode.workspace.onDidChangeTextDocument((e) => this.onDocumentChanged(e)),
       vscode.workspace.onDidSaveTextDocument((doc) => this.onDocumentSaved(doc)),
       vscode.workspace.onDidCloseTextDocument((doc) => this.onDocumentClosed(doc)),
-      vscode.workspace.onDidOpenTextDocument((doc) => void this.maybeAutoStart(doc, 'open')),
+      vscode.workspace.onDidOpenTextDocument((doc) => {
+        this.watchDocument(doc);
+        void this.maybeAutoStart(doc, 'open');
+      }),
       vscode.window.onDidChangeActiveTextEditor(() => this.updateActive()),
     );
-    for (const doc of vscode.workspace.textDocuments) void this.maybeAutoStart(doc, 'open');
+    for (const doc of vscode.workspace.textDocuments) {
+      this.watchDocument(doc);
+      void this.maybeAutoStart(doc, 'open');
+    }
   }
 
   dispose(): void {
     for (const d of this.disposables) d.dispose();
+    for (const watcher of this.documentWatchers.values()) watcher.dispose();
+    this.documentWatchers.clear();
     for (const s of [...this.sessions.values()]) this.stopSession(s, false);
   }
 
@@ -283,15 +293,24 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
 
   /* ---------- document wiring ---------- */
 
+  private watchDocument(doc: vscode.TextDocument): void {
+    if (doc.uri.scheme !== 'file' || !isRunnable(doc) || this.documentWatchers.has(doc.uri.toString())) return;
+    // Explicit non-recursive watches also reach files outside the workspace. Their
+    // file-service events let VS Code reload clean documents without editor focus.
+    const pattern = new vscode.RelativePattern(path.dirname(doc.uri.fsPath), path.basename(doc.uri.fsPath));
+    this.documentWatchers.set(doc.uri.toString(), vscode.workspace.createFileSystemWatcher(pattern));
+  }
+
   private onDocumentChanged(e: vscode.TextDocumentChangeEvent): void {
     const own = this.get(e.document);
     if (own) own.onDocumentChanged(e);
     else if (isRunnable(e.document) && e.contentChanges.length) void this.maybeAutoStart(e.document, 'edit');
     if (e.document.uri.scheme !== 'file' || !isRunnable(e.document) || !e.contentChanges.length) return;
     // project-file dependency watch: a session that imported this file re-runs
-    for (const s of this.sessions.values()) {
-      if (s === own) continue;
-      if (s.files.byPath(e.document.uri.fsPath) && s.runMode === 'auto') s.scheduleRun('dependency');
+    const dependents = this.all().filter((s) => s !== own && s.files.byPath(e.document.uri.fsPath));
+    const saved = dependents.some((s) => s.runMode === 'onSave') && isDiskReload(e.document);
+    for (const s of dependents) {
+      if (s.runMode === 'auto' || (s.runMode === 'onSave' && saved)) s.scheduleRun('dependency');
     }
   }
 
@@ -306,6 +325,8 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   }
 
   private onDocumentClosed(doc: vscode.TextDocument): void {
+    this.documentWatchers.get(doc.uri.toString())?.dispose();
+    this.documentWatchers.delete(doc.uri.toString());
     const s = this.get(doc);
     if (!s) return;
     // keep the "was running" memory so automaticRestart can bring it back

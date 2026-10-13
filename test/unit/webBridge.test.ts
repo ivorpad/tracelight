@@ -278,6 +278,19 @@ describe('BridgeServer', () => {
     page.ws.close();
   });
 
+  it('refreshes source on disk writes and atomic replacements without executing under --no-watch', async () => {
+    const { port, file } = await start(false);
+    const page = await connect(port);
+    await page.next(m => m.type === 'hello');
+    fs.writeFileSync(file, 'print("changed")\n');
+    expect(await page.next(m => m.type === 'file' && m.file.content.includes('changed'))).toMatchObject({ file: { content: 'print("changed")\n' } });
+    fs.writeFileSync(`${file}.tmp`, 'print("replaced")\n');
+    fs.renameSync(`${file}.tmp`, file);
+    expect(await page.next(m => m.type === 'file' && m.file.content.includes('replaced'))).toMatchObject({ file: { content: 'print("replaced")\n' } });
+    expect(page.messages.some(m => m.type === 'run.begin' || m.type === 'event')).toBe(false);
+    page.ws.close();
+  });
+
   it('opens without executing and can start the debugger before any recording', async () => {
     const { port, file } = await start(false);
     const page = await connect(port);

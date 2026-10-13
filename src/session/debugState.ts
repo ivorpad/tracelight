@@ -60,6 +60,7 @@ export interface DebugBreakpointEcho {
   /** absent on a function breakpoint until the runtime resolved it */
   line?: number;
   condition?: string;
+  logMessage?: string;
   /** the function whose entry pauses (`--at NAME`), echoed back as it was asked for */
   function?: string;
   rid?: number;
@@ -79,7 +80,7 @@ export interface PausedInfo {
   kind?: StepKind;
   breakpoint?: DebugBreakpointEcho;
   conditionError?: string;
-  watch?: { id: string; exp: string; text: string };
+  watch?: { id: string; exp: string; text: string; error?: string };
   /** with reason exception: what was raised, and whether it reached the top */
   exception?: PausedException;
   /** the thread being served; absent from an older runtime */
@@ -97,6 +98,7 @@ export type BreakWatchSpec = DebugWatchSpec;
 
 export interface LocalVar {
   name: string;
+  type?: string;
   text: string;
   valueBag?: ValueBag;
 }
@@ -199,9 +201,10 @@ export function fileHasBreakpoints(list: readonly SourceBreakpointLike[], fsPath
  */
 export function entryPause(req: { stopOnEntry?: unknown }, breakpoints: readonly BreakpointSpec[], files: readonly string[], opts: { anyFile?: boolean } = {}): boolean {
   if (req.stopOnEntry === true) return true;
-  if (opts.anyFile) return breakpoints.length === 0;
+  const pauses = breakpoints.filter((bp) => bp.logMessage === undefined);
+  if (opts.anyFile) return pauses.length === 0;
   // a function breakpoint names no file until the runtime resolves it, so it can always still hit
-  return !breakpoints.some((bp) => bp.function !== undefined || (bp.path !== undefined && files.includes(bp.path)));
+  return !pauses.some((bp) => bp.function !== undefined || (bp.path !== undefined && files.includes(bp.path)));
 }
 
 /** One list for the run: VS Code's, the session's own and a transient one, without duplicates. */
@@ -210,7 +213,7 @@ export function mergeBreakpoints(...lists: (readonly BreakpointSpec[] | undefine
   const out: BreakpointSpec[] = [];
   for (const list of lists) {
     for (const bp of list ?? []) {
-      const key = `${bp.function ?? ''}\n${bp.path ?? ''}\n${bp.line ?? ''}\n${bp.condition ?? ''}`;
+      const key = JSON.stringify([bp.function, bp.path, bp.line, bp.condition ?? '', bp.logMessage]);
       if (seen.has(key)) continue;
       seen.add(key);
       const spec: BreakpointSpec = {};
@@ -218,6 +221,7 @@ export function mergeBreakpoints(...lists: (readonly BreakpointSpec[] | undefine
       if (bp.path !== undefined) spec.path = bp.path;
       if (bp.line !== undefined) spec.line = bp.line;
       if (bp.condition) spec.condition = bp.condition;
+      if (bp.logMessage !== undefined) spec.logMessage = bp.logMessage;
       out.push(spec);
     }
   }

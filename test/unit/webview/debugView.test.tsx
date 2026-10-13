@@ -71,6 +71,7 @@ describe('pausedPhrase and debugHeader', () => {
     expect(pausedPhrase({ active: true, paused: true, reason: 'step', kind: 'over' })).toBe('step over');
     expect(pausedPhrase(paused)).toBe('watch w1 normalized is None turned true');
     expect(pausedPhrase({ ...paused, watch: { id: 'w2', exp: 'total', text: '3', breakWhen: 'change' } })).toBe('watch w2 total changed to 3');
+    expect(pausedPhrase({ ...paused, watch: { id: 'w2', exp: 'total++', text: '<evaluation failed>', error: 'writes are refused', breakWhen: 'true' } })).toBe('watch w2 total++ failed: writes are refused');
     expect(pausedPhrase({ active: true, paused: true, reason: 'pause' })).toBe('paused on request');
     expect(pausedPhrase({ active: true, paused: true, reason: 'exception', exception: { type: 'ValueError', message: 'too big: 3', uncaught: true } })).toBe('uncaught ValueError: too big: 3');
     expect(pausedPhrase({ active: true, paused: true, reason: 'exception', exception: { type: 'ValueError', message: 'too big: 3', uncaught: false } })).toBe('raised ValueError: too big: 3');

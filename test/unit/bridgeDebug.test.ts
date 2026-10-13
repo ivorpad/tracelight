@@ -1,10 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
+import * as vscode from 'vscode';
 import { BridgeDebug, applyWatchRequest, breakpointReply, displayFile, displayWatchItems, entryPause, exceptionMode, localsReply, nextWatchId, nodeText, outputTail, parseBreakItems, pausedReply, resolveFile, type PathContext } from '../../src/agent/bridgeDebug';
 import type { PausedInfo } from '../../src/session/debugState';
+import { routeBreakpointRequest } from '../../src/agent/bridgeDebugShapes';
+import { applyBreakpointRequest } from '../../src/agent/bridgeDebugReply';
+import type { BreakpointSpec } from '../../src/session/debugState';
 
-// the module imports vscode for the gutter; the shaping under test never touches it
-vi.mock('vscode', () => ({}));
+vi.mock('vscode', () => {
+  class Position { constructor(public line: number, public character: number) {} }
+  class Location { range: { start: Position }; constructor(public uri: unknown, position: Position) { this.range = { start: position }; } }
+  class SourceBreakpoint { constructor(public location: unknown, public enabled: boolean, public condition?: string, public hitCondition?: string, public logMessage?: string) {} }
+  class FunctionBreakpoint { constructor(public functionName: string, public enabled: boolean) {} }
+  const debug = {
+    breakpoints: [] as unknown[],
+    addBreakpoints: (items: unknown[]) => { debug.breakpoints.push(...items); },
+    removeBreakpoints: (items: unknown[]) => { debug.breakpoints = debug.breakpoints.filter((bp) => !items.includes(bp)); },
+  };
+  return { Position, Location, SourceBreakpoint, FunctionBreakpoint, debug, Uri: { file: (fsPath: string) => ({ scheme: 'file', fsPath }) } };
+});
 
 const root = path.resolve('/ws');
 const ctx: PathContext = {
@@ -53,6 +67,43 @@ describe('parseBreakItems and breakpointReply', () => {
     ]);
     expect(breakpointReply(ctx, items, undefined)[0]).toEqual({ file: path.join('lib', 'rank.py'), line: 12, condition: 'n > 3' });
   });
+  it('matches each template to its own runtime echo at a shared location', () => {
+    const site = { path: ctx.filePath, line: 7 };
+    expect(breakpointReply(ctx, [site, { ...site, logMessage: 'n={n}' }], [
+      { ...site, logMessage: 'n={n}', error: 'bad log expression' }, { ...site, rid: 3 },
+    ])).toEqual([{ file: 'agent.py', line: 7, rid: 3 }, { file: 'agent.py', line: 7, logMessage: 'n={n}', error: 'bad log expression' }]);
+  });
+});
+
+describe('runtime logpoint routing', () => {
+  const log = { path: ctx.filePath, line: 7, logMessage: 'n={n}', condition: 'n > 0' };
+  it('deduplicates API logpoints, removes by site, and resets before adding in the same request', () => {
+    const routed = routeBreakpointRequest(ctx, [{ function: 'old' }, log], { set: [], add: [log, log, { file: 'agent.py', line: 8 }] });
+    expect(routed.own).toEqual([log]);
+    expect(routed.gutter).toEqual({ set: [], add: [{ path: ctx.filePath, line: 8 }] });
+    expect(routeBreakpointRequest(ctx, [log], { remove: [{ file: 'agent.py', line: 7 }] }).own).toEqual([]);
+    expect(routeBreakpointRequest(ctx, [], { add: [log], remove: [log] }).own).toEqual([]);
+    expect(routeBreakpointRequest(ctx, [{ function: 'old' }], { set: [log] })).toEqual({ own: [log], gutter: { set: [] } });
+  });
+  it('shares set/add/remove across both bridge kinds without adding API logpoints to the gutter', async () => {
+    const marker = new vscode.SourceBreakpoint(new vscode.Location(vscode.Uri.file(ctx.filePath), new vscode.Position(6, 0)), true, undefined, undefined, 'instrumented marker');
+    vscode.debug.removeBreakpoints([...vscode.debug.breakpoints]);
+    vscode.debug.addBreakpoints([marker, new vscode.FunctionBreakpoint('old', true)]);
+    let own: BreakpointSpec[] = [{ function: 'old' }];
+    const setOwn = async (items: BreakpointSpec[]): Promise<void> => { own = items; };
+    await applyBreakpointRequest(ctx, { add: [log, log] }, () => own, setOwn);
+    expect(own).toEqual([{ function: 'old' }, log]);
+    expect(vscode.debug.breakpoints).toHaveLength(2);
+    await applyBreakpointRequest(ctx, { set: [], add: [log, { file: 'agent.py', line: 7 }] }, () => own, setOwn);
+    expect(own).toEqual([log]);
+    expect(vscode.debug.breakpoints).toHaveLength(1);
+    expect((vscode.debug.breakpoints[0] as vscode.SourceBreakpoint).logMessage).toBeUndefined();
+    await applyBreakpointRequest(ctx, { set: [], add: [{ file: 'agent.py', line: 7 }] }, () => own, setOwn);
+    expect(vscode.debug.breakpoints).toHaveLength(1);
+    await applyBreakpointRequest(ctx, { add: [log], remove: [{ file: 'agent.py', line: 7 }] }, () => own, setOwn);
+    expect(own).toEqual([]);
+    expect(vscode.debug.breakpoints).toEqual([]);
+  });
 });
 
 describe('pausedReply', () => {
@@ -75,6 +126,7 @@ describe('pausedReply', () => {
     const watch = pausedReply(ctx, { ...info, fileId: 9, reason: 'watch', watch: { id: 'w1', exp: 'x is None', text: 'True' } });
     expect(watch['file']).toBe(ctx.filePath);
     expect(watch['watch']).toEqual({ id: 'w1', exp: 'x is None', text: 'True' });
+    expect(pausedReply(ctx, { ...info, watch: { id: 'w1', exp: 'x', text: '<evaluation failed>', error: 'bad sk-abcdefghijklmnopqrstuvwxyz' } }).watch).toEqual({ id: 'w1', exp: 'x', text: '<evaluation failed>', error: 'bad «redacted»' });
     const raised = pausedReply(ctx, { ...info, reason: 'exception', exception: { type: 'ValueError', message: 'bad token sk-abcdefghijklmnopqrstuvwxyz', uncaught: true } });
     expect(raised['exception']).toEqual({ type: 'ValueError', message: 'bad token «redacted»', uncaught: true });
   });
@@ -129,6 +181,9 @@ describe('entryPause', () => {
     // only a real boolean counts: "true" from a request field does not
     expect(entryPause({ stopOnEntry: 'true' }, [{ path: agent, line: 12 }], files)).toBe(false);
     expect(entryPause({ stopOnEntry: false }, [], files)).toBe(true);
+    expect(entryPause({}, [{ path: agent, line: 12, logMessage: 'n={n}' }], files)).toBe(true);
+    expect(entryPause({}, [{ path: agent, line: 12, logMessage: '' }], files, { anyFile: true })).toBe(true);
+    expect(entryPause({}, [{ path: agent, line: 12, logMessage: 'n={n}' }, { path: agent, line: 13 }], files)).toBe(false);
   });
 });
 
@@ -143,6 +198,10 @@ describe('outputTail', () => {
 });
 
 describe('localsReply', () => {
+  it('names-only omits values and bags even when a value bag was requested', () => {
+    const vars = [{ name: 'i', type: 'number', text: 'sensitive', valueBag: { data: { type: 'number', value: 'sensitive' } } as never }, { name: 'unknown', text: 'hidden' }];
+    expect(localsReply(vars, true, true)).toEqual([{ name: 'i', type: 'number' }, { name: 'unknown', type: 'unknown' }]);
+  });
   it('keeps the value bag only when asked', () => {
     const bag = { data: { type: 'number', value: '1', id: 'd:1 1', queryPath: [] as string[] }, runtimeKey: 'd:1' };
     const vars = [{ name: 'i', text: '1', valueBag: bag as never }];

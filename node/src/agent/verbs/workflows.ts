@@ -4,15 +4,18 @@ import { resolve } from 'node:path';
 import { registerVerb } from '../commands.ts';
 import { AgentError, SavedRun, callSource, type RunSource } from '../source.ts';
 import { MAX_LOCALS_ENTRIES } from '../protocol.ts';
+import { History } from '../history.ts';
+import { RecordedRun as EvidenceRun } from '../recorded.ts';
 import { coverageReport } from '../coverage.ts';
 import { Side, diffSides, renderDiff } from '../diff.ts';
 
 type Msg = Record<string, any>;
+
 async function saved(source: RunSource): Promise<SavedRun> {
-  if (source instanceof SavedRun) return source;
+  if (source instanceof SavedRun) return new EvidenceRun(source.path, { meta: source.meta, events: source.events });
   if (typeof source.recording !== 'function') throw new AgentError('This workflow needs a recording. Start Debug Current File (Recording).');
   const doc = await source.recording();
-  return new SavedRun('live-run.json', doc);
+  return new EvidenceRun('live-run.json', doc);
 }
 function privateWrite(file: string, content: string): void {
   try { writeFileSync(resolve(file), content, { flag: 'wx', mode: 0o600 }); }
@@ -21,7 +24,11 @@ function privateWrite(file: string, content: string): void {
 function notes(run: SavedRun): string[] {
   return ['Evidence covers this input only.',
     ...(!run.localsEntries.length ? ['No locals were recorded. Enable Record Variable Changes and run again.'] : []),
+    ...(run.localsEntries.length >= MAX_LOCALS_ENTRIES ? ['The local-value recording reached its limit. Later changes may be missing.'] : []),
     ...(run.recording ? ['The recording is truncated.'] : []),
+    ...(run.midRun ? ['Recording began partway through execution. Earlier values and causes are not recorded.'] : []),
+    ...(!run.finished.type ? ['The recording has no completion event. Final values are not established.'] : []),
+    ...([...run.files.values()].some(file => run.keptSource(String(file.path)) === null) ? ['Some files have no recorded source copy. Their source is unavailable in this evidence.'] : []),
     ...(run.localsEntries.some(e => e.changes?.some((c: Msg) => c.snapshotIncomplete)) ? ['Some object snapshots are bounded or contain accessors. Unobserved properties are unknown.'] : [])];
 }
 registerVerb({
@@ -33,16 +40,28 @@ registerVerb({
   async run(source, args) {
     const run = await saved(source);
     const errors = await callSource(run, 'exceptions');
-    const history = args.value ? run.var(args.value, { limit: 1000 }) : null;
+    const history = args.value ? run.var(args.value, { limit: MAX_LOCALS_ENTRIES }) : null;
     const suspicious = history?.changes.find((c: Msg) => /\bNaN\b|^undefined$/.test(c.text));
-    const step = args.at ?? suspicious?.step ?? history?.changes.at(-1)?.step ?? run.errors[0]?.step;
+    const selected = suspicious ?? history?.changes.at(-1);
+    const automatic = args.at === undefined || args.at === null;
+    let observedStep: number | undefined;
+    if (automatic && selected?.source === 'locals') {
+      const index = new History(run);
+      observedStep = index.localsByName.get(selected.name)?.find(([observed, scopeId, text]) =>
+        scopeId === selected.scopeId && text === selected.text &&
+        index.attribute(observed, scopeId, selected.name) === selected.step)?.[0];
+    }
+    const step = args.at ?? observedStep ?? selected?.step ?? run.errors[0]?.step;
     const evidence: Msg = { kind: 'investigation', notes: notes(run), exceptions: errors, coverage: await coverageReport(run), history };
+    if (automatic && selected) evidence.selection = { changeStep: selected.step, observedStep: observedStep ?? null };
     if (step !== undefined) {
       evidence.step = step;
       evidence.context = run.context({ step });
       if (args.value) {
-        evidence.why = await callSource(run, 'why', step, args.value, { depth: 5 });
-        evidence.origin = await callSource(run, 'origin', step, args.value, { depth: 20 });
+        evidence.why = await callSource(run, 'why', automatic && selected ? selected.step : step, args.value, { depth: 5 });
+        if (automatic && selected?.source === 'locals' && observedStep === undefined) {
+          evidence.notes.push('The selected change could not be matched to its observation. Its origin is not established.');
+        } else evidence.origin = await callSource(run, 'origin', step, args.value, { depth: 20 });
         evidence.comparisons = history.changes.filter((c: Msg) => c.text !== suspicious?.text).slice(0, 5);
       }
     }
@@ -123,9 +142,9 @@ registerVerb({
       const doc = await recordRun({ file: before.meta.file, argv: before.meta.argv ?? [], json: true, autoLog: !!c.autoLog,
         cwd: before.meta.cwd, workspaceRoot: before.meta.workspaceRoot, node: before.meta.executable, timeoutMs: c.timeoutMs ?? 30000, recordLocals: true, http: c.http === 'record' ? 'replay' : c.http,
         libraryCode: c.libraryCode, exclude: c.exclude, only: c.only, plugins: c.plugins, maxSteps: c.maxTraceSteps, maxValueChars: c.maxValueChars });
-      after = new SavedRun(args.out ?? 'verification.json', doc);
+      after = new EvidenceRun(args.out ?? 'verification.json', doc);
       if (args.out) privateWrite(args.out, JSON.stringify({ meta: doc.meta, events: doc.events }) + '\n');
-    } else after = new SavedRun(args.after);
+    } else after = new EvidenceRun(args.after);
     const checks = expectations.map(({ name, expected }: Msg) => {
       const history = after.var(name, { limit: 100000 });
       const value = history.changes.at(-1)?.text;

@@ -89,7 +89,7 @@ main file at a time, of one runtime's language.
 | `--runtime "CMD ARGS"` | any command that speaks the protocol on stdio, started in the file's directory (`TRACELIGHT_RUNTIME`); the only way to run a file of another language |
 | `--open` | open the page in the default browser |
 | `--no-run` | serve the source without executing it on startup; explicit Run and Automatic page edits still execute it |
-| `--no-watch` | do not re-run on save |
+| `--no-watch` | refresh source on disk changes without re-running; agent sessions always leave watching enabled |
 | `--verbose` | log the runtime's spawn, stderr and exits |
 
 Bun executes the actual program with `Bun.plugin` instrumentation and its JavaScriptCore
@@ -113,7 +113,7 @@ through the three. A window narrower than 760px stacks the code over the panel.
 ## Agents: step through code while explaining
 
 For live learning or debugging without a preliminary run, start with
-`tracelight web FILE --no-run --no-watch`, open the page, set breakpoints, then issue
+`tracelight web FILE --no-run`, open the page, set breakpoints, then issue
 `tracelight web ctl debug start`. Use `debug continue` to resume between stages, including
 known imported files targeted by `break LINE on --file FILE`. The debugger captures the same
 execution as it pauses for Code history. Recording navigation does not resume the live program.

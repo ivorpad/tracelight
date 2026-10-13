@@ -182,12 +182,13 @@ export class BridgeServer {
     // port 0 asks the OS for one (tests); the origin checks need the real one
     const addr = this.server.address();
     if (addr && typeof addr === 'object') this.opts.port = addr.port;
-    if (this.opts.watch) this.watchFile();
+    this.watchFile();
     if (this.opts.initialRun !== false) void this.run('start');
   }
 
   async close(): Promise<void> {
     this.watcher?.close();
+    if (this.watchTimer) clearTimeout(this.watchTimer);
     for (const p of this.pages) p.close(1001);
     this.views.dispose();
     await Promise.all([this.runner, this.debugRunner].map((r) => r?.shutdown().catch(() => undefined)));
@@ -407,10 +408,9 @@ export class BridgeServer {
     this.buffer = undefined;
     this.lastWritten = undefined;
     this.remember(this.file);
-    if (this.opts.watch) {
-      this.watcher?.close();
-      this.watchFile();
-    }
+    this.watcher?.close();
+    if (this.watchTimer) clearTimeout(this.watchTimer);
+    this.watchFile();
     this.broadcast({ type: 'hello', file: this.file, runtime: this.runtimeInfo, watch: this.opts.watch, canNarrate: this.views.canNarrate() });
     await this.run('open');
     return null;
@@ -439,7 +439,7 @@ export class BridgeServer {
     if (next.content === this.lastWritten) return; // our own save; the page already ran it
     this.buffer = undefined;
     this.broadcast({ type: 'file', file: next });
-    if (this.runMode !== 'onDemand') void this.run('disk');
+    if (this.opts.watch && this.runMode !== 'onDemand') void this.run('disk');
   }
 
   /* ---------- pages ---------- */
@@ -1003,7 +1003,7 @@ export async function main(argv: string[]): Promise<number> {
   }
   const server = new BridgeServer(opts);
   await server.start();
-  process.stdout.write(`Tracelight: ${server.url}  (${path.basename(opts.file)}, ${opts.watch ? 're-runs on save' : 'no file watch'}; Ctrl+C stops)\n`);
+  process.stdout.write(`Tracelight: ${server.url}  (${path.basename(opts.file)}, ${opts.watch ? 're-runs on save' : 'source updates without re-running'}; Ctrl+C stops)\n`);
   if (opts.open) openBrowser(server.url);
   const stop = () => void server.close().finally(() => process.exit(0));
   process.on('SIGINT', stop);

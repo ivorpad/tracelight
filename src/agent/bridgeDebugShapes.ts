@@ -7,7 +7,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Session } from '../session/session';
-import { type BreakpointSpec, type BreakWatchSpec, type DebugBreakpointEcho, type ExceptionMode, type LocalVar, type PausedInfo } from '../session/debugState';
+import { mergeBreakpoints, type BreakpointSpec, type BreakWatchSpec, type DebugBreakpointEcho, type ExceptionMode, type LocalVar, type PausedInfo } from '../session/debugState';
 import { parseAt } from '../debug/debugSessionState';
 import { redact, redactValueBag } from '../util/redact';
 import { int, type Request } from './bridgeSupport';
@@ -58,6 +58,7 @@ export interface BreakItem {
   path: string;
   line: number;
   condition?: string;
+  logMessage?: string;
 }
 
 /** `[{file | path, line, condition?}]` from a request into absolute specs; entries without a line are dropped. */
@@ -72,9 +73,29 @@ export function parseBreakItems(ctx: PathContext, items: unknown, exists?: (p: s
     const item: BreakItem = { path: resolveFile(ctx, o.file ?? o.path, exists), line };
     const condition = typeof o.condition === 'string' ? o.condition.trim() : '';
     if (condition) item.condition = condition;
+    if (typeof o.logMessage === 'string') item.logMessage = o.logMessage;
     out.push(item);
   }
   return out;
+}
+
+/** API logpoints belong to the runtime, unlike editor logpoints instrumented as markers. */
+export function routeBreakpointRequest(ctx: PathContext, own: readonly BreakpointSpec[], req: Request): { own: BreakpointSpec[]; gutter: Request } {
+  const gutter = { ...req };
+  let next = Array.isArray(req.set) ? [] : [...own];
+  for (const field of ['set', 'add'] as const) {
+    if (!Array.isArray(req[field])) continue;
+    const items = parseBreakItems(ctx, req[field]);
+    next = mergeBreakpoints(next, items.filter((it) => it.logMessage !== undefined));
+    gutter[field] = items.filter((it) => it.logMessage === undefined);
+  }
+  if (Array.isArray(req.remove)) {
+    const items = parseBreakItems(ctx, req.remove);
+    const removed = (bp: BreakpointSpec): boolean => items.some((it) => it.path === bp.path && it.line === bp.line);
+    next = next.filter((bp) => !removed(bp));
+    for (const field of ['set', 'add'] as const) if (Array.isArray(gutter[field])) gutter[field] = (gutter[field] as BreakItem[]).filter((it) => !removed(it));
+  }
+  return { own: next, gutter };
 }
 
 /**
@@ -84,7 +105,7 @@ export function parseBreakItems(ctx: PathContext, items: unknown, exists?: (p: s
  */
 export function breakpointReply(ctx: PathContext, list: readonly BreakpointSpec[], echo: readonly DebugBreakpointEcho[] | undefined): Record<string, unknown>[] {
   return list.map((bp) => {
-    const e = echo?.find((x) => (bp.function !== undefined ? x.function === bp.function : x.function === undefined && x.path === bp.path && x.line === bp.line && (x.condition ?? '') === (bp.condition ?? '')));
+    const e = echo?.find((x) => (bp.function !== undefined ? x.function === bp.function : x.function === undefined && x.path === bp.path && x.line === bp.line && (x.condition ?? '') === (bp.condition ?? '') && x.logMessage === bp.logMessage));
     const out: Record<string, unknown> = {};
     if (bp.function !== undefined) out.function = bp.function;
     // an unresolved function spec is echoed as `{path: "", line: 0}`: that is not a file and not a line
@@ -93,6 +114,7 @@ export function breakpointReply(ctx: PathContext, list: readonly BreakpointSpec[
     const line = bp.line ?? e?.resolvedLine ?? (e?.line || undefined);
     if (line) out.line = line;
     if (bp.condition) out.condition = bp.condition;
+    if (bp.logMessage !== undefined) out.logMessage = bp.logMessage;
     if (e) {
       if (e.rid !== undefined) out.rid = e.rid;
       if (e.fileId !== undefined) out.fileId = e.fileId;
@@ -138,7 +160,7 @@ export function pausedReply(ctx: PathContext, info: PausedInfo): Record<string, 
   const file = ctx.runFiles().find((f) => f.fileId === info.fileId)?.path ?? ctx.filePath;
   const out: Record<string, unknown> = { ...info, file };
   if (info.breakpoint) out.breakpoint = { ...info.breakpoint, ...(info.breakpoint.path ? { file: displayFile(ctx, info.breakpoint.path) } : {}) };
-  if (info.watch) out.watch = { ...info.watch, text: redact(info.watch.text) };
+  if (info.watch) out.watch = { ...info.watch, ...(info.watch.text !== undefined ? { text: redact(info.watch.text) } : {}), ...(info.watch.error !== undefined ? { error: redact(info.watch.error) } : {}) };
   if (info.conditionError) out.conditionError = redact(info.conditionError);
   if (info.exception) out.exception = { ...info.exception, message: redact(info.exception.message) };
   return out;
@@ -158,8 +180,9 @@ export function outputTail(output: string, limit = OUTPUT_TAIL): { text: string;
  * `length` for a sized value) so a reader can say "a list of 2" without the whole bag. A masked
  * value keeps its name and its masked text only.
  */
-export function localsReply(vars: readonly LocalVar[], valueBag: boolean): Record<string, unknown>[] {
+export function localsReply(vars: readonly LocalVar[], valueBag: boolean, namesOnly = false): Record<string, unknown>[] {
   return vars.map((v) => {
+    if (namesOnly) return { name: v.name, type: v.type ?? v.valueBag?.data?.type ?? 'unknown' };
     const out: Record<string, unknown> = { name: v.name, text: redact(v.text) };
     const node = v.valueBag?.data;
     if (node && !node.secret) {

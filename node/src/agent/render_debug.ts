@@ -49,6 +49,7 @@ export function stopReason(paused: Msg): string {
   if (reason === 'step') return `step ${pyText(paused.kind || 'into')}`;
   if (reason === 'watch') {
     const w = isObj(paused.watch) ? paused.watch : {};
+    if (w.error) return `watch ${pyText(w.exp)} failed: ${pyText(w.error)}`;
     return Object.keys(w).length ? `watch ${pyText(w.exp)}: ${pyText(w.text)}` : 'watch';
   }
   if (reason === 'exception') {
@@ -268,6 +269,7 @@ export function renderBreak(result: Msg, source: RunSource, _args: Args): string
     const where = bp.file ? loc(source, bp.file, bp.line) : null;
     let line = bp.function ? `  ${bp.function}${where ? '  ' + where : ''}` : `  ${loc(source, bp.file, bp.line)}`;
     if (bp.condition) line += `  if ${oneLine(bp.condition, 80)}`;
+    if (bp.logMessage !== undefined) line += `  log ${oneLine(bp.logMessage, 160)}`;
     if (bp.error) line += `  (${oneLine(bp.error, 80)})`;
     else if (bp.resolvedLine !== null && bp.resolvedLine !== undefined) line += `  -> resolved line ${bp.resolvedLine}`;
     else line += '  (not resolved yet)';
@@ -295,7 +297,7 @@ export function renderWatches(result: Msg, _source: RunSource, _args: Args): str
 
 export function renderLocals(result: Msg, _source: RunSource, _args: Args): string[] {
   const variables = (result.locals || []).filter(isObj);
-  return variables.length ? variables.map((v: Msg) => `${pyText(v.name)} = ${oneLine(v.text)}`) : ['(no variables in this frame)'];
+  return variables.length ? variables.map((v: Msg) => 'text' in v ? `${pyText(v.name)} = ${oneLine(v.text)}` : `${pyText(v.name)} (${v.type ?? 'unknown'})`) : ['(no variables in this frame)'];
 }
 
 debugRender.stop = renderDebugStop;

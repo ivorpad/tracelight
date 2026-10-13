@@ -19,7 +19,7 @@ Contents: [Start it](#start-it) Â· [A page must be open](#a-page-must-be-open) Â
 ## Start it
 
 ```
-tracelight web FILE [--port N] [--open] [--no-run] [--no-watch] [--verbose] [--runtime js|node|bun|"CMD ARGS"] [--node PATH]
+tracelight web FILE [--port N] [--open] [--no-run] [--verbose] [--runtime js|node|bun|"CMD ARGS"] [--node PATH]
 tracelight web -h | --help
 ```
 
@@ -37,12 +37,13 @@ It serves until it is stopped, so start it in the background (your harness's bac
   a free port and pass the same `--port` to every `ctl`.
 - `--open`: open the page in the default browser, for a person at this machine.
 - `--no-run`: serve the source without executing it on startup. For live teaching or debugging,
-  combine it with `--no-watch`, open the page, set breakpoints, then issue `debug start`.
+  leave watching enabled, open the page, set breakpoints, then issue `debug start`.
   The normal startup behavior stays unchanged when this flag is omitted. This flag skips only
   the initial run; explicit Run and page edits under Automatic mode can still execute code.
-- `--no-watch`: do not re-run when the file changes on disk. Without it a save in any editor
-  re-runs the file and refreshes the page; typing in the page's code pane runs the edited buffer
-  without saving, and Ctrl/Cmd+S in the page writes the file.
+- Always start with watching enabled. A save in any editor refreshes the source and executes
+  according to the page's run mode. Never use `--no-watch` in this skill. The CLI flag suppresses
+  disk-triggered execution but still refreshes source. Typing in the page's code pane runs the
+  edited buffer under Automatic mode; Ctrl/Cmd+S writes the file.
 - `--verbose`: log the runtime's spawn, stderr and exits to stderr.
 - `--runtime "CMD ARGS"` (or `$TRACELIGHT_RUNTIME`): any command that speaks the runtime's NDJSON
   protocol on stdio, started in the file's directory. `js`, the default for `.js`, `.mjs`, `.cjs`,

@@ -115,7 +115,11 @@ test('the browser page: tracelight web, every ctl command and flag, the HTTP API
   if (!has(ctl, '--port')) missing.push('ctl --port');
   const main = server.slice(server.indexOf('export async function main'));
   const serve = synopses(page, 'web');
-  for (const f of new Set([...main.matchAll(/a === '(--[a-z-]+)'/g)].map((m) => m[1]!))) if (!has(serve, f)) missing.push(`web ${f}`);
+  for (const f of new Set([...main.matchAll(/a === '(--[a-z-]+)'/g)].map((m) => m[1]!))) {
+    if (!has(f === '--no-watch' ? page : serve, f)) missing.push(`web ${f}`);
+  }
+  assert.ok(!has(serve, '--no-watch'), 'browser startup commands must keep watching enabled');
+  assert.ok(doc('SKILL.md').includes('Always start browser sessions with file watching enabled'));
   for (const p of new Set([...server.matchAll(/'(\/api\/[a-z]+)'/g)].map((m) => m[1]!))) if (!page.includes(p)) missing.push(p);
   for (const t of source('web/agent.ts').matchAll(/tool\('(tracelight_\w+)'/g)) if (!has(page, t[1]!)) missing.push(t[1]!);
   assert.deepEqual(missing, []);

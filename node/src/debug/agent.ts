@@ -38,6 +38,7 @@ import { showsValue } from './repl.ts';
 import { predict, regionsOf, type FrameView, type Regions, type Verdict } from './predict.ts';
 import { expressionName } from './describe.ts';
 import { functionSourceAt } from './functionSource.ts';
+import { logMessageParts, syntaxError } from './breakpoints.ts';
 import { MASK, secrets } from '../secrets.ts';
 
 export interface AgentData {
@@ -108,6 +109,7 @@ interface Watch {
   last: unknown;
   missing: boolean;
   error?: string;
+  evaluationError?: string;
 }
 
 const files: FileView[] = [];
@@ -314,23 +316,31 @@ async function onPaused(params: any): Promise<void> {
   if (cand.stepWatches && frame) await evaluateStepWatches(cand.stepWatches, cand.n, frame);
   let why: string | null = cand.reason;
   const extra: Record<string, unknown> = { ...cand.extra };
+  for (const logpoint of frame ? cand.logpoints ?? [] : []) {
+    try {
+      const checked = logpoint.expression ? await conditionResult(post, frame!, logpoint.expression) : { matches: true };
+      if (checked.error) throw new Error(checked.error);
+      if (checked.matches) await main(`logpointMessage(${cand.n}, ${J(await logpointText(post, frame!, logpoint.bp))}, ${J(logpoint.bp)})`);
+    } catch (error) {
+      why = why ?? 'breakpoint';
+      extra.breakpoint ??= logpoint.bp;
+      extra.conditionError = `logpoint: ${expressionError(error)}`;
+    }
+  }
   if (why === null && cand.condition && frame) {
-    const r = await post('Debugger.evaluateOnCallFrame', { callFrameId: frame.callFrameId, expression: cand.condition.expression, silent: true, objectGroup: GROUP });
-    if (r.exceptionDetails) {
+    const checked = await conditionResult(post, frame, cand.condition.expression);
+    if (checked.matches || checked.error) {
       why = 'breakpoint';
       extra.breakpoint = cand.condition.bp;
-      extra.conditionError = String(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text).split('\n')[0];
-    } else if (await truthy(r.result)) {
-      why = 'breakpoint';
-      extra.breakpoint = cand.condition.bp;
+      if (checked.error) extra.conditionError = checked.error;
     }
   }
   if (why === null && cand.watches && frame) {
     for (const w of watches) {
-      const text = await watchFires(w, frame);
-      if (text !== null) {
+      const result = await watchFires(w, frame);
+      if (result !== null) {
         why = 'watch';
-        extra.watch = { id: w.id, exp: w.exp, text };
+        extra.watch = { id: w.id, exp: w.exp, ...result };
         break;
       }
     }
@@ -363,28 +373,65 @@ async function evaluateStepWatches(watches: { id: string; exp: string }[], step:
   }
 }
 
-async function watchFires(w: Watch, frame: Frame): Promise<string | null> {
+function expressionError(error: unknown): string {
+  const err = error as Error;
+  return (err instanceof RefusedError || err instanceof EvalException ? err.message : `${err.name}: ${err.message}`).split('\n')[0]!;
+}
+
+async function conditionResult(p: Post, frame: Frame, expression: string): Promise<{ matches: boolean; error?: string }> {
+  try {
+    const remote = await evaluatePure(p, { callFrameId: frame.callFrameId }, expression, GROUP);
+    return { matches: await truthy(remote) };
+  } catch (error) {
+    return { matches: false, error: expressionError(error) };
+  }
+}
+
+async function logpointText(p: Post, frame: Frame, bp: Record<string, unknown>, thread?: Thread): Promise<string> {
+  const { parts, error } = logMessageParts(String(bp.logMessage ?? ''));
+  if (error) throw new Error(error);
+  let message = '';
+  for (const part of parts) {
+    if ('text' in part) message += part.text;
+    else {
+      const remote = await evaluatePure(p, { callFrameId: frame.callFrameId }, part.expression, GROUP);
+      message += thread ? (await describeAt(remote, part.expression, thread)).text : await textOf(remote, part.expression);
+    }
+  }
+  return secrets.scrub(message);
+}
+
+async function watchFires(w: Watch, frame: Frame): Promise<{ text: string; error?: string } | null> {
   let remote: Remote;
   try {
     remote = await evaluatePure(post, { callFrameId: frame.callFrameId }, w.exp, GROUP);
-  } catch {
-    if (w.last === undefined) w.missing = true; // not bound yet: its first value counts as a change
-    return null;
+  } catch (error) {
+    // A watch may be installed before a binding exists or entered from another frame. That is
+    // temporary absence, not a broken expression; its first available value still counts.
+    if (error instanceof EvalException && error.errorType === 'ReferenceError') {
+      if (w.last === undefined) w.missing = true;
+      return null;
+    }
+    const message = expressionError(error);
+    if (message === w.evaluationError) return null;
+    w.evaluationError = message;
+    return { text: '<evaluation failed>', error: message };
   }
+  w.evaluationError = undefined;
   if (w.mode === 'true') {
     const now = await truthy(remote);
     const fired = now && !w.last;
     w.last = now;
-    return fired ? textOf(remote, w.exp) : null;
+    return fired ? { text: await textOf(remote, w.exp) } : null;
   }
   const text = await textOf(remote, w.exp);
   if (w.last === undefined) {
     w.last = text;
-    return w.missing ? text : null;
+    return w.missing ? { text } : null;
   }
   if (text === w.last) return null;
   w.last = text;
-  return text;
+  return { text };
 }
 
 let exceptionMode = 'uncaught';
@@ -579,7 +626,7 @@ interface Thread {
    * (a breakpoint's line, a step) goes on to just after it, where the statement's step is in the
    * trace. Meanwhile this holds what the pause will be reported as.
    */
-  settle: { why: string; extra: Record<string, unknown> } | null;
+  settle: { why: string; extra: Record<string, unknown>; conditionChecked?: boolean } | null;
   /** scriptId -> where its step hooks are (`hookSpans`) */
   spans: Map<string, Map<number, number[]> | null>;
   /** it records (threads/worker.ts): it stops itself for a step */
@@ -624,9 +671,19 @@ async function syncBreakpoints(t: Thread): Promise<void> {
   t.breakpoints.clear();
   for (const id of ids) await t.post('Debugger.removeBreakpoint', { breakpointId: id }).catch(() => {});
   const specs: { path: string; line: number; condition: string | null; echo: Record<string, unknown> }[] = await main('lineBreakpoints()');
+  const groups = new Map<string, typeof specs>();
   for (const bp of specs) {
-    const r = await t.post('Debugger.setBreakpointByUrl', { url: pathToFileURL(bp.path).href, lineNumber: bp.line - 1, ...(bp.condition ? { condition: bp.condition } : {}) }).catch(() => null);
-    if (r?.breakpointId) t.breakpoints.set(r.breakpointId, bp.echo);
+    const key = JSON.stringify([bp.path, bp.line]);
+    const list = groups.get(key) ?? [];
+    list.push(bp);
+    groups.set(key, list);
+  }
+  for (const list of groups.values()) {
+    const bp = list[0]!;
+    // Check conditions ourselves with the same pure evaluator as main-thread stops. Native CDP
+    // conditions can write state and silently skip a breakpoint when evaluation throws.
+    const r = await t.post('Debugger.setBreakpointByUrl', { url: pathToFileURL(bp.path).href, lineNumber: bp.line - 1 }).catch(() => null);
+    if (r?.breakpointId) t.breakpoints.set(r.breakpointId, list.length === 1 ? bp.echo : { ...bp.echo, coincident: list.map(item => item.echo) });
   }
   // a recorded worker traps its function breakpoints itself (threads/worker.ts); one that has not
   // loaded its preload yet takes them from the hub when it starts
@@ -813,6 +870,7 @@ async function onThreadPaused(t: Thread, params: any): Promise<void> {
   const k = all.findIndex((f) => !isLibrary(f));
   const extra: Record<string, unknown> = {};
   let why: string | null = null;
+  let conditionChecked = false;
   const stepping = t.stepping;
   t.stepping = null;
   if (reason === 'exception' || reason === 'promiseRejection') {
@@ -841,10 +899,38 @@ async function onThreadPaused(t: Thread, params: any): Promise<void> {
       return;
     }
     why = t.settle.why;
+    conditionChecked = !!t.settle.conditionChecked;
     Object.assign(extra, t.settle.extra);
   } else if (stepping && k >= 0) {
     why = 'step';
     extra.kind = stepping;
+  }
+  let breakpoint = extra.breakpoint as Record<string, unknown> | undefined;
+  if (why === 'breakpoint' && !conditionChecked && breakpoint && k >= 0) {
+    const candidates = (Array.isArray(breakpoint.coincident) ? breakpoint.coincident : [breakpoint]) as Record<string, unknown>[];
+    const logs: Record<string, unknown>[] = [];
+    let stopping: Record<string, unknown> | undefined;
+    for (const bp of candidates) {
+      const checked = typeof bp.condition === 'string' ? await conditionResult(t.post, all[k]!, bp.condition) : { matches: true };
+      if (checked.error) {
+        stopping ??= bp;
+        extra.conditionError ??= typeof bp.logMessage === 'string' ? `logpoint: ${checked.error}` : checked.error;
+      } else if (checked.matches) {
+        if (typeof bp.logMessage === 'string') logs.push(bp);
+        else stopping ??= bp;
+      }
+    }
+    conditionChecked = true;
+    extra.logpoints = logs;
+    extra.logpointOnly = !stopping;
+    breakpoint = stopping ?? logs[0];
+    extra.breakpoint = breakpoint;
+    if (!breakpoint) {
+      t.settle = null;
+      await t.post('Runtime.releaseObjectGroup', { objectGroup: GROUP }).catch(() => {});
+      await t.post('Debugger.resume');
+      return;
+    }
   }
   if (why === null) {
     // the program's own `debugger` statement, or a step that left the user's code: go on
@@ -854,7 +940,7 @@ async function onThreadPaused(t: Thread, params: any): Promise<void> {
   }
   if (why !== 'exception' && !(await atStatement(t, raw[0]))) {
     // a breakpoint's line pauses before its statement's step hook: on to just after it
-    t.settle = { why, extra };
+    t.settle = { why, extra, conditionChecked };
     const runtime = isRuntimeFrame(urlPath(frameUrl(raw[0], t.urls)));
     await t.post(runtime ? 'Debugger.stepOut' : 'Debugger.stepOver');
     return;
@@ -863,6 +949,21 @@ async function onThreadPaused(t: Thread, params: any): Promise<void> {
   const frames = all.slice(k);
   const top = frames[0]!;
   const n = await threadStep(t);
+  const logs = (extra.logpoints ?? []) as Record<string, unknown>[];
+  const logpointOnly = extra.logpointOnly;
+  delete extra.logpoints;
+  delete extra.logpointOnly;
+  for (const logpoint of logs) {
+    try {
+      const text = await logpointText(t.post, top, logpoint, t);
+      send({ type: 'output', stream: 'stdout', text: text + '\n', step: n, logpoint, thread: { name: t.name, ident: t.ident } });
+    } catch (error) { extra.conditionError = `logpoint: ${expressionError(error)}`; }
+  }
+  if (logpointOnly && !extra.conditionError) {
+    await t.post('Runtime.releaseObjectGroup', { objectGroup: GROUP }).catch(() => {});
+    await t.post('Debugger.resume');
+    return;
+  }
   const own = top.file && !top.file.library ? top.file : null;
   stopped = { frames, step: n, thread: t };
   send({
@@ -930,15 +1031,15 @@ async function afterStop(): Promise<void> {
 
 /** `{text, valueBag}` of a value in a worker thread: a bounded `util.inspect` there, masked here (not expandable) */
 let threadValues = 0;
-async function describeAt(remote: Remote, name: string): Promise<{ text: string; valueBag: unknown }> {
-  const t = stopped?.thread;
+async function describeAt(remote: Remote, name: string, thread = stopped?.thread): Promise<{ text: string; valueBag: unknown }> {
+  const t = thread;
   if (!t) return describe(remote, name);
   const r = await t.post('Runtime.callFunctionOn', {
     objectId: await t.globalObject(),
     functionDeclaration: `function (v) {
       const util = process.getBuiltinModule('node:util');
       let text;
-      try { text = typeof v === 'string' ? JSON.stringify(v) : util.inspect(v, { depth: 2, breakLength: Infinity, maxArrayLength: 20, maxStringLength: 120, compact: true }); }
+      try { text = typeof v === 'string' ? JSON.stringify(v) : util.inspect(v, { depth: 2, breakLength: Infinity, maxArrayLength: 20, maxStringLength: 120, compact: true, customInspect: false, getters: false }); }
       catch (e) { text = '<unrepresentable>'; }
       const type = v === null ? 'null' : Array.isArray(v) ? 'Array' : typeof v === 'object' ? (v.constructor?.name ?? 'Object') : typeof v;
       return { text, type, secretable: typeof v === 'string' || v instanceof Uint8Array, length: typeof v === 'string' || Array.isArray(v) ? v.length : undefined };
@@ -1012,9 +1113,16 @@ async function exec(req: Req): Promise<void> {
 // scope is the wrapper's (require, module, ...), never the paused function's
 const MODULE_NOISE = new Set(['exports', 'require', 'module', '__filename', '__dirname', 'arguments']);
 
-async function locals(frame: Frame): Promise<{ name: string; text: string; valueBag: unknown }[]> {
-  const out: { name: string; text: string; valueBag: unknown }[] = [];
-  for (const b of await bindingsOf(frame, GROUP)) if (b.shown) out.push({ name: b.name, ...(await describeAt(b.value, b.name)) });
+async function locals(frame: Frame, req: Req): Promise<{ name: string; type?: string; text: string; valueBag?: unknown }[]> {
+  const out: { name: string; type?: string; text: string; valueBag?: unknown }[] = [];
+  if (req.namesOnly !== undefined && typeof req.namesOnly !== 'boolean') throw new TypeError('namesOnly must be a boolean');
+  if (req.names !== undefined && (!Array.isArray(req.names) || req.names.some((name: unknown) => typeof name !== 'string'))) throw new TypeError('names must be an array of strings');
+  const names = req.names === undefined ? null : new Set<string>(req.names);
+  for (const b of await bindingsOf(frame, GROUP)) {
+    if (!b.shown || names && !names.has(b.name)) continue;
+    const type = b.value.subtype ?? b.value.type;
+    out.push(req.namesOnly ? { name: b.name, type, text: '' } : { name: b.name, type, ...(await describeAt(b.value, b.name)) });
+  }
   return out;
 }
 
@@ -1062,9 +1170,19 @@ async function debugAction(req: Req): Promise<void> {
         const exp = String(spec?.exp ?? '').trim();
         if (!exp) continue;
         const w: Watch = { id: String(spec.id ?? `w${echo.length + 1}`), exp, mode: spec.breakWhen === 'true' ? 'true' : 'change', last: undefined, missing: false };
-        const res = parseSync('tracelight-watch.js', `(${exp}\n)`, { sourceType: 'script' });
-        if (res.errors.length) w.error = `SyntaxError: ${res.errors[0]!.message}`;
-        else kept.push(w);
+        w.error = syntaxError(exp) ?? undefined;
+        if (spec.breakWhen !== undefined && !['true', 'change'].includes(spec.breakWhen)) w.error = `unknown watch mode '${spec.breakWhen}' (change, true)`;
+        if (!w.error) {
+          // A change watch starts with the value at the current pause, so the first resumed
+          // assignment is not mistaken for its baseline. An unbound name waits for its frame.
+          if (w.mode === 'change' && stopped && !stopped.thread) {
+            try {
+              const remote = await evaluatePure(post, targetOf(stopped.frames[0]!), exp, GROUP);
+              if (remote.type !== 'undefined') w.last = await textOf(remote, exp);
+            } catch { /* evaluation failures are explained at the next statement */ }
+          }
+          kept.push(w);
+        }
         echo.push({ id: w.id, exp: w.exp, breakWhen: w.mode, ...(w.error ? { error: w.error } : {}) });
       }
       watches = kept;
@@ -1083,7 +1201,7 @@ async function debugAction(req: Req): Promise<void> {
       return reply(await main('requestPause()'));
     case 'locals': {
       if (!stopped) return error(finished ? 'the run has ended; there is no frame' : 'the program is running; pause it first');
-      const fields: Record<string, unknown> = { locals: await locals(frameFor(req)) };
+      const fields: Record<string, unknown> = { locals: await locals(frameFor(req), req) };
       if (await main('modified')) fields.modified = true;
       return reply(fields);
     }

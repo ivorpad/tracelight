@@ -20,6 +20,7 @@ export function pausedPhrase(d: DebugPanelInfo): string {
     case 'watch': {
       const w = d.watch;
       if (!w) return 'watch';
+      if (w.error) return `watch ${w.id} ${w.exp} failed: ${w.error}`;
       return w.breakWhen === 'true' ? `watch ${w.id} ${w.exp} turned true` : `watch ${w.id} ${w.exp} changed to ${w.text}`;
     }
     case 'pause':

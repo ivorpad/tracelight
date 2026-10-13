@@ -4,7 +4,7 @@
  * Stdlib JSON-RPC 2.0, one message per line (the MCP stdio transport), no SDK.
  *
  * - `tracelight_run` records a JavaScript / TypeScript file in this process (`tracelight run FILE --save`).
- * - The other five turn a call into the words of the one-shot agent command and run that verb in
+ * - The other tools turn a call into the words of the one-shot agent command and run that verb in
  *   this process (`dispatchVerb`). The tool answers exactly what the command prints: its text, its
  *   `error:` and hint (as `isError`), or the `--json` shape with `json: true`.
  *
@@ -18,6 +18,9 @@ import { NAME, RUNTIME_VERSION } from '../protocol.ts';
 import { dispatchVerb, getVerb, verbNames, type Io } from '../agent/commands.ts';
 import '../agent/verbs.ts';
 import { DEBUG_ACTIONS, DEBUG_COMMAND, MAP_ACTIONS, MOVES, VALUE_ACTIONS, toolDefinitions } from './tools.ts';
+import { boundedEvidence } from './evidence.ts';
+import { callWorkflow, workflowDefinitions } from './workflowTools.ts';
+import { AgentError } from '../agent/source.ts';
 
 type Args = Record<string, any>;
 type Msg = Record<string, any>;
@@ -31,7 +34,14 @@ export const INSTRUCTIONS = `Tracelight records a JavaScript or TypeScript progr
 3. tracelight_step {run, step, move: "into"} is the Time Machine: code, values, stack and moves at a step; move back and forward freely.
 4. tracelight_value {action: "why", run, step, name} explains where a value came from; "var" lists every change of a name; "origin" follows a bad value from an exception back to its root.
 5. tracelight_coverage {run} lists the lines that never ran.
+For a saved run, tracelight_investigate {run, value} bundles history, context, origin, exceptions and coverage in one bounded response. Follow its step numbers with tracelight_step or tracelight_value for more detail.
+To check an edit, record its before and after separately, then tracelight_verify {before, after, expect: ["total=3"]}. It reads those recordings without executing anything. verified means only that the supplied final-value expectations passed on this input in a complete successful recording, not that every behavior is correct. ignore affects the comparison, never the checks.
+These two saved-run tools return structuredContent and matching JSON text. response.omissions lists shortened detail; notes describe missing recording evidence. A failed expectation returns verified: false, not a tool error.
+tracelight_session {} lists sessions without selecting one; {run} reads saved state; {session} reads the chosen live session without starting it. livePause and recordedSelection are independent; neither confirms the visible editor.
+tracelight_seek {run, value: "total", equals: "NaN"} finds a recorded destination, or use {run, file, line}; occurrence selects first or last. It does not move live execution.
+tracelight_save_investigation {path, run, question, checkpoints: [{name, step}]} writes a new private checkpoint artifact. Keep it and its recording. tracelight_open_investigation {path} verifies the recording hash and reopens recorded evidence without running code.
 For a program running now in VS Code (setting tracelight.agentAccess), pass live: true instead of run; tracelight_debug {action: "start", file, at: ["func"]} starts the debugger and returns the first stop, then "continue", "locals", tracelight_step with a move.
+For expression breakpoints use tracelight_debug {action: "watches", add: ["total > 100"], break_when: "true"}, or break with add: ["file.ts:12"] and when. break with log_message uses pure {expression} substitutions without pausing. locals with names_only lists names/types; names requests only selected binding values.
 The text results are the form to read; json: true gives the raw shape.`;
 
 const JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', '.tsx']);
@@ -61,6 +71,7 @@ function int(v: unknown): number {
 }
 
 function sourceWords(a: Args, positional = true): [string[], string[]] {
+  if (a.run && (a.live || a.session)) throw new ToolError('choose a saved run or a live session, not both');
   const opts: string[] = [];
   const pos: string[] = [];
   if (a.json) opts.push('--json');
@@ -205,6 +216,49 @@ export function wordsCoverage(a: Args): string[] {
   return [...words, '--', ...pos];
 }
 
+/** These workflows deliberately accept saved evidence only: no live evaluation, rerun or export. */
+function evidenceArgs(a: Args, allowed: string[]): void {
+  if (!a || typeof a !== 'object' || Array.isArray(a)) throw new ToolError('arguments must be an object');
+  const unknown = Object.keys(a).filter(k => !allowed.includes(k));
+  if (unknown.length) throw new ToolError(`unsupported argument(s): ${unknown.join(', ')}`, 'these tools only read saved recordings; they do not rerun, export or control a live session');
+  if (a.limit !== undefined && (typeof a.limit !== 'number' || !Number.isInteger(a.limit) || a.limit < 1 || a.limit > 100)) {
+    throw new ToolError('limit must be an integer from 1 to 100');
+  }
+}
+
+function evidenceString(a: Args, key: string, required = true, maxLength = 4096): string | undefined {
+  const value = a[key];
+  if (value === undefined && !required) return undefined;
+  if (typeof value !== 'string' || !value.trim() || value.length > maxLength) throw new ToolError(`${key} must be a nonempty string of at most ${maxLength} characters`);
+  return value;
+}
+
+export function wordsInvestigate(a: Args): string[] {
+  evidenceArgs(a, ['run', 'value', 'at', 'limit']);
+  const run = evidenceString(a, 'run')!;
+  const value = evidenceString(a, 'value', false, 256);
+  if (a.at !== undefined && (typeof a.at !== 'number' || !Number.isInteger(a.at) || a.at < 0)) throw new ToolError('at must be a nonnegative integer');
+  return ['investigate', '--json', ...(value === undefined ? [] : [`--value=${value}`]),
+    ...(a.at === undefined ? [] : [`--at=${a.at}`]), '--', resolve(run)];
+}
+
+export function wordsVerify(a: Args): string[] {
+  evidenceArgs(a, ['before', 'after', 'expect', 'ignore', 'limit']);
+  const before = evidenceString(a, 'before')!;
+  const after = evidenceString(a, 'after')!;
+  if (!Array.isArray(a.expect) || !a.expect.length || a.expect.length > 50 ||
+    a.expect.some((v: unknown) => typeof v !== 'string' || v.indexOf('=') < 1 || !v.slice(0, v.indexOf('=')).trim()) ||
+    Buffer.byteLength(JSON.stringify(a.expect), 'utf8') > 8192) {
+    throw new ToolError('expect needs 1 to 50 NAME=TEXT strings, at most 8192 bytes in total', 'use the exact recorded text, e.g. ["total=3"]; comparisons alone do not verify a fix');
+  }
+  if (a.ignore !== undefined && (!Array.isArray(a.ignore) || a.ignore.length > 50 || a.ignore.some((v: unknown) => typeof v !== 'string' || !v.trim() || v.length > 256))) {
+    throw new ToolError('ignore must be an array of at most 50 nonempty names, each at most 256 characters');
+  }
+  if (!isTracelightRun(after)) throw refusal(['verify', '--', after]);
+  return ['verify', '--json', `--after=${resolve(after)}`, ...a.expect.map((v: string) => `--expect=${v}`),
+    ...(a.ignore ?? []).map((v: string) => `--ignore=${v}`), '--', resolve(before)];
+}
+
 export function wordsDebug(a: Args): string[] {
   const action = need(a, 'action', 'tracelight_debug', '{"action": "start", "file": "app.ts", "at": ["main"]}');
   oneOf(action, DEBUG_ACTIONS);
@@ -228,7 +282,11 @@ export function wordsDebug(a: Args): string[] {
   }
   if (action === 'pause') opt(words, a, 'no_wait', '--no-wait');
   if (action === 'break') {
+    if (a.clear !== undefined && typeof a.clear !== 'boolean') throw new ToolError('clear must be a boolean');
+    if (a.log_message !== undefined && (typeof a.log_message !== 'string' || !a.log_message.trim() || a.log_message.length > 4096)) throw new ToolError('log_message must be a nonempty string of at most 4096 characters');
     opt(words, a, 'when', '--when');
+    opt(words, a, 'log_message', '--log-message');
+    opt(words, a, 'clear', '--clear');
     opt(words, a, 'on_exception', '--on-exception');
     for (const at of strings(a.at)) words.push(`--at=${at}`);
     for (const r of strings(a.remove)) words.push(`--remove=${r}`);
@@ -239,7 +297,13 @@ export function wordsDebug(a: Args): string[] {
     for (const e of strings(a.add)) words.push(`--add=${e}`);
     for (const r of strings(a.remove)) words.push(`--remove=${r}`);
   }
-  if (action === 'locals') opt(words, a, 'frame', '--frame');
+  if (action === 'locals') {
+    opt(words, a, 'frame', '--frame');
+    if (a.names_only !== undefined && typeof a.names_only !== 'boolean') throw new ToolError('names_only must be a boolean');
+    if (a.names !== undefined && (!Array.isArray(a.names) || !a.names.length || a.names.length > 100 || a.names.some((v: unknown) => typeof v !== 'string' || !v.trim()))) throw new ToolError('names must contain 1 to 100 nonempty binding names');
+    opt(words, a, 'names_only', '--names-only');
+    for (const name of strings(a.names)) words.push(`--name=${name}`);
+  }
   if (action === 'exec') {
     opt(words, a, 'frame', '--frame');
     return [...words, '--', String(need(a, 'source', 'exec', '{"action": "exec", "source": "count = 3"}'))];
@@ -341,6 +405,8 @@ const TOOLS: Record<string, (a: Args) => string[]> = {
   tracelight_value: wordsValue,
   tracelight_coverage: wordsCoverage,
   tracelight_debug: wordsDebug,
+  tracelight_investigate: wordsInvestigate,
+  tracelight_verify: wordsVerify,
 };
 
 /** A `tools/call` result: the command's text, `isError` when it failed. */
@@ -348,15 +414,30 @@ export async function callTool(name: string, args: Args): Promise<Msg> {
   let text: string;
   let isError: boolean;
   try {
+    if (workflowDefinitions.some(d => d.name === name)) {
+      const payload = boundedEvidence(await callWorkflow(name, args));
+      return { content: [{ type: 'text', text: JSON.stringify(payload) }], structuredContent: payload, isError: false };
+    }
     if (name === 'tracelight_run') [text, isError] = await callRun(args);
     else if (TOOLS[name]) {
       const words = TOOLS[name]!(args);
       if (!nativeFor(words)) throw refusal(words);
       [text, isError] = await runNative(words);
+      if ((name === 'tracelight_investigate' || name === 'tracelight_verify') && (!isError || text.trimStart().startsWith('{'))) {
+        const result = JSON.parse(text);
+        // A negative verification is an answer about the program, not a tool failure.
+        if (!isError || (name === 'tracelight_verify' && typeof result.verified === 'boolean' && Array.isArray(result.checks))) {
+          const source = name === 'tracelight_investigate' ? { run: resolve(args.run) } : { before: resolve(args.before), after: resolve(args.after) };
+          let payload: Msg;
+          try { payload = boundedEvidence({ ...source, ...result }, args.limit ?? 20); }
+          catch (error) { throw new ToolError((error as Error).message, 'request fewer expectations or inspect the cited values separately with tracelight_value'); }
+          return { content: [{ type: 'text', text: JSON.stringify(payload) }], structuredContent: payload, isError: false };
+        }
+      }
     }
     else throw new ToolError(`unknown tool ${name}`, 'tools: tracelight_run, ' + Object.keys(TOOLS).join(', '));
   } catch (e) {
-    if (e instanceof ToolError) text = `error: ${e.message}${e.hint ? '\n' + e.hint : ''}`;
+    if (e instanceof ToolError || e instanceof AgentError) text = `error: ${e.message}${e.hint ? '\n' + e.hint : ''}`;
     else if (e instanceof TypeError) text = `error: bad argument: ${e.message}`;
     else {
       process.stderr.write(`${(e as Error).stack ?? e}\n`);
@@ -403,7 +484,7 @@ export async function handle(msg: any): Promise<Msg | null> {
       if (!params || typeof params !== 'object' || typeof params.name !== 'string') return rpcError(id, -32602, 'tools/call needs params.name');
       const args = params.arguments ?? {};
       if (!args || typeof args !== 'object' || Array.isArray(args)) return rpcError(id, -32602, 'tools/call params.arguments must be an object');
-      if (params.name !== 'tracelight_run' && !TOOLS[params.name]) return rpcError(id, -32602, `unknown tool ${params.name}`);
+      if (params.name !== 'tracelight_run' && !TOOLS[params.name] && !workflowDefinitions.some(d => d.name === params.name)) return rpcError(id, -32602, `unknown tool ${params.name}`);
       return { jsonrpc: '2.0', id, result: await callTool(params.name, args) };
     }
     case 'resources/list':

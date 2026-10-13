@@ -1,7 +1,8 @@
 /**
- * The MCP tools' definitions for `tracelight mcp` (`server.ts`): six tools, one per family of agent
+ * The MCP tools' definitions for `tracelight mcp` (`server.ts`): tools over families of agent
  * commands. The actions' descriptions are the agent commands' own help text (`commandHelps`).
  */
+import { workflowDefinitions } from './workflowTools.ts';
 
 export const MAP_ACTIONS = ['state', 'walkthrough', 'story', 'steps', 'find', 'graph', 'exceptions', 'http', 'tour', 'diff'] as const;
 export const VALUE_ACTIONS = ['var', 'why', 'origin', 'values', 'eval', 'expand', 'release'] as const;
@@ -29,6 +30,8 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
   const src = sourceProps();
   const lineProp = { type: 'string', description: 'FILE:LINE, e.g. app.ts:57 (path suffix or basename)' };
   const readOnly = { readOnlyHint: true, openWorldHint: false };
+  const evidenceLimit = { type: 'integer', minimum: 1, maximum: 100, default: 20, description: 'maximum entries per detail list; response.omissions identifies shortened detail. All verification checks are retained. JSON payload is capped at 32 KiB.' };
+  const savedReadOnly = { ...readOnly, destructiveHint: false, idempotentHint: true };
   return [
     {
       name: 'tracelight_run',
@@ -47,7 +50,7 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
         },
         required: ['file'],
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     {
       name: 'tracelight_map',
@@ -92,7 +95,7 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
           whole_block: { type: 'boolean', description: 'the whole block and every value (lifts the 60-line / 20-value caps)' },
         },
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     {
       name: 'tracelight_value',
@@ -152,6 +155,10 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
           no_wait: { type: 'boolean', description: 'continue, pause: answer at once instead of waiting for the stop' },
           add: { type: 'array', items: { type: 'string' }, description: 'break: FILE:LINE breakpoints to add; watches: expressions to add' },
           when: { type: 'string', description: 'break: only pause when this expression is true at the added line' },
+          log_message: { type: 'string', description: 'break: log this message with pure {expression} substitutions instead of pausing at added lines' },
+          clear: { type: 'boolean', description: 'break: remove all breakpoints from the selected session and editor' },
+          names_only: { type: 'boolean', description: 'locals: return binding names and types without formatting values' },
+          names: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'string', minLength: 1 }, description: 'locals: only read these named bindings in the selected frame and its lexical scopes' },
           remove: { type: 'array', items: { type: 'string' }, description: 'break: FILE:LINE or function names to remove; watches: watch ids to remove' },
           on_exception: { type: 'string', enum: ['off', 'uncaught', 'raised'], description: 'break: when an exception pauses the run' },
           break_when: { type: 'string', enum: ['change', 'true'], description: 'watches: make the added watches pause the run on change, or when true' },
@@ -160,7 +167,41 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
         },
         required: ['action'],
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
+    {
+      name: 'tracelight_investigate',
+      title: 'Investigate recorded execution',
+      description: 'Read one saved recording without executing the program. Bundles a selected value\'s history, context, why/origin chain, exceptions (including handled failures), and coverage. Without a value, start at the first recorded exception when available. Links distinguish recorded evidence from inference; notes and response.omissions disclose missing or shortened evidence. Returns structuredContent and matching JSON text. Use tracelight_step/tracelight_value to expand the cited steps.',
+      inputSchema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          run: { type: 'string', minLength: 1, maxLength: 4096, description: 'saved JS/TS run.json to investigate' },
+          value: { type: 'string', minLength: 1, maxLength: 256, description: 'variable or property path to follow, e.g. total or order.price' },
+          at: { type: 'integer', minimum: 0, description: 'recorded step to explain; otherwise first suspicious value or last recorded change' },
+          limit: evidenceLimit,
+        }, required: ['run'],
+      },
+      outputSchema: { type: 'object' },
+      annotations: savedReadOnly,
+    },
+    {
+      name: 'tracelight_verify',
+      title: 'Check recorded fix expectations',
+      description: 'Compare two saved recordings and check explicit final-value expectations. Never reruns a program, writes a file or controls a live session. verified is true only when every expectation matches a complete successful after recording; it does not prove correctness for other inputs. A mismatch or incomplete recording returns verified:false as a successful tool answer. ignore filters comparison facts, never checks. Returns bounded structuredContent and matching JSON text; response.omissions describes shortened detail.',
+      inputSchema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          before: { type: 'string', minLength: 1, maxLength: 4096, description: 'saved baseline JS/TS run.json' },
+          after: { type: 'string', minLength: 1, maxLength: 4096, description: 'saved JS/TS run.json after the edit' },
+          expect: { type: 'array', minItems: 1, maxItems: 50, items: { type: 'string', minLength: 2 }, description: 'NAME=TEXT expectations using exact recorded text, e.g. ["total=3"]; at most 8192 UTF-8 bytes total' },
+          ignore: { type: 'array', maxItems: 50, items: { type: 'string', minLength: 1, maxLength: 256 }, description: 'value/log names to ignore in the comparison, never in expectation checks' },
+          limit: evidenceLimit,
+        }, required: ['before', 'after', 'expect'],
+      },
+      outputSchema: { type: 'object' },
+      annotations: savedReadOnly,
+    },
+    ...workflowDefinitions,
   ];
 }

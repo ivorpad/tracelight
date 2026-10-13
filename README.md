@@ -6,6 +6,12 @@ you can step through backwards and forwards. A debugger pauses the real program 
 live. A CLI, an MCP server, a browser page and a Claude Code plugin read the same runs, so an agent
 can follow what you see or drive it for you.
 
+For agents, the focus is evidence from a recorded run: locate a bad value, follow its history and
+provenance, then check explicit expectations against a recording made after the edit. For people,
+the same evidence supports interactive learning and shareable code histories. The existing
+`tracelight` VS Code debug type provides an integration point for clients such as DebugMCP;
+that compatibility still needs an end-to-end test.
+
 It is inspired by [Quokka.js](https://quokkajs.com/). Tracelight was developed inside the Pyokka
 repository (the same tool for Python) and became its own project on 2026-10-11. The two share no
 code, command, setting or directory. A `.py` file gets a pointer to Pyokka and nothing else.
@@ -151,7 +157,7 @@ The ones you are most likely to change come first in each group. The defaults ar
 | Setting | |
 |---|---|
 | `tracelight.nodePath` [empty] | the Node that runs your files, `node` on PATH when empty |
-| `tracelight.runMode` [`onSave`] | `onSave` runs on save, `onDemand` only on Re-execute, `auto` on every edit (and for hovers, watches and Show Value), `smart` runs scratch files on every edit and files inside a project (`package.json`, `tsconfig.json`, `jsconfig.json`, `deno.json` or a lock file) on save |
+| `tracelight.runMode` [`onSave`] | `onSave` runs on save and when an open file reloads after an external disk change, `onDemand` only on Re-execute, `auto` on every edit (and for hovers, watches and Show Value), `smart` runs scratch files on every edit and files inside a project (`package.json`, `tsconfig.json`, `jsconfig.json`, `deno.json` or a lock file) on save |
 | `tracelight.delay` [0] | milliseconds after the last edit before an automatic run |
 | `tracelight.runTimeout` [30000] | kill a run after this many milliseconds (0 waits forever) |
 | `tracelight.args` [`[]`], `tracelight.env` [`{}`] | `process.argv.slice(2)` and environment variables for the run |
@@ -261,7 +267,7 @@ Every verb takes `--help`. The full reference, with recorded examples, is
 
 ### MCP
 
-`tracelight mcp` is the CLI as an MCP server on stdio, with six tools:
+`tracelight mcp` is the CLI as an MCP server on stdio, with twelve tools:
 
 | Tool | What it covers |
 |---|---|
@@ -271,6 +277,33 @@ Every verb takes `--help`. The full reference, with recorded examples, is
 | `tracelight_value` | `var`, `why`, `origin`, `values`, `eval`, `expand`, `release` |
 | `tracelight_coverage` | the lines that ran and did not, per file |
 | `tracelight_debug` | the live debugger: `start`, `continue`, `pause`, `stop`, `restart`, `break`, `watches`, `locals`, `exec`, `record` |
+| `tracelight_investigate` | one bounded evidence bundle from a saved run: value history, context, why/origin, exceptions and coverage |
+| `tracelight_verify` | compare two saved runs and check explicit `NAME=TEXT` expectations against the after-run evidence |
+| `tracelight_session` | list sessions or read saved/live state, separating the live pause from recorded selection |
+| `tracelight_seek` | find the first/last recorded value equal to text, or execution of a file and line |
+| `tracelight_save_investigation` | save a question and named checkpoints referencing a recording and its hash |
+| `tracelight_open_investigation` | reopen those checkpoints after checking that the recording is unchanged |
+
+`tracelight_investigate` and `tracelight_verify` read saved recordings only. They return structured
+JSON with bounded detail and explicit omissions; they never rerun the program or write a recording.
+A failed expectation is an ordinary verification result, not a tool error. Passing expectations
+supports only those checks on that execution, not a claim that every bug is fixed.
+
+`tracelight_seek` accepts an exact value or source location, rather than parsing arbitrary questions.
+Use `tracelight_session` before live control to see the actual pause and recording selection.
+Saving an investigation writes one new private artifact and refuses overwrite; keep its referenced
+recording alongside it. Reopening reads evidence without resuming execution.
+
+The grouped `tracelight_debug` tool covers start/stop, stepping through `tracelight_step`,
+continue/pause/restart, conditional breakpoints and logpoints, locals and expression evaluation
+through `tracelight_value`. Names-only and named-value reads operate on the requested frame's
+lexical scopes. DebugMCP's named test/launch configuration and local/global/all scope selectors
+are not exposed here. See the [MCP reference](skills/tracelight/references/mcp.md) for the mapping.
+
+The measure of useful agent support is a correct diagnosis with no unsupported fix claims, fewer
+reruns and tool calls, and fewer response bytes, accounting for recording time and storage. These
+bundles aim to reduce repeated evidence requests. No advantage over DebugMCP is established until
+a same-model experiment compares the same cases and records those costs.
 
 For Claude Code: `claude mcp add tracelight -- tracelight mcp`, or with the checkout's path,
 `claude mcp add tracelight -- node /path/to/tracelight/node/bin/tracelight.mjs mcp`. Saved runs
@@ -323,9 +356,10 @@ tracelight web ctl state
 ```
 
 `debug start` goes to the first breakpoint and pauses at the first statement only when none is
-set. `--say` puts the explanation in a bubble under the new line. The bridge sends each command to
-every open tab of the page, so keep one tab per bridge. The page's code runs in the browser, which
-means that after `npm run build` you restart the bridge and reload the tab. [docs/WEB.md](docs/WEB.md)
+set. `--say` puts the explanation in a bubble under the new line. Agent control requires exactly
+one connected page; the bridge refuses commands when multiple pages are connected. The page's
+code runs in the browser, which means that after `npm run build` you restart the bridge and reload
+the tab. [docs/WEB.md](docs/WEB.md)
 has every option, the HTTP API, the WebMCP tools and the security model (127.0.0.1 only, same-origin
 checks).
 

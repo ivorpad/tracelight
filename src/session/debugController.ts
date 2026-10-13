@@ -122,9 +122,9 @@ export class DebugController {
     await this.send({ action: 'pause' });
   }
 
-  async locals(opts: { frameId?: number } = {}): Promise<LocalVar[]> {
+  async locals(opts: { frameId?: number; namesOnly?: boolean; names?: string[] } = {}): Promise<LocalVar[]> {
     this.requirePaused('list the locals');
-    const reply = await this.send({ action: 'locals', ...(opts.frameId ? { frameId: opts.frameId } : {}) });
+    const reply = await this.send({ action: 'locals', ...opts });
     return (reply['locals'] as LocalVar[] | undefined) ?? [];
   }
 
@@ -285,7 +285,7 @@ export class DebugController {
     if (!this.state.paused) throw new Error(`cannot ${what}: the debug run is not paused${this.state.active ? '' : ' (debug mode is off: use "Tracelight: Debug Current File")'}`);
   }
 
-  private send(body: { action: 'continue' | 'step' | 'pause' | 'breakpoints' | 'watches' | 'locals' | 'exceptions' | 'record'; kind?: StepKind; set?: BreakpointSpec[] | BreakWatchSpec[]; mode?: ExceptionMode; frameId?: number }): Promise<Record<string, unknown>> {
+  private send(body: { action: 'continue' | 'step' | 'pause' | 'breakpoints' | 'watches' | 'locals' | 'exceptions' | 'record'; kind?: StepKind; set?: BreakpointSpec[] | BreakWatchSpec[]; mode?: ExceptionMode; frameId?: number; namesOnly?: boolean; names?: string[] }): Promise<Record<string, unknown>> {
     const runId = this.runId();
     if (!runId) return Promise.reject(new Error('no debug run in progress'));
     return this.session.runner.debug(runId, body);

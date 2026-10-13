@@ -13,7 +13,7 @@ import { functionBreakpoint, mergeBreakpoints, type BreakpointSpec, type LocalVa
 import { currentFunctionBreakpoints, currentSourceBreakpoints } from '../features/debugBreakpoints';
 import { redact } from '../util/redact';
 import { BridgeError, int, type Request } from './bridgeSupport';
-import { applyWatchRequest, breakpointReply, displayWatchItems, exceptionMode, localsReply, parseAtItem, parseBreakItems, pausedReply, resolveFile, type BreakItem, type PathContext } from './bridgeDebugShapes';
+import { applyWatchRequest, breakpointReply, displayWatchItems, exceptionMode, localsReply, parseAtItem, parseBreakItems, pausedReply, resolveFile, routeBreakpointRequest, type BreakItem, type PathContext } from './bridgeDebugShapes';
 
 /** A stop reply waits for the program: as long as it runs, within reason. */
 export const STOP_TIMEOUT_MS = 600_000;
@@ -141,19 +141,25 @@ export function requirePaused(ds: DebugSession, what: string): void {
 }
 
 /**
- * `break` on a debug session: the change goes into VS Code's own breakpoint list, so the gutter
- * shows it and `debugBreakpoints.ts` pushes it to the program in flight like any other, exactly as
- * the run socket's `break` does.
+ * `break` on a debug session: ordinary breakpoints go into VS Code's list; API logpoints stay
+ * runtime-owned. Both bridge kinds apply the same routing.
  */
 export async function breakpoints(ds: DebugSession, req: Request): Promise<Record<string, unknown>> {
   const ctx = context(ds);
   const mode = exceptionMode(req.exceptions);
   if (mode) await ds.setDebugExceptions(mode);
-  await applyAt(ctx, req, ds.debug.breakpoints, (specs) => ds.setDebugBreakpoints(specs));
-  await removeFunctionBreakpoints(req, ds.debug.breakpoints, (specs) => ds.setDebugBreakpoints(specs));
-  await applyGutter(ctx, req);
+  await applyBreakpointRequest(ctx, req, () => ds.debug.breakpoints, (specs) => ds.setDebugBreakpoints(specs));
   const echo = await ds.syncVsCodeBreakpoints()?.catch(() => undefined);
   return { breakpoints: breakpointReply(ctx, mergeBreakpoints(currentSourceBreakpoints(), currentFunctionBreakpoints(), ds.debug.breakpoints), echo ?? (ds.debug.paused?.breakpoint ? [ds.debug.paused.breakpoint] : undefined)), exceptions: ds.debug.exceptions };
+}
+
+/** Both bridge kinds route API logpoints separately from the editor's marker logpoints. */
+export async function applyBreakpointRequest(ctx: PathContext, req: Request, getOwn: () => readonly BreakpointSpec[], setOwn: (specs: BreakpointSpec[]) => Promise<unknown>): Promise<void> {
+  const routed = routeBreakpointRequest(ctx, getOwn(), req);
+  if (JSON.stringify(routed.own) !== JSON.stringify(getOwn())) await setOwn(routed.own);
+  await removeFunctionBreakpoints(routed.gutter, getOwn(), setOwn);
+  await applyAt(ctx, routed.gutter, getOwn(), setOwn);
+  await applyGutter(ctx, routed.gutter);
 }
 
 /**
@@ -183,14 +189,15 @@ export async function applyAt(ctx: PathContext, req: Request, own: readonly Brea
  * gutter's line breakpoints are `applyGutter`'s.
  */
 export async function removeFunctionBreakpoints(req: Request, own: readonly BreakpointSpec[], setOwn: (specs: BreakpointSpec[]) => Promise<unknown>): Promise<void> {
-  if (!Array.isArray(req.remove)) return;
+  const clear = Array.isArray(req.set);
+  if (!clear && !Array.isArray(req.remove)) return;
   // `--at Ranker.rank` matches on the last segment, so `--remove rank` and `--remove Ranker.rank` both name it
   const last = (name: string): string => name.trim().split('.').pop() ?? '';
-  const names = new Set(req.remove.map((it) => (it && typeof it === 'object' && typeof (it as Record<string, unknown>).function === 'string' ? last(String((it as Record<string, unknown>).function)) : '')).filter(Boolean));
-  if (!names.size) return;
-  const kept = own.filter((bp) => bp.function === undefined || !names.has(last(bp.function)));
+  const names = new Set((Array.isArray(req.remove) ? req.remove : []).map((it) => (it && typeof it === 'object' && typeof (it as Record<string, unknown>).function === 'string' ? last(String((it as Record<string, unknown>).function)) : '')).filter(Boolean));
+  if (!clear && !names.size) return;
+  const kept = own.filter((bp) => bp.function === undefined || (!clear && !names.has(last(bp.function))));
   if (kept.length !== own.length) await setOwn(kept);
-  const fns = (): vscode.FunctionBreakpoint[] => vscode.debug.breakpoints.filter((b): b is vscode.FunctionBreakpoint => b instanceof vscode.FunctionBreakpoint && names.has(last(b.functionName)));
+  const fns = (): vscode.FunctionBreakpoint[] => vscode.debug.breakpoints.filter((b): b is vscode.FunctionBreakpoint => b instanceof vscode.FunctionBreakpoint && (clear || names.has(last(b.functionName))));
   if (!fns().length) return;
   vscode.debug.removeBreakpoints(fns());
   const started = Date.now();
@@ -204,14 +211,14 @@ const BREAKPOINT_SETTLE_MS = 1_500;
 export async function applyGutter(ctx: PathContext, req: Request): Promise<void> {
   const source = (): vscode.SourceBreakpoint[] => vscode.debug.breakpoints.filter((b): b is vscode.SourceBreakpoint => b instanceof vscode.SourceBreakpoint);
   const matches = (b: vscode.SourceBreakpoint, it: BreakItem, withCondition: boolean): boolean =>
-    b.location.uri.scheme === 'file' && b.location.uri.fsPath === it.path && b.location.range.start.line === it.line - 1 && (!withCondition || (b.condition ?? '') === (it.condition ?? ''));
+    b.location.uri.scheme === 'file' && b.location.uri.fsPath === it.path && b.location.range.start.line === it.line - 1 && (!withCondition || (!b.logMessage && (b.condition ?? '') === (it.condition ?? '')));
   const toAdd: BreakItem[] = [];
   const toRemove: vscode.SourceBreakpoint[] = [];
   if (Array.isArray(req.set)) {
     toRemove.push(...source());
     toAdd.push(...parseBreakItems(ctx, req.set));
   }
-  if (Array.isArray(req.add)) for (const it of parseBreakItems(ctx, req.add)) if (!source().some((b) => matches(b, it, true)) && !toAdd.some((a) => a.path === it.path && a.line === it.line && (a.condition ?? '') === (it.condition ?? ''))) toAdd.push(it);
+  if (Array.isArray(req.add)) for (const it of parseBreakItems(ctx, req.add)) if (!source().some((b) => !toRemove.includes(b) && matches(b, it, true)) && !toAdd.some((a) => a.path === it.path && a.line === it.line && (a.condition ?? '') === (it.condition ?? ''))) toAdd.push(it);
   if (Array.isArray(req.remove)) {
     const items = parseBreakItems(ctx, req.remove);
     for (const b of source()) if (items.some((it) => matches(b, it, false)) && !toRemove.includes(b)) toRemove.push(b);

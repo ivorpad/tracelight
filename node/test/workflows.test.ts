@@ -33,6 +33,57 @@ test('investigation attributes mutations through aliases to the writing statemen
   assert.ok(result.coverage);
   assert.ok(result.origin);
 });
+test('investigating a saved run uses its recorded source after the file is edited', async () => {
+  const original = 'const originalInput = 7;\nconst total = originalInput + 2; // RECORDED expression\nconsole.log(total);\n';
+  const edited = 'const changedInput = 100;\nconst total = changedInput * 10; // EDITED expression\nconsole.log(total);\n';
+  const root = project({ 'main.mjs': original });
+  const file = join(root, 'main.mjs');
+  const saved = join(root, 'run.json');
+  try {
+    await recordRun({ file, save: saved, json: true, autoLog: false, timeoutMs: 10000, argv: [] });
+    writeFileSync(file, edited);
+    const snapshot = readFileSync(saved, 'utf8');
+    const at = new SavedRun(saved).trace.count - 1; // console.log reads the completed assignment
+    const { code, result } = await cli('investigate', saved, '--value', 'total', '--at', String(at));
+    assert.equal(code, 0);
+    assert.equal(result.history.changes.at(-1).text, '9');
+    const source = result.context.block.lines.map((line: any) => line.text).join('\n');
+    assert.match(source, /const total = originalInput \+ 2; \/\/ RECORDED expression/);
+    assert.doesNotMatch(source, /EDITED expression|changedInput/);
+    assert.match(result.why.root.statement, /originalInput \+ 2/);
+    assert.ok(result.why.root.reads.some((read: any) => read.name === 'originalInput' && read.text === '7'));
+    assert.equal(result.origin.value.text, '9');
+    assert.ok(result.origin.links.some((link: any) => /originalInput \+ 2/.test(link.statement ?? '')));
+    assert.equal(readFileSync(file, 'utf8'), edited);
+    assert.equal(readFileSync(saved, 'utf8'), snapshot);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+test('automatic investigation selects the observed bad value while explicit steps retain their meaning', async () => {
+  const root = project({ 'main.mjs': 'let sum = 1;\nconst bad = Number("oops");\nsum += bad;\nconsole.log(sum);\n' });
+  const saved = join(root, 'run.json');
+  try {
+    await recordRun({ file: join(root, 'main.mjs'), save: saved, json: true, autoLog: false, timeoutMs: 10000, argv: [] });
+    const { code, result } = await cli('investigate', saved, '--value', 'sum');
+    assert.equal(code, 0);
+    const change = result.history.changes.find((entry: any) => entry.text === 'NaN');
+    assert.ok(change, 'the recorded history includes the bad assignment');
+    assert.equal(change.line, 3);
+    assert.equal(result.selection.changeStep, change.step);
+    assert.ok(result.selection.observedStep > change.step, 'the NaN snapshot occurs after its writer');
+    assert.equal(result.step, result.selection.observedStep);
+    assert.equal(result.origin.value.text, 'NaN');
+    assert.equal(result.why.step, change.step, 'why explains the assignment that made NaN');
+    assert.match(result.why.root.statement, /sum \+= bad/);
+    const explicit = await cli('investigate', saved, '--value', 'sum', '--at', String(change.step));
+    assert.equal(explicit.code, 0);
+    assert.equal(explicit.result.step, change.step, '--at still selects the requested statement');
+    assert.equal(explicit.result.origin.value.text, '1', 'an explicit writer stop sees its pre-write value');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 test('learning hides results until reveal and retains the prediction', async () => {
   const lesson = (await cli('learn', beforeFile)).result;
   assert.ok(lesson.checkpoints.length);
