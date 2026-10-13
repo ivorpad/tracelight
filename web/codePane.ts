@@ -15,7 +15,7 @@ import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController';
 import 'monaco-editor/esm/vs/editor/contrib/parameterHints/browser/parameterHints';
 import 'monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu';
 import { configureLanguageService, registerLanguageSource, staticHover } from './languageService';
-import type { BridgeFile, TeachingNote } from './bridgeProtocol';
+import type { BridgeFile, TeachingNote, RenderedSource } from './bridgeProtocol';
 import { PROFILE_PATH, type CodeDecorations, type CodeView } from './pageHost';
 import { STORY_PATH } from './story';
 import { pausedOccurrences, pausedInline, pausedHover, pausedProperty, type ValueOccurrence } from './pausedValues';
@@ -34,6 +34,7 @@ export class CodePane implements CodeView {
   renderStory?: CodeView['renderStory'];
   revealStory?: CodeView['revealStory'];
   closeStory?: CodeView['closeStory'];
+  renderedStory?: CodeView['renderedStory'];
   private readonly editor: monaco.editor.IStandaloneCodeEditor;
   private readonly models = new Map<string, monaco.editor.ITextModel>();
   /** the content each model last had on disk (or from the bridge), to tell an edit from a reload */
@@ -43,6 +44,7 @@ export class CodePane implements CodeView {
   private decorations: monaco.editor.IEditorDecorationsCollection;
   private zone: { id: string; line: number; text: string } | null = null;
   private extraZones: string[] = [];
+  private noteLayouts = new Map<string, { bubble: HTMLElement; observer: ResizeObserver }>();
   private notesKey = '';
   private lastNotes: TeachingNote[] = [];
   private valueOccurrences: ValueOccurrence[] = [];
@@ -53,6 +55,22 @@ export class CodePane implements CodeView {
 
   async presentationReady(): Promise<void> {
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  }
+
+  renderedSource(): RenderedSource {
+    const model = this.editor.getModel();
+    const decorations = model?.getAllDecorations() ?? [];
+    const marker = decorations.find(d => d.options.className === 'pkw-paused-line')
+      ?? decorations.find(d => d.options.className === 'pkw-current-line');
+    const line = marker?.range.startLineNumber ?? null;
+    const element = this.editor.getDomNode();
+    const box = element?.getBoundingClientRect();
+    const visible = !!element?.isConnected && !!box?.width && !!box.height && element.getClientRects().length > 0;
+    return { file: this.shown ?? null, pane: this.shown === STORY_PATH ? 'story' : 'source', line,
+      code: model && line ? model.getLineContent(line) : null,
+      highlight: marker ? marker.options.className === 'pkw-paused-line' ? 'live' : 'recorded' : null,
+      visible, lineVisible: visible && !!line && this.editor.getVisibleRanges().some(r => r.startLineNumber <= line && r.endLineNumber >= line),
+      content: model?.getValue() };
   }
 
   private inspected = new Set<string>();
@@ -218,7 +236,10 @@ export class CodePane implements CodeView {
       return true;
     } });
     this.editor.onDidDispose(() => { providers.forEach(p => p.dispose()); opener.dispose(); valueOpener.dispose(); this.clearInspector(); this.clearZone(); });
-    this.editor.onDidLayoutChange(() => { if (this.lastRender) this.render(this.lastRender); });
+    this.editor.onDidLayoutChange(() => {
+      for (const { bubble } of this.noteLayouts.values()) this.sizeNarration(bubble);
+      if (this.lastRender) this.render(this.lastRender);
+    });
     this.editor.onDidChangeModelContent(() => {
       this.decorations.clear();
       this.hideValueHover();
@@ -449,34 +470,56 @@ export class CodePane implements CodeView {
     const node = document.createElement('div');
     const bubble = document.createElement('div');
     bubble.className = 'pkw-narration';
+    this.sizeNarration(bubble);
     node.appendChild(bubble);
     const icon = document.createElement('i');
     icon.className = 'codicon codicon-comment-discussion';
+    icon.setAttribute('aria-hidden', 'true');
     const text = document.createElement('div');
     text.className = 'pkw-narration-text';
     const label = document.createElement('span');
     label.className = 'pkw-note-label';
     label.textContent = n.kind === 'prediction' ? 'Predicción' : 'Nota';
     text.append(label, document.createTextNode(n.text));
+    text.setAttribute('role', 'note');
     bubble.append(icon, text);
-    // estimate the height from the text: about 90 characters a row at the pane's usual width
-    const rows = n.text.split('\n').reduce((sum, l) => sum + Math.max(1, Math.ceil(l.length / 90)), 0);
-    this.editor.changeViewZones((acc) => {
-      const height = Math.min(rows * 19 + 40, Math.max(70, this.editor.getLayoutInfo().height * .35));
-      bubble.style.maxHeight = `${height - 8}px`;
-      bubble.style.overflow = 'auto';
-      const id = acc.addZone({ afterLineNumber: line, heightInPx: height, domNode: node });
+    let height = 0;
+    let id = '';
+    const viewZone: monaco.editor.IViewZone = { afterLineNumber: line, heightInPx: 1, domNode: node };
+    const observer = new ResizeObserver(() => {
+      if (!this.noteLayouts.has(id)) return;
+      const next = Math.ceil(bubble.getBoundingClientRect().height) + 12;
+      text.tabIndex = text.scrollHeight > text.clientHeight ? 0 : -1;
+      if (next === height) return;
+      height = next;
+      viewZone.heightInPx = height;
+      this.editor.changeViewZones(acc => acc.layoutZone(id));
+    });
+    this.editor.changeViewZones(acc => {
+      id = acc.addZone(viewZone);
       if (!this.zone) this.zone = { id, line, text: n.text };
       else this.extraZones.push(id);
     });
+    this.noteLayouts.set(id, { bubble, observer });
+    observer.observe(bubble);
     }
     const active = this.lastRender?.paused ?? this.lastRender?.current?.line;
     if (active) this.reveal(active);
   }
 
+  private sizeNarration(bubble: HTMLElement): void {
+    // View zones span the scrollable code width, which can exceed the visible pane.
+    const layout = this.editor.getLayoutInfo();
+    bubble.style.width = `${Math.max(0, layout.contentWidth - 16)}px`;
+    const text = bubble.querySelector<HTMLElement>('.pkw-narration-text');
+    if (text) text.style.maxHeight = `${Math.min(190, Math.max(40, layout.height * .35 - 34))}px`;
+  }
+
   private clearZone(): void {
     const zone = this.zone;
     this.notesKey = '';
+    for (const { observer } of this.noteLayouts.values()) observer.disconnect();
+    this.noteLayouts.clear();
     const ids = [...(zone ? [zone.id] : []), ...this.extraZones];
     this.zone = null;
     this.extraZones = [];

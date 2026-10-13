@@ -20,7 +20,7 @@ import { applyEvent, emptyRun, runInputs, type RunData } from './runState';
 import { Panes } from './panes';
 import { DebugHost } from './debugHost';
 import type { PausedValues } from './pausedValues';
-import type { TeachingNote } from './bridgeProtocol';
+import type { TeachingNote, RenderedSource, ConfirmedPosition, PositionAnchor } from './bridgeProtocol';
 import { buildStory, paintStory, storyRowOf, storyTarget, STORY_PATH, type StoryModel } from './story';
 
 /** What the page needs from its bridge connection (web/link.ts). */
@@ -65,6 +65,8 @@ export interface CodeView {
   inspectValues?(names: string[], open: boolean): { name: string; open: boolean; visible: boolean }[];
   valueUiState?(): { name: string; open: boolean; visible: boolean }[];
   presentationReady?(): Promise<void>;
+  renderedSource?(): RenderedSource;
+  renderedStory?(): RenderedSource | null;
   setNotes?(notes: TeachingNote[]): void;
   cacheFile?(file: BridgeFile): void;
   showFile(file: BridgeFile, opts?: { keepDirty?: boolean }): void;
@@ -114,7 +116,7 @@ export const BROWSER_SETTINGS: PanelSettings = {
 
 export class PageHost {
   main: BridgeFile | null = null;
-  onScratchpad?: (open: boolean, line?: number) => Promise<void>;
+  onScratchpad?: (command: import('./scratchpadProtocol').ScratchCommand) => Promise<import('./scratchpadProtocol').ScratchState>;
   runtime: RuntimeInfo | null = null;
   connected = false;
   private recordedRun: RunData | null = null;
@@ -157,6 +159,8 @@ export class PageHost {
   /** called on every change an agent could ask about */
   onChange: () => void = () => {};
   private pauseRevision = 0;
+  private sourceMode: 'live' | 'recorded' = 'live';
+  get viewingRecordedSource(): boolean { return this.sourceMode === 'recorded'; }
   private pauseListeners = new Set<() => void>();
 
   pauseSource(): { line: number; text: string }[] {
@@ -307,6 +311,7 @@ export class PageHost {
         this.panes.onTour(msg.tour);
         break;
       case 'debug.begin':
+        this.sourceMode = 'live';
         this.liveRecording = emptyRun(msg.runId, msg.content);
         this.historyFollowing = true;
         this.story = null;
@@ -316,7 +321,7 @@ export class PageHost {
         this.debug.onBegin(msg.runId, msg.content, msg.recording);
         break;
       case 'debug.event':
-        if (msg.event.type === 'debug.paused') this.pauseRevision++;
+        if (msg.event.type === 'debug.paused') { this.pauseRevision++; this.sourceMode = 'live'; }
         if (this.liveRecording) applyEvent(this.liveRecording, msg.event);
         if (msg.event.type === 'file.instrumented') this.ensureLanguageSource(msg.event.path);
         this.debug.onEvent(msg.event);
@@ -1056,6 +1061,7 @@ export class PageHost {
   }
 
   async returnToPause(): Promise<void> {
+    this.sourceMode = 'live';
     const pause = this.debug.paused;
     if (!pause) return;
     const frame = pause.stack[this.debug.selectedFrame];
@@ -1140,7 +1146,7 @@ export class PageHost {
       const frame = p?.stack[this.debug.selectedFrame];
       const fileId = frame?.fileId ?? p?.fileId;
       const line = frame?.line ?? p?.line;
-      if (p && line && this.debug.pathOf(fileId) === shown) {
+      if (this.sourceMode === 'live' && p && line && this.debug.pathOf(fileId) === shown) {
         out.paused = line;
         const file = this.debug.run?.files.get(fileId!);
         const startOf = (f: NonNullable<typeof file>['functions'][number]) => file!.ranges[f.rid]?.[0] ?? f.bodyRange[0];
@@ -1168,10 +1174,10 @@ export class PageHost {
         }
       }
     }
-    out.historyValues = this.debug.history.filter(s => s.path === shown && s.values).map(s => s.values!);
+    if (this.sourceMode === 'live') out.historyValues = this.debug.history.filter(s => s.path === shown && s.values).map(s => s.values!);
     // Keep the saved run separate from the observed stops of this live execution.
     if (shown === STORY_PATH) return this.storyDecorations(out);
-    if (this.debug.active) return out;
+    if (this.debug.active && this.sourceMode === 'live') return out;
     const run = this.run;
     const fileId = this.shownFileId();
     if (!run || fileId === undefined) return out;
@@ -1198,10 +1204,11 @@ export class PageHost {
       if (loc && loc.fileId === fileId) out.errors.set(loc.range[0], `${e.errorType}: ${e.message}`);
     }
     const trace = run.trace;
-    // a live debug run owns the current line while it runs: the Time Machine's would read as a second one
-    if (this.nav.active && trace && trace.valid(this.nav.step) && !this.debug.active) {
+    // A recording source view has its own highlight and never borrows live value overlays.
+    if (this.nav.active && trace && trace.valid(this.nav.step) && (!this.debug.active || this.sourceMode === 'recorded')) {
       const loc = trace.location(this.nav.step);
-      if (loc && loc.fileId === fileId) out.current = { line: loc.range[0], col: loc.range[1] };
+      const selected = this.nav.selectedFrame > 0 ? trace.callStack(this.nav.step)[this.nav.selectedFrame] : undefined;
+      if (selected ? selected.fileId === fileId : loc?.fileId === fileId) out.current = { line: selected?.line ?? loc!.range[0], col: selected ? 0 : loc!.range[1] };
       // the variables recorded at this step were changed by the statement before it: show them there
       const changes = run.locals.find((l) => l.step === this.nav.step)?.changes;
       const prev = trace.location(this.nav.step - 1) ?? loc;
@@ -1418,6 +1425,7 @@ export class PageHost {
 
   readonly notes = new Map<string, TeachingNote>();
   async peekValue(name: string): Promise<unknown> {
+    this.sourceMode = 'live';
     if (!this.code.peekValue) throw new Error('the code view does not support value peeks');
     if (name && !this.debug.paused) throw new Error('peek needs a live pause');
     const pause = this.debug.paused;
@@ -1444,6 +1452,7 @@ export class PageHost {
   private valuePresentation: { mode: 'selected' | 'all' | 'none'; names: string[]; file: string; line?: number; runId: string; frame: number } | null = null;
 
   async inspectValue(name: string, open: boolean, names?: string[]): Promise<unknown> {
+    this.sourceMode = 'live';
     const pause = this.debug.paused;
     const state = this.debug.state();
     if (!pause || !state) throw new Error('inspect needs a live pause');
@@ -1497,6 +1506,8 @@ export class PageHost {
     const missing = names.filter((name) => !state.locals.some((v) => v.name === name));
     if (missing.length) throw new Error(`not in the current paused frame: ${missing.join(', ')}`);
     this.valuePresentation = { mode: command.mode, names, file, ...(command.line !== undefined ? { line: command.line } : {}), runId: state.id, frame: this.debug.selectedFrame };
+    this.sourceMode = 'live';
+    this.revealPath(file, f?.line ?? p.line ?? 1);
     this.render();
     this.onChange();
     await this.code.presentationReady?.();
@@ -1534,6 +1545,71 @@ export class PageHost {
   }
 
   /* ---------- what an agent reads ---------- */
+
+  private positionAnchor(mode: 'live' | 'recorded'): PositionAnchor | null {
+    if (mode === 'live') {
+      const pause = this.debug.paused;
+      const frame = pause?.stack[this.debug.selectedFrame];
+      const file = this.debug.pathOf(frame?.fileId ?? pause?.fileId);
+      const line = frame?.line ?? pause?.line;
+      if (!pause || !file || !line || !this.debug.run) return null;
+      const source = file === this.main?.path ? this.debug.run.content : this.sources.get(file);
+      return { runId: this.debug.run.runId, step: pause.step, frame: this.debug.selectedFrame,
+        file, line, function: frame?.name ?? '<module>', code: source?.split(/\r?\n/)[line - 1] ?? null };
+    }
+    const run = this.run;
+    const trace = run?.trace;
+    if (!run || !trace || !this.nav.active || !trace.valid(this.nav.step)) return null;
+    const loc = trace.location(this.nav.step);
+    const frame = trace.callStack(this.nav.step)[this.nav.selectedFrame];
+    const fileId = this.nav.selectedFrame > 0 ? frame?.fileId : loc?.fileId;
+    const line = this.nav.selectedFrame > 0 ? frame?.line : loc?.range[0];
+    const file = fileId === undefined ? undefined : run.files.get(fileId)?.path;
+    if (!file || !line) return null;
+    return { runId: run.runId, step: this.nav.step, frame: this.nav.selectedFrame,
+      file, line, function: frame?.function ?? '<module>', code: this.sourceOf(fileId!)?.split(/\r?\n/)[line - 1] ?? null };
+  }
+
+  /** Wait for the rendered editor, then compare its actual model and highlight with the target. */
+  async confirmPosition(mode: 'live' | 'recorded' | 'visible' = 'visible', focus = false): Promise<ConfirmedPosition> {
+    const targetMode = mode === 'visible' ? this.debug.paused && this.sourceMode === 'live' ? 'live' : 'recorded' : mode;
+    const target = this.positionAnchor(targetMode);
+    if (focus && target) {
+      // Closing the history pane here must not stop navigation or resume live execution.
+      this.code.closeStory?.();
+      this.sourceMode = targetMode;
+      this.revealPath(target.file, target.line);
+      for (let i = 0; i < 20 && this.code.shownPath() !== target.file; i++) await new Promise(r => setTimeout(r, 25));
+      this.scheduleRender(true);
+      this.code.reveal(target.line);
+      this.onChange();
+    } else this.scheduleRender(true);
+    await this.code.presentationReady?.();
+    const rendered = this.code.renderedSource?.() ?? null;
+    const history = this.code.renderedStory?.() ?? null;
+    const activePane = this.storyShown() ? 'story' : 'source';
+    const recorded = this.positionAnchor('recorded');
+    const live = this.positionAnchor('live');
+    const now = targetMode === 'live' ? live : recorded;
+    const expectedContent = target?.file === this.main?.path
+      ? targetMode === 'live' ? this.debug.run?.content : this.run?.content
+      : target ? this.sources.get(target.file) : undefined;
+    const sourceMatches = !!rendered && !!target && expectedContent !== undefined
+      && rendered.file === target.file && rendered.content === expectedContent;
+    const blockers: string[] = [];
+    if (!target) blockers.push(`No ${targetMode} paused/selected position is available`);
+    if (JSON.stringify(now) !== JSON.stringify(target)) blockers.push('Position changed while awaiting presentation');
+    if (!rendered) blockers.push('The editor does not expose rendered-position evidence');
+    if (activePane !== 'source') blockers.push('Code history is active; focus the target source before narrating source');
+    if (rendered && !rendered.visible) blockers.push('The source editor is hidden');
+    if (rendered && target && rendered.file !== target.file) blockers.push('Visible source file differs from the selected position');
+    if (rendered && target && (rendered.line !== target.line || rendered.highlight !== targetMode)) blockers.push('Rendered highlight differs from the selected position');
+    if (rendered && !rendered.lineVisible) blockers.push('The highlighted line is outside the visible editor');
+    if (target && !sourceMatches) blockers.push('Visible source is stale, edited, unavailable or differs from the run source');
+    const withoutContent = (s: RenderedSource | null) => { if (!s) return null; const { content: _content, ...result } = s; return result; };
+    return { mode, ready: blockers.length === 0, blockers, activePane, source: withoutContent(rendered), story: withoutContent(history),
+      recorded, live, sourceMatches, recordedDiffersFromLive: !!recorded && !!live && (recorded.runId !== live.runId || recorded.step !== live.step || recorded.frame !== live.frame || recorded.file !== live.file || recorded.line !== live.line) };
+  }
 
   /** Variables of the current scope as of the step: the latest recorded change of each name. */
   localsAt(step: number): { name: string; text: string }[] {

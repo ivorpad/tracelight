@@ -86,6 +86,7 @@ main file at a time, of one runtime's language.
 | `--runtime js` | the default for `.js`/`.mjs`/`.cjs`/`.jsx`/`.ts`/`.mts`/`.cts`/`.tsx`: `node <dist>/node/bin/tracelight.mjs serve`, else the checkout's `node/bin/tracelight.mjs` |
 | `--runtime "CMD ARGS"` | any command that speaks the protocol on stdio, started in the file's directory (`TRACELIGHT_RUNTIME`); the only way to run a file of another language |
 | `--open` | open the page in the default browser |
+| `--no-run` | serve the source without executing it on startup; explicit Run and Automatic page edits still execute it |
 | `--no-watch` | do not re-run on save |
 | `--verbose` | log the runtime's spawn, stderr and exits |
 
@@ -97,6 +98,12 @@ is next to it; `?layout=code` shows the code pane alone. The layout button in th
 through the three. A window narrower than 760px stacks the code over the panel.
 
 ## Agents: step through code while explaining
+
+For live learning or debugging without a preliminary run, start with
+`tracelight web FILE --no-run --no-watch`, open the page, set breakpoints, then issue
+`tracelight web ctl debug start`. Use `debug continue` to resume between stages, including
+known imported files targeted by `break LINE on --file FILE`. The debugger captures the same
+execution as it pauses for Code history. Recording navigation does not resume the live program.
 
 An agent (Claude Code, Codex, a script) drives the open page and reads back where it is. Every
 command answers with the page's state: the step, file, line and function, the source line, the
@@ -172,3 +179,25 @@ recording the run wrote.
 Anyone with a shell on the machine can drive it, as with the runtime itself.
 
 `ctl peek NAME` opens the paused value hover through the same command used by WebMCP. `ctl peek --hide` dismisses it. Nested arrays and objects keep indentation in the syntax-highlighted hover. WebMCP registers on `document.modelContext`, with compatibility for older navigator APIs.
+
+
+The visible scratchpad has a complete agent lifecycle through `tracelight_scratchpad` WebMCP
+and the same `/api/command` bridge: `op: experiment|open|close|state|update|run|restore|create|save|list|load|history`. `update` replaces
+any supplied `code`, `inputs`, `mocks` and `autoRun` atomically. Give every explicit mock a
+`mockLabels` entry. `run` awaits execution; `state` returns code, JSON/text inputs and mocks,
+labels, captured provenance, revision, status, runtime errors, missing fixture paths, values,
+console output, cap flags and application error fields from the result. A completed worker can
+still return an application error. Fixtures remain synthetic, and the captured original inputs
+retain unavailable markers. The controls share Monaco models and manual Run's isolated worker.
+No scratch operation sends a live debugger execution request or makes real provider calls.
+
+CLI: `ctl scratchpad open [--line N]`, `close`, `state`, `run`, `restore`, or
+`update --data /absolute/experiment.json`. The JSON file contains the update fields above.
+See `skills/tracelight/references/scratchpad.md` for the preparation and explanation workflow.
+
+Named scratchpads autosave creation, edits, names and completed results under
+`$TRACELIGHT_HOME/scratchpads` (default `~/.tracelight/scratchpads`). `create` makes a
+separate experiment, `list` finds saved copies, `history` reads immutable versions,
+`load` reopens without execution and `save` adds an optional checkpoint. The pane exposes
+the library, version history and autosave status. CLI accepts `--id`, `--title` and
+`--version`. Use `experiment --data FILE` for complete prepared teaching packages.
