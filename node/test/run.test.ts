@@ -351,3 +351,14 @@ test('run flags: --max-steps below 1 is refused, --node picks the program Node, 
   assert.notEqual(nope.status, 0);
   assert.match(nope.stderr, /cannot run .*no-such-node/);
 });
+
+
+test('reports rejected promises consumed by allSettled and catch, without duplicating uncaught errors', async () => {
+  const r = await run({ 'main.mjs': `async function fail(message) { await Promise.resolve(); throw new RangeError(message); }
+await Promise.allSettled([fail('settled')]);
+await fail('caught').catch(() => {});
+await fail('uncaught');` }, 'main.mjs');
+  const errors = r.of('error');
+  assert.deepEqual(errors.map(e => [e.message, e.handled]).sort(), [['caught', true], ['settled', true], ['uncaught', false]]);
+  for (const error of errors) assert.ok(error.step >= 0);
+});

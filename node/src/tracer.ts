@@ -85,6 +85,7 @@ export class Tracer {
   // exceptions
   readonly seen = new WeakMap<object, { rid: number; step: number; stack: StackFrame[] | null }>();
   readonly caught = new Map<string, CaughtGroup>();
+  private pendingErrors = new Map<unknown, CaughtGroup>();
   readonly errorStates = new Map<number, number>();
   finished = false;
   readonly hooks: Record<string, any>;
@@ -557,6 +558,10 @@ export class Tracer {
     const rid = this.steps[step * 4] ?? 0;
     this.flagStep(step, FLAG_ERROR);
     if (key) this.seen.set(key, { rid, step, stack: null });
+    if (this.pendingErrors.size < MAX_CAUGHT_GROUPS) this.pendingErrors.set(err, {
+      errorType: errorType(err), message: secrets.scrub(String((err as Error)?.message ?? err)),
+      rid, fileId: this.fileIdFor(rid), step, lastStep: step, count: 1, stack: this.stackOf(err),
+    });
   }
 
   /**
@@ -607,6 +612,7 @@ export class Tracer {
   }
 
   handled(tryRid: number, err: unknown, broad: boolean, line?: number, sid?: number): void {
+    this.pendingErrors.delete(err);
     const key = asKey(err);
     let origin = key ? this.seen.get(key) : undefined;
     // the frame whose catch this is (a catch after a rejected await runs before any step of the resumed frame)
@@ -719,6 +725,7 @@ export class Tracer {
   }
 
   reportUncaught(err: unknown, stepNow?: number): Record<string, any> {
+    this.pendingErrors.delete(err);
     const stack = this.stackOf(err);
     const user = stack.filter((f) => f.fileId !== 0);
     const top = user[0];
@@ -790,7 +797,7 @@ export class Tracer {
   }
 
   caughtEvents(): Record<string, any>[] {
-    return [...this.caught.values()].map((g) => ({ type: 'error', fileId: g.fileId, rid: g.rid, step: g.step, message: g.message, errorType: g.errorType, stack: g.stack, handled: true, ...(g.handledAt ? { handledAt: g.handledAt } : {}), count: g.count, lastStep: g.lastStep }));
+    return [...this.caught.values(), ...this.pendingErrors.values()].map((g) => ({ type: 'error', fileId: g.fileId, rid: g.rid, step: g.step, message: g.message, errorType: g.errorType, stack: g.stack, handled: true, ...(g.handledAt ? { handledAt: g.handledAt } : {}), count: g.count, lastStep: g.lastStep }));
   }
 
   /** The end of a debug run that recorded nothing: the uncaught exception alone, at the statement counter. */

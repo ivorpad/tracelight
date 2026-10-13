@@ -1,0 +1,158 @@
+import * as ts from 'typescript';
+import * as esbuild from 'esbuild';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { builtinModules } from 'node:module';
+import { Worker } from 'node:worker_threads';
+import { scratchEnvironment } from './scratchpadEnvironment';
+
+export interface ScratchRequest { file: string; code: string; inputs: Record<string, unknown>; mocks: Record<string, unknown> }
+export interface ScratchResult { values: { name: string; line: number; value: unknown }[]; output: unknown[]; result?: unknown; error?: string }
+
+/** Find a function without running the module's initialization. */
+export function scratchFunction(source: string, line: number): { code: string; name?: string; parameters: string[]; helpers?: string[] } {
+  const sf = ts.createSourceFile('scratch.ts', source, ts.ScriptTarget.Latest, true);
+  let found: ts.FunctionLikeDeclaration | undefined;
+  function visit(node: ts.Node): void {
+    const start = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+    const end = sf.getLineAndCharacterOfPosition(node.end).line + 1;
+    if (start <= line && end >= line) {
+      if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) found = node;
+      else if (!found && (ts.isArrowFunction(node) || ts.isFunctionExpression(node))) found = node;
+      ts.forEachChild(node, visit);
+    }
+  }
+  visit(sf);
+  if (!found) return { code: '', parameters: [] };
+  const binding = ts.isVariableDeclaration(found.parent) && ts.isIdentifier(found.parent.name) ? found.parent.name.text : undefined;
+  const name = found.name && ts.isIdentifier(found.name) ? found.name.text : binding;
+  const typed = ts.transform(found, [context => root => {
+    const visit: ts.Visitor = node => ts.isParameter(node) && !node.type
+      ? ts.factory.updateParameterDeclaration(node, node.modifiers, node.dotDotDotToken, node.name, node.questionToken, ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword), node.initializer)
+      : ts.visitEachChild(node, visit, context);
+    return ts.visitNode(root, visit) as typeof root;
+  }]);
+  let code = ts.createPrinter().printNode(ts.EmitHint.Unspecified, typed.transformed[0]!, sf).replace(/^export\s+/, '');
+  typed.dispose();
+  if (binding && (ts.isArrowFunction(found) || ts.isFunctionExpression(found))) code = `const ${binding} = ${code};`;
+  if (ts.isMethodDeclaration(found)) code = code.replace(/^(async\s+)?/, '$1function ');
+  const helpers = sf.statements.filter(ts.isFunctionDeclaration).flatMap(s => s.name && s.name.text !== name ? [s.name.text] : []);
+  return { code, ...(name ? { name } : {}), parameters: found.parameters.map(p => `${p.dotDotDotToken ? '...' : ''}${p.name.getText(sf)}`), helpers };
+}
+
+/** Names explicitly declared by the edited copy override captured bindings. */
+function topLevelNames(sf: ts.SourceFile): Set<string> {
+  const names = new Set<string>();
+  const binding = (n: ts.BindingName): void => {
+    if (ts.isIdentifier(n)) names.add(n.text);
+    else for (const e of n.elements) if (ts.isBindingElement(e)) binding(e.name);
+  };
+  for (const s of sf.statements) {
+    if ((ts.isFunctionDeclaration(s) || ts.isClassDeclaration(s)) && s.name) names.add(s.name.text);
+    if (ts.isVariableStatement(s)) for (const d of s.declarationList.declarations) binding(d.name);
+    if (ts.isImportDeclaration(s) && s.importClause) {
+      const c = s.importClause;
+      if (c.name) names.add(c.name.text);
+      if (c.namedBindings) {
+        if (ts.isNamespaceImport(c.namedBindings)) names.add(c.namedBindings.name.text);
+        else for (const e of c.namedBindings.elements) names.add(e.name.text);
+      }
+    }
+  }
+  return names;
+}
+
+/** Bring in referenced module declarations and imports, without its top-level run. */
+export function scratchDependencies(source: string, code: string, mocked: Set<string>): string {
+  const sf = ts.createSourceFile('original.ts', source, ts.ScriptTarget.Latest, true);
+  const declarations = new Map<string, ts.Statement>();
+  for (const s of sf.statements) {
+    if ((ts.isFunctionDeclaration(s) || ts.isClassDeclaration(s)) && s.name) declarations.set(s.name.text, s);
+    if (ts.isVariableStatement(s)) for (const d of s.declarationList.declarations) if (ts.isIdentifier(d.name)) declarations.set(d.name.text, s);
+    if (ts.isImportDeclaration(s)) {
+      const c = s.importClause;
+      if (c?.name) declarations.set(c.name.text, s);
+      if (c?.namedBindings) {
+        if (ts.isNamespaceImport(c.namedBindings)) declarations.set(c.namedBindings.name.text, s);
+        else for (const e of c.namedBindings.elements) declarations.set(e.name.text, s);
+      }
+    }
+  }
+  const edited = ts.createSourceFile('scratch.ts', code, ts.ScriptTarget.Latest, true);
+  const own = new Set([...mocked, ...topLevelNames(edited)]);
+  for (const s of edited.statements) {
+    if (ts.isFunctionDeclaration(s) && s.name) own.add(s.name.text);
+    if (ts.isVariableStatement(s)) for (const d of s.declarationList.declarations) if (ts.isIdentifier(d.name)) own.add(d.name.text);
+  }
+  const chosen = new Set<ts.Statement>();
+  function collect(node: ts.Node): void {
+    if (ts.isIdentifier(node) && !own.has(node.text)) {
+      const declaration = declarations.get(node.text);
+      if (declaration && !chosen.has(declaration)) { chosen.add(declaration); collect(declaration); }
+    }
+    ts.forEachChild(node, collect);
+  }
+  collect(edited);
+  return sf.statements.filter(s => chosen.has(s)).map(s => s.getText(sf).replace(/^export\s+/, '')).join('\n');
+}
+
+/** Instrument the scratch copy only. */
+export function captureScratch(code: string): string {
+  const sf = ts.createSourceFile('scratch.ts', code, ts.ScriptTarget.Latest, true);
+  const edits: { at: number; text: string }[] = [];
+  function visit(n: ts.Node): void {
+    if (ts.isVariableStatement(n)) {
+      const line = sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1;
+      for (const d of n.declarationList.declarations) if (ts.isIdentifier(d.name)) edits.push({ at: n.end, text: `\n__capture(${JSON.stringify(d.name.text)},${line},${d.name.text});` });
+    }
+    ts.forEachChild(n, visit);
+  }
+  visit(sf);
+  for (const e of edits.sort((a, b) => b.at - a.at)) code = code.slice(0, e.at) + e.text + code.slice(e.at);
+  return code;
+}
+
+export async function runScratch(request: ScratchRequest): Promise<ScratchResult> {
+  if (!request.file || typeof request.code !== 'string' || request.code.length > 100_000) throw new Error('Invalid scratchpad source');
+  const inputs = request.inputs ?? {}, mocks = request.mocks ?? {};
+  const names = [...Object.keys(inputs), ...Object.keys(mocks).filter(n => !n.startsWith('http:') && !n.includes('.'))];
+  if (names.some(n => !/^[A-Za-z_$][\w$]*$/.test(n) || n.startsWith('__'))) throw new Error('Invalid input or mock name');
+  const own = topLevelNames(ts.createSourceFile('scratch.ts', request.code, ts.ScriptTarget.Latest, true));
+  const deps = scratchDependencies(fs.readFileSync(request.file, 'utf8'), request.code, new Set(names));
+  const bindings = Object.keys(inputs).filter(n => !own.has(n)).map(n => `const ${n}=__hydrate(__inputs[${JSON.stringify(n)}],${JSON.stringify(n)});`).join('\n') + '\n' + Object.keys(mocks).filter(n => !own.has(n) && !(n in inputs) && /^[A-Za-z_$][\w$]*$/.test(n)).map(n => `const ${n}=(...args)=>__clone(__mocks[${JSON.stringify(n)}]);`).join('\n');
+  const edited = ts.createSourceFile('scratch.ts', request.code, ts.ScriptTarget.Latest, true);
+  const imports = edited.statements.filter(ts.isImportDeclaration);
+  const moduleMarkers = edited.statements.filter(s => ts.isExportDeclaration(s) && !s.moduleSpecifier && s.exportClause && ts.isNamedExports(s.exportClause) && !s.exportClause.elements.length);
+  let body = request.code;
+  for (const statement of [...imports, ...moduleMarkers].sort((a, b) => b.pos - a.pos)) body = body.slice(0, statement.getStart(edited)) + statement.getText(edited).replace(/[^\n]/g, ' ') + body.slice(statement.end);
+  const built = await esbuild.build({ stdin: { contents: `${deps}\n${imports.map(s => s.getText(edited)).join('\n')}\nexport async function __run(){${bindings}\n${captureScratch(body)}\n}`, resolveDir: path.dirname(request.file), sourcefile: 'scratch.ts', loader: 'ts' }, bundle: true, write: false, format: 'iife', globalName: '__scratch', platform: 'browser', target: 'es2022', logLevel: 'silent', plugins: [{ name: 'scratch-no-node', setup(b) { b.onResolve({ filter: /.*/ }, args => builtinModules.includes(args.path.replace(/^node:/, '')) || args.path.startsWith('node:') ? { errors: [{ text: `Scratchpad cannot import ${args.path}. Provide a mock instead.` }] } : undefined); } }] });
+  const bundle = built.outputFiles[0]!.text;
+  // Standard APIs bridge through JSON. Host objects and the bridge stay inaccessible to scratch code.
+  const payload = JSON.stringify({ inputs, mocks });
+  const worker = new Worker(`
+    const {parentPort,workerData}=require('node:worker_threads');
+    const vm=require('node:vm');
+    const context=vm.createContext(Object.create(null),{codeGeneration:{strings:false,wasm:false}});
+    const decoders=new Map();let decoderId=0;
+    context.__nativeEncoding=encoded=>{try{const r=JSON.parse(encoded);let value;
+      if(r.op==='clock')value={now:performance.now(),timeOrigin:performance.timeOrigin};
+      else if(r.op==='encode')value=Array.from(new TextEncoder().encode(r.text));
+      else if(r.op==='decoder'){const d=new TextDecoder(r.label,r.options);const id=++decoderId;decoders.set(id,d);value={id,encoding:d.encoding,fatal:d.fatal,ignoreBOM:d.ignoreBOM};}
+      else if(r.op==='decode')value=decoders.get(r.id).decode(new Uint8Array(r.bytes),r.options);
+      else if(r.op==='url'){const u=new URL(r.input,r.base);if(r.key)u[r.key]=r.value;value=Object.fromEntries(['href','origin','protocol','username','password','host','hostname','port','pathname','search','hash'].map(k=>[k,u[k]]));}
+      else if(r.op==='params'){const p=new URLSearchParams(r.input);let result;if(r.method){if(!['append','delete','get','getAll','has','set','sort'].includes(r.method))throw Error('Unknown URLSearchParams operation');result=p[r.method](...r.args);}value={text:p.toString(),entries:Array.from(p),result};}
+      else throw Error('Unknown encoding operation');return JSON.stringify({value});
+    }catch(e){return JSON.stringify({error:String(e.message||e)});}};
+    context.__scratchPayload=workerData.payload;
+    const setup=workerData.setup;
+    (async()=>{try{vm.runInContext(setup,context,{timeout:1000});vm.runInContext(workerData.bundle,context,{timeout:1000});
+      await vm.runInContext('__scratch.__run()',context,{timeout:1000});
+      const json=vm.runInContext('JSON.stringify({values:__values,output:__output})',context,{timeout:1000});parentPort.postMessage(JSON.parse(json));
+    }catch(e){let partial={values:[],output:[]};try{partial=JSON.parse(vm.runInContext('JSON.stringify({values:__values,output:__output})',context,{timeout:100}));}catch{}parentPort.postMessage({...partial,error:String(e.message||e)});}})();
+  `, { eval: true, workerData: { payload, bundle, setup: scratchEnvironment }, resourceLimits: { maxOldGenerationSizeMb: 64 } });
+  return new Promise(resolve => {
+    const timer = setTimeout(() => { void worker.terminate(); resolve({ values: [], output: [], error: 'Scratchpad exceeded 3 seconds' }); }, 3000);
+    worker.once('message', (result: ScratchResult) => { clearTimeout(timer); void worker.terminate(); resolve(result); });
+    worker.once('error', error => { clearTimeout(timer); void worker.terminate(); resolve({ values: [], output: [], error: error.message }); });
+  });
+}

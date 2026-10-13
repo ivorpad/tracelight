@@ -13,7 +13,7 @@
 import { Session } from 'node:inspector';
 import { createRequire, isBuiltin, registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, readFileSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, extname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseSync } from './parse.ts';
@@ -197,9 +197,16 @@ export class RunChild {
       this.emit({ type: 'runner.error', message: 'run.file.path is missing' });
       return this.finish(undefined, false, 1);
     } else this.mainPath = resolve(file.path);
+    // Node resolves imports through real paths. Match selection and unsaved buffers to them.
+    try { this.mainPath = realpathSync(this.mainPath); } catch { /* unsaved file */ }
     this.root = resolve(req.workspaceRoot ?? dirname(this.mainPath));
+    try { this.root = realpathSync(this.root); } catch { /* virtual workspace */ }
     if (typeof file.content === 'string') this.overrides.set(this.mainPath, file.content);
-    for (const pf of req.projectFiles ?? []) if (pf?.path && typeof pf.content === 'string') this.overrides.set(resolve(pf.path), pf.content);
+    for (const pf of req.projectFiles ?? []) if (pf?.path && typeof pf.content === 'string') {
+      let path = resolve(pf.path);
+      try { path = realpathSync(path); } catch { /* unsaved file */ }
+      this.overrides.set(path, pf.content);
+    }
     try {
       if (req.cwd) process.chdir(req.cwd);
     } catch (e) {
@@ -697,7 +704,7 @@ class ExitSignal extends Error {
 
 class InstrumentFailure extends Error {}
 
-if (process.send) {
+if (process.send && process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   process.setSourceMapsEnabled(true);
   const child = new RunChild();
   process.on('message', (msg: Msg) => {

@@ -43,6 +43,7 @@ export interface Verb {
   render?(result: Msg, source: RunSource, args: Args): string[];
   /** render prints the stale lines itself (`render(result, source, args)` gets them as `args._stale`) */
   ownStale?: boolean;
+  exitCode?(result: Msg): number;
   /** a verb that prints as it goes (`watch`) instead of one result: write lines with `out`, return the exit code */
   stream?(source: RunSource, args: Args, out: (text: string) => void, err: (text: string) => void): Promise<number>;
   /** a line for stderr before the text form (a statement that raised in `exec`), or null */
@@ -253,7 +254,7 @@ export async function runVerb(verb: Verb, args: Args, io: Io = stdio): Promise<n
       if (notes.length) result.recording = notes.length === 1 && notes[0]![0] === null ? notes[0]![1] : Object.fromEntries(notes.map(([label, info]) => [label, info]));
     }
     io.out(JSON.stringify(result, null, 1) + '\n');
-    return 0;
+    return verb.exitCode?.(result) ?? 0;
   }
   for (const [label, info] of notes) {
     const line = noteLine(info);
@@ -262,7 +263,7 @@ export async function runVerb(verb: Verb, args: Args, io: Io = stdio): Promise<n
   const raised = verb.stderrLine?.(result) ?? null;
   if (raised) io.err(`${redact(raised)}\n`);
   io.out(renderVerb(verb, result, source, args));
-  return 0;
+  return verb.exitCode?.(result) ?? 0;
 }
 
 /** the text form of a result: stale lines, then the verb's lines, each redacted */

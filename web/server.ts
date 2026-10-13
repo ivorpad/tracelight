@@ -24,6 +24,7 @@ import { upgrade, type WebSocketConnection } from './ws';
 import { applyEvent, emptyRun, type RunData } from './runState';
 import { ServerViews } from './serverViews';
 import { runtimeRoot } from './runtimeRoot';
+import { scratchFunction, runScratch, type ScratchRequest } from './scratchpadRuntime';
 
 export const DEFAULT_PORT = 4777;
 /** the virtual file `file.read` answers with the bridge's log (Show Logs) */
@@ -37,6 +38,7 @@ export interface ServerOptions {
   /** `js`, or a whole command line that speaks the protocol on stdio (`node path/to/runtime.js serve`) */
   runtime: string;
   watch: boolean;
+  only?: string[];
   open: boolean;
   /** dist/: where the page, the panel bundle and the runtime (`dist/node`) were built to */
   distDir: string;
@@ -132,6 +134,7 @@ export class BridgeServer {
   private profiling = false;
 
   constructor(private readonly opts: ServerOptions) {
+    if (opts.only?.length) this.configPatch.only = opts.only;
     this.file = readBridgeFile(opts.file);
     this.rootFile = this.file.path;
     this.recent = loadRecent(this.recentPath());
@@ -257,14 +260,14 @@ export class BridgeServer {
     return r;
   }
 
-  /** A `record: false` debug run of the file (the Debugger view): it pauses and steps, records nothing. */
+  /** One execution supplies both live pauses and recorded history. */
   async startDebug(breakpoints: DebugBreakpointSpec[], exceptions: DebugExceptionMode, content?: string, stopOnEntry = true): Promise<void> {
     await this.stopDebug();
     const runner = this.ensureDebugRunner();
     const runId = `d-${++this.debugCounter}`;
     const text = content ?? this.buffer ?? this.file.content;
     this.debugRun = { runId, content: text, events: [] };
-    this.broadcast({ type: 'debug.begin', runId, content: text });
+    this.broadcast({ type: 'debug.begin', runId, content: text, recording: true });
     const dir = path.dirname(this.file.path);
     const base = runConfig(this.configPatch);
     const request: Omit<RunRequest, 'type' | 'id'> = {
@@ -275,7 +278,7 @@ export class BridgeServer {
       argv: [],
       env: {},
       projectFiles: [],
-      config: { ...base, debug: true, record: false, stopOnEntry, breakOnException: exceptions, timeoutMs: 0, recordLocals: false, autoLog: false, http: 'off', httpObserve: false },
+      config: { ...base, debug: true, record: true, stopOnEntry, breakOnException: exceptions, timeoutMs: 0, recordLocals: true, autoLog: false, http: 'off', httpObserve: false },
       breakpoints,
       markers: [],
       expressionsToEvaluate: {},
@@ -451,7 +454,7 @@ export class BridgeServer {
       for (const m of this.views.replay(this.current.runId)) this.sendTo(ws, m);
     }
     if (this.debugRun) {
-      this.sendTo(ws, { type: 'debug.begin', runId: this.debugRun.runId, content: this.debugRun.content });
+      this.sendTo(ws, { type: 'debug.begin', runId: this.debugRun.runId, content: this.debugRun.content, recording: true });
       for (const ev of this.debugRun.events) this.sendTo(ws, { type: 'debug.event', event: ev });
     }
   }
@@ -496,7 +499,9 @@ export class BridgeServer {
         return;
       case 'request': {
         try {
-          const reply = await this.runner.forward(msg.body);
+          const requestRunner = 'runId' in msg.body && typeof msg.body.runId === 'string' && msg.body.runId.startsWith('d-') ? this.debugRunner : this.runner;
+          if (!requestRunner) throw new Error('no runtime for this run');
+          const reply = await requestRunner.forward(msg.body);
           this.sendTo(ws, { type: 'reply', id: msg.id, reply });
         } catch (err) {
           this.sendTo(ws, { type: 'reply', id: msg.id, reply: { type: 'error', id: msg.id, message: err instanceof Error ? err.message : String(err) } });
@@ -584,6 +589,17 @@ export class BridgeServer {
   private async onHttp(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     if (!sameOrigin(req.headers, this.opts.port)) return reply(res, 403, 'forbidden');
     const url = new URL(req.url ?? '/', this.url);
+    if (url.pathname.startsWith('/api/scratchpad/') && req.method === 'POST') {
+      if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return reply(res, 415, 'send application/json');
+      try {
+        const body = JSON.parse(await readBody(req));
+        if (url.pathname === '/api/scratchpad/prepare') {
+          return json(res, 200, scratchFunction(fs.readFileSync(String(body.file), 'utf8'), Number(body.line)));
+        }
+        if (url.pathname === '/api/scratchpad/run') return json(res, 200, await runScratch(body as ScratchRequest));
+        return reply(res, 404, 'not found');
+      } catch (e) { return json(res, 400, { error: e instanceof Error ? e.message : String(e) }); }
+    }
     if (url.pathname === '/api/state' && req.method === 'GET') {
       const state = this.pages.size ? ((await this.agent({ action: 'state' })).result as PageState | null) ?? this.lastState : this.lastState;
       return json(res, 200, { url: this.url, file: this.file.path, runtime: this.runtimeInfo, pages: this.pages.size, state });
@@ -638,6 +654,7 @@ export function pickWatches(list: unknown): WatchRequest[] {
 /** Only the keys a page may set, with the right types; anything else is dropped. */
 export function pickConfig(patch: ConfigPatch): ConfigPatch {
   const out: ConfigPatch = {};
+  if (Array.isArray(patch.only) && patch.only.every(p => typeof p === 'string')) out.only = patch.only;
   if (typeof patch.autoLog === 'boolean') out.autoLog = patch.autoLog;
   if (typeof patch.libraryCode === 'boolean') out.libraryCode = patch.libraryCode;
   if (typeof patch.recordLocals === 'boolean') out.recordLocals = patch.recordLocals;
@@ -712,13 +729,14 @@ function loadRecent(file: string | undefined): RecentFile[] {
 /* ---------- command line ---------- */
 
 const USAGE = `usage:
-  tracelight-web FILE [--port N] [--runtime js|"CMD ARGS"] [--open] [--no-watch] [--verbose]
+  tracelight-web FILE [--port N] [--runtime js|"CMD ARGS"] [--open] [--no-watch] [--verbose] [--only PATTERN]
   tracelight-web ctl [--port N] state | goto STEP | step into|over|out|back|backOver|backOut | line N
                  | say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kind explanation|prediction]
                  | clear [--id ID] | values NAME... [--file FILE] [--line N] | values --all|--hide | peek NAME | peek --hide | inspect open|close NAME
+                 | scratchpad open|close [--line N]
                  | start | stop | run | eval EXPR
                  | var NAME | why NAME [--step N] | watch EXPR [--remove]
-                 | break LINE [on|off] [--if COND] | debug start|restart|continue|step [into|over|out]|pause|stop|state
+                 | break LINE [on|off] [--file FILE] [--if COND] | debug start|restart|continue|step [into|over|out]|pause|stop|state
                  | story | profile
   Step and debug commands take --say TEXT to show a narration bubble at the new position.`;
 
@@ -752,9 +770,12 @@ export function parseCtl(args: string[]): AgentCommand {
     case 'peek':
       if (!words.length && !flags.has('hide')) throw new Error('peek needs NAME or --hide');
       return { action, name: flags.has('hide') ? '' : words.join(' ') };
+    case 'scratchpad':
+      if (!['open', 'close'].includes(words[0] ?? '')) throw new Error('scratchpad needs open|close');
+      return { action, open: words[0] === 'open', ...(flags.has('line') ? { line: int(flags.get('line'), '--line') } : {}) };
     case 'inspect':
       if (!['open', 'close'].includes(words[0] ?? '') || !words[1]) throw new Error('inspect needs open|close NAME');
-      return { action, name: words.slice(1).join(' '), open: words[0] === 'open' };
+      return { action, name: words[1]!, ...(words.length > 2 ? { names: words.slice(1) } : {}), open: words[0] === 'open' };
     case 'values':
       if (flags.has('all') && flags.has('hide')) throw new Error('choose --all or --hide');
       return { action, mode: flags.has('all') ? 'all' : flags.has('hide') ? 'none' : 'selected', ...(words.length ? { names: words } : {}), ...(flags.has('file') ? { file: flags.get('file') } : {}), ...(flags.has('line') ? { line: int(flags.get('line'), '--line') } : {}) };
@@ -787,7 +808,7 @@ export function parseCtl(args: string[]): AgentCommand {
       return { action, exp: words.join(' '), ...(flags.has('remove') ? { remove: true } : {}) };
     case 'break':
     case 'breakpoint':
-      return { action: 'breakpoint', line: int(words[0], 'LINE'), ...(words[1] === 'on' ? { on: true } : words[1] === 'off' ? { on: false } : {}), ...(flags.has('if') ? { condition: flags.get('if') } : {}) };
+      return { action: 'breakpoint', line: int(words[0], 'LINE'), ...(flags.has('file') ? { file: flags.get('file') } : {}), ...(words[1] === 'on' ? { on: true } : words[1] === 'off' ? { on: false } : {}), ...(flags.has('if') ? { condition: flags.get('if') } : {}) };
     case 'debug': {
       const op = (words[0] ?? 'state') as Extract<AgentCommand, { action: 'debug' }>['op'];
       if (!['start', 'restart', 'continue', 'step', 'pause', 'stop', 'state'].includes(op)) throw new Error(`unknown debug op ${op}`);
@@ -813,7 +834,11 @@ async function ctl(args: string[]): Promise<number> {
     ? await fetch(`${base}/api/state`)
     : await fetch(`${base}/api/command`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(command) });
   const body = await res.text();
-  process.stdout.write(formatJson(body) + '\n');
+  // Structured values can exceed the stdout buffer. Finish writing before the
+  // command entry point exits, including when stdout is piped to an agent.
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write(formatJson(body) + '\n', (error) => error ? reject(error) : resolve());
+  });
   return res.ok ? 0 : 1;
 }
 
@@ -854,6 +879,7 @@ export async function main(argv: string[]): Promise<number> {
     const a = argv[i]!;
     if (a === '--port') opts.port = Number(argv[++i]);
     else if (a === '--runtime') opts.runtime = argv[++i] ?? '';
+    else if (a === '--only') (opts.only ??= []).push(argv[++i] ?? '');
     else if (a === '--open') opts.open = true;
     else if (a === '--no-watch') opts.watch = false;
     else if (a === '--verbose') verbose = true;

@@ -88,6 +88,7 @@ tracelight web ctl clear [--id ID]
 tracelight web ctl values NAME... [--file FILE] [--line N]
 tracelight web ctl values --all|--hide
 tracelight web ctl peek NAME | peek --hide
+tracelight web ctl inspect open|close NAME...
 tracelight web ctl run
 tracelight web ctl eval EXPR
 tracelight web ctl var NAME
@@ -240,12 +241,28 @@ recording the run wrote.
 
 An agent that works inside the browser gets the same commands as WebMCP tools when the browser
 offers `document.modelContext` (with a fallback for older navigator APIs) (the header then shows a WebMCP chip): `tracelight_state`,
-`tracelight_goto`, `tracelight_step`, `tracelight_line`, `tracelight_say`, `tracelight_values`, `tracelight_peek`, `tracelight_run`,
+`tracelight_goto`, `tracelight_step`, `tracelight_wait_pause`, `tracelight_line`, `tracelight_say`, `tracelight_values`, `tracelight_peek`, `tracelight_inspect`, `tracelight_run`,
 `tracelight_eval`, `tracelight_var`, `tracelight_why`, `tracelight_watch`, `tracelight_breakpoint`,
 `tracelight_story`, `tracelight_profile`, `tracelight_debug`. A browser-automation agent can also
 call `window.tracelight`, the page's host object, directly.
 
 ## Layouts
+
+The learning view's **Code history** button opens executed code in order in a side panel,
+keeping the current source visible. Browser debug runs record the same execution that pauses.
+History follows each live pause by default. Its recording controls review earlier events
+without advancing the program, and the banner changes to “reviewing an earlier step”.
+**Return to current pause** restores following. A run started by an older bridge without
+recording shows history as unavailable, never a previous run as its substitute.
+The same Code history button closes the panel. Drag its divider to resize it.
+
+The separate **Inline values** toggle shows captured values beside variable declarations.
+Repeated observed changes appear as a short value sequence; hover shows the captured values
+with syntax highlighting and their pause provenance. The toggle remembers the preference.
+Hiding inline values leaves variable hovers working.
+The values come from visited pauses of this live execution, not a full execution recording.
+A new debug run clears them. Editing the source hides snapshots that no longer match it.
+Values from earlier pauses are unavailable after reconnecting unless captured during this visit.
 
 `http://127.0.0.1:4790/` is the code pane next to the panel; `?layout=panel` drops the code pane
 and `?layout=code` shows it alone; the header's layout button cycles the three, and a window
@@ -276,3 +293,36 @@ running only when the person is still using it, and tell them the URL and port.
 Notes accept a known source `--file`, positive `--line`, and stable `--id` for replacement. `--kind prediction` labels a prediction separately from an explanation. `tracelight_values` accepts `mode`, `names`, `file`, and `line`; it selects existing locals without evaluation or source edits. Replies include the observed run, step, frame and source location. Values refresh on stepping and vanish on resume. Notes remain separate from runtime observations.
 
 `peek NAME` opens the syntax-highlighted hover on a binding in the selected paused frame. Arrays and objects are indented. `peek --hide` dismisses it. WebMCP `tracelight_peek` takes `name` (empty to dismiss). Peeks show only captured bindings and serialized properties, never evaluate an expression, and return pause provenance. They navigate to the selected frame’s source before showing the hover.
+
+`inspect open NAME...` opens a focused value card beneath the live paused line and replaces its selection atomically. Choose all relevant bindings first and open them in one call. `inspect close NAME...` removes those bindings, and the card's close button dismisses all. WebMCP `tracelight_inspect` takes `names` and `open`; the legacy single `name` is also accepted. Use `{"names":["input","options"],"open":true}` for a complete selection rather than a call per binding. The card uses the captured, syntax-highlighted value tree, loads nested fields on expansion, and clears when the pause changes. Expand taught fields and leave unrelated metadata collapsed. A runtime cap remains explicit. Verify the card is visible before teaching from it.
+
+Function inspection can include captured runtime `functionSource` and `functionLocation` with a source link. Use those fields to explain the actual runtime function when available. An LSP signature or declaration adds static context; a parameter declaration is not the source of the runtime callback. Do not claim runtime source or identity when the captured fields are unavailable.
+
+`tracelight_wait_pause` supports active teaching while the user steps manually. Without `after`,
+it returns the current cursor immediately. With `after`, it waits event-driven for a newer live
+pause, matching captured locals, and ready presentation; `timeoutMs` is at most `25000`. Its
+reply is `{cursor, changed, state, source}`. Live state and control replies, including this wait,
+carry a debug summary with `runId`, `step`, `frame`, nearby source, and each local's captured
+`valueBag`. Explain directly from the returned source and structured values, retaining capped
+and unavailable markers. Extra inspection calls are needed only for relevant missing detail or
+a user-requested visible inspector. Explain a changed pause, then re-arm with its cursor.
+The tool does not advance execution or open an overlay. It is an active wait, not an integration
+that wakes idle or ended chats.
+
+`scratchpad open [--line N]` opens a TypeScript scratchpad beside the source. WebMCP
+`tracelight_scratchpad` accepts `open` and optional `line`. It copies the containing function
+and captured inputs. Code and JSON input edits auto-run in a separate worker. Local helpers
+and imports resolve from the source file; external calls need explicit mock fixtures.
+The live program remains paused. Missing captured data stays marked unavailable.
+`scratchpad close` dismisses the pane without advancing execution.
+For the full editing, inspection, mock and verification workflow, read
+[scratchpad.md](scratchpad.md).
+
+```sh
+tracelight web FILE [--only PATTERN]
+tracelight web ctl scratchpad open|close [--line N]
+```
+
+`--only` can be repeated to select project files to instrument.
+WebMCP `tracelight_start` starts navigating the recording from its beginning;
+`tracelight_stop` stops navigating it. Neither executes the program.

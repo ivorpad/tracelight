@@ -13,7 +13,7 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 export type RequestBody = DistributiveOmit<HostRequest, 'id'>;
 
 /** The run settings a page may change; everything else stays the extension's defaults. */
-export type ConfigPatch = Partial<Pick<RunConfig, 'autoLog' | 'libraryCode' | 'timeoutMs' | 'recordLocals' | 'http'>> & { maskSecrets?: boolean };
+export type ConfigPatch = Partial<Pick<RunConfig, 'autoLog' | 'libraryCode' | 'timeoutMs' | 'recordLocals' | 'http'>> & { maskSecrets?: boolean; only?: string[] };
 
 export interface BridgeFile {
   /** absolute path on the machine the bridge runs on */
@@ -33,6 +33,8 @@ export interface RuntimeInfo {
 
 /** An instruction from an agent (the HTTP API, the `ctl` CLI or WebMCP), carried out by the page. */
 export type AgentCommand =
+  | { action: 'scratchpad'; open: boolean; line?: number }
+  | { action: 'waitPause'; after?: number; timeoutMs?: number }
   | { action: 'state' }
   | { action: 'goto'; step: number; say?: string }
   | { action: 'step'; kind: 'next' | 'into' | 'over' | 'out' | 'back' | 'backOver' | 'backOut'; say?: string }
@@ -41,7 +43,7 @@ export type AgentCommand =
   | { action: 'clear'; noteId?: string }
   /** Select existing bindings for display only; no expressions are evaluated. */
   | { action: 'values'; mode: 'selected' | 'all' | 'none'; names?: string[]; file?: string; line?: number }
-  | { action: 'inspect'; name: string; open: boolean }
+  | { action: 'inspect'; name: string; names?: string[]; open: boolean }
   | { action: 'peek'; name: string }
   | { action: 'start' }
   | { action: 'stop' }
@@ -53,10 +55,10 @@ export type AgentCommand =
   | { action: 'why'; step?: number; name: string }
   /** add a Time Machine watch (`remove` drops the one with this text) */
   | { action: 'watch'; exp: string; remove?: boolean }
-  /** the live debugger: start a `record: false` run, move it, or stop it */
+  /** the live debugger: start one recorded execution, move it, or stop it */
   | { action: 'debug'; op: 'start' | 'restart' | 'continue' | 'step' | 'pause' | 'stop' | 'state'; kind?: 'into' | 'over' | 'out'; say?: string }
   /** set or clear a breakpoint of the main file (toggles without `on`) */
-  | { action: 'breakpoint'; line: number; on?: boolean; condition?: string }
+  | { action: 'breakpoint'; line: number; file?: string; on?: boolean; condition?: string }
   /** open the Code Story of the last run (starting the Time Machine), and read it back */
   | { action: 'story' }
   /** run once under the runtime's profiler and read the hottest functions */
@@ -111,7 +113,7 @@ export type BridgeToPage =
   | { type: 'narration'; narration: BridgeNarration }
   | { type: 'tour'; tour: BridgeTour }
   /** the live debugger's run (a runtime of its own): begun, each of its events, and gone */
-  | { type: 'debug.begin'; runId: string; content: string }
+  | { type: 'debug.begin'; runId: string; content: string; recording?: boolean }
   | { type: 'debug.event'; event: RunEvent }
   | { type: 'debug.end'; runId: string; message?: string }
   | { type: 'profile'; profile: BridgeProfile }

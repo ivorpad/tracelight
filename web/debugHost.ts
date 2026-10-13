@@ -1,7 +1,7 @@
 /**
  * The live debugger in the browser (the panel's Debugger view, docs/design/debugger-product.md):
- * one `record: false` run on a runtime of its own (the bridge starts it), which pauses at
- * breakpoints and steps, with nothing recorded. This is the page's DebugSession and
+ * one run on a runtime of its own (the bridge starts it), which pauses at
+ * breakpoints and steps while supplying the same execution's recorded history. This is the page's DebugSession and
  * DebuggerViewHost in one: it keeps the pause, the frame's variables, the watches, the breakpoints
  * set in the code pane's gutter and the program's output, and pushes `debug.session` to the panel.
  * VS Code shows the call stack, the variables and the step buttons in its own side bar; here the
@@ -26,7 +26,19 @@ export interface LocalVar {
   valueBag?: ValueBag;
 }
 
+/** Observed stops, not an execution recording. Historical values cannot be evaluated. */
+export interface LearningStop {
+  values?: import('./pausedValues').PausedValues;
+  step: number;
+  path: string;
+  line: number;
+  name: string;
+  reason: string;
+  locals: { name: string; text: string }[] | null;
+}
+
 interface DebugRun {
+  recording: boolean;
   runId: string;
   content: string;
   startedAt: number;
@@ -46,6 +58,7 @@ type Control = Extract<WebviewToHost, { type: 'debug.control' }>['action'];
 
 export class DebugHost {
   run: DebugRun | null = null;
+  readonly history: LearningStop[] = [];
   /** breakpoints by absolute path, then line; they outlive the runs */
   readonly breakpoints = new Map<string, Map<number, { condition?: string }>>();
   /** what the runtime answered for each breakpoint (resolved line, error) */
@@ -134,8 +147,9 @@ export class DebugHost {
     this.link.send({ type: 'debug.stop' });
   }
 
-  onBegin(runId: string, content: string): void {
-    this.run = { runId, content, startedAt: Date.now(), endedAt: null, running: true, paused: null, files: new FileTable(), output: new OutputLog(), modified: false };
+  onBegin(runId: string, content: string, recording = false): void {
+    this.history.length = 0;
+    this.run = { runId, content, recording, startedAt: Date.now(), endedAt: null, running: true, paused: null, files: new FileTable(), output: new OutputLog(), modified: false };
     this.selectedFrame = 0;
     this.locals = null;
     this.values.clear();
@@ -159,6 +173,8 @@ export class DebugHost {
         return;
       case 'debug.paused':
         run.paused = ev;
+        this.history.push({ step: ev.step, path: this.pathOf(ev.fileId) ?? this.mainFile()?.path ?? '', line: ev.line ?? 1,
+          name: ev.stack[0]?.name ?? '<module>', reason: reasonText(ev), locals: null });
         if (ev.modified) run.modified = true;
         if (ev.breakpoint) this.echoes = [...this.echoes.filter((e) => !(e.path === ev.breakpoint!.path && e.line === ev.breakpoint!.line)), ev.breakpoint];
         this.selectedFrame = 0;
@@ -268,6 +284,8 @@ export class DebugHost {
       if (this.run?.paused !== p || this.selectedFrame !== frameId) return;
       if (reply['modified'] === true && this.run) this.run.modified = true;
       this.locals = { step: p.step, frameId, locals: (reply['locals'] as LocalVar[] | undefined) ?? [] };
+      const stop = this.history[this.history.length - 1];
+      if (frameId === 0 && stop?.step === p.step) stop.locals = this.locals.locals.map(v => ({ name: v.name, text: v.text }));
       await this.refreshWatches();
     } catch {
       /* the program moved on */
@@ -430,11 +448,11 @@ export class DebugHost {
     return {
       id: run.runId,
       displayName: main.displayName,
-      launch: { program: main.displayName, args: [], cwd: '.', node: null, record: false },
-      launchTitle: `${main.path}  ·  no recording`,
+      launch: { program: main.displayName, args: [], cwd: '.', node: null, record: run.recording },
+      launchTitle: `${main.path}  ·  ${run.recording ? 'recording' : 'no recording'}`,
       running: run.running,
       paused: !!p,
-      record: false,
+      record: run.recording,
       modified: run.modified,
       ...(p ? { reason: p.reason } : {}),
       reasonText: p ? reasonText(p) : run.running ? 'running' : run.message ? `ended: ${run.message}` : 'ended',

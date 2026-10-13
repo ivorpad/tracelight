@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { prettyPausedText, pausedFrameLocals, pausedHover, pausedInline, pausedOccurrences, pausedProperty, pausedSummary, pausedShadows, runtimeCapped } from '../../web/pausedValues';
+import { pausedHoverPreview, prettyPausedText, pausedFrameLocals, pausedHover, pausedInline, pausedOccurrences, pausedProperty, pausedSummary, pausedShadows, runtimeCapped } from '../../web/pausedValues';
 
 describe('paused source values', () => {
   it('does not attach another lexical binding of the same name to source', () => {
@@ -10,6 +10,7 @@ describe('paused source values', () => {
     const identifiers = { scopes: [{ start: 0, end: source.length, parent: -1, names: ['x'] }, { start: inner, end, parent: 0, names: ['x'] }], references: [...source.matchAll(/\bx\b/g)].map(m => ({ start: m.index, end: m.index + 1, name: 'x', scope: m.index > inner && m.index < end ? 1 : 0, path: [] })) };
     const pause = { line: 3, start: 1, end: 5, content: source, identifiers, locals: [{ name: 'x', text: '0' }] };
     expect(pausedOccurrences(lines, [], pause).map(o => o.line)).toEqual([2, 3]);
+    expect(pausedOccurrences(lines, [], { ...pause, excluded: [[3, 3]] }).map(o => o.line)).toEqual([2, 3]); // lexical identities preserve outer bindings on callback lines
     expect(pausedOccurrences(lines, [], { ...pause, line: 5, locals: [{ name: 'x', text: '1' }] }).map(o => o.line)).toEqual([1, 5]);
     expect(pausedOccurrences(lines, [], { ...pause, identifiers: { scopes: [], references: [] } })).toEqual([]);
     identifiers.scopes[1] = { ...identifiers.scopes[1]!, pending: [{ name: 'x', until: source.indexOf(' use') }] } as typeof identifiers.scopes[number];
@@ -89,5 +90,24 @@ describe('structured paused previews', () => {
     expect(hover).toContain("x: '```'");
     expect(hover).toContain('````javascript');
     expect(hover).toContain('Runtime preview is truncated');
+  });
+});
+
+
+describe('bounded hover previews', () => {
+  it('does not offer expansion before the variable exists', () => {
+    expect(pausedHover({ name: 'toolCalls', text: 'Not available in this pause' }, 'pause:1')).not.toContain('Expand value');
+  });
+  it('keeps indentation when the runtime cuts a quoted nested value', () => {
+    const text = "{ messages: [ { role: 'system', content: 'a, [b]…(+277 chars)";
+    expect(prettyPausedText(text)).toBe("{\n  messages: [\n    {\n      role: 'system',\n      content: 'a, [b]…(+277 chars)");
+    expect(pausedHover({ name: 'context', text }, 'pause:1')).toContain('[Expand value in Debugger](command:tracelight.inspectPausedValue?');
+    expect(runtimeCapped(undefined, '…(+1,217 chars)')).toBe(true);
+  });
+  it('limits large previews by rows and characters without mutating the value', () => {
+    expect(pausedHoverPreview('{ text: "' + 'x'.repeat(2000) + '" }').length).toBeLessThanOrEqual(600);
+    const preview = pausedHoverPreview('[' + Array.from({ length: 30 }, (_, i) => i).join(', ') + ']');
+    expect(preview.split('\n').length).toBe(11);
+    expect(preview.endsWith('\n…')).toBe(true);
   });
 });

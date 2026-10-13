@@ -402,6 +402,9 @@ export type ValueType =
   | 'bytes' | 'function' | 'class' | 'module' | (string & {});
 
 export interface ValueNode {
+  functionSource?: string;
+  functionSourceCapped?: boolean;
+  functionLocation?: { path: string; line: number; column: number };
   type: ValueType;
   value?: string;
   length?: number;
@@ -628,7 +631,7 @@ export interface TraceCap {
 
 export interface LocalsEvent extends RunEventBase {
   type: 'locals';
-  entries: { step: number; scopeId: number; changes: { name: string; text: string }[] }[];
+  entries: { step: number; scopeId: number; changes: { name: string; text: string; objectId?: number; snapshotIncomplete?: true }[] }[];
 }
 
 /** `locals` entries the runtime records per run at most; past the cap "no change recorded" stops meaning "unchanged" */

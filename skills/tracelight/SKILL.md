@@ -1,7 +1,7 @@
 ---
 name: tracelight
 description: >-
-  See what JavaScript or TypeScript code does with the `tracelight` CLI, the user's VS Code window and the browser page, in one of four modes given as the first argument. `ask` answers a question about code from a recording of it running, in chat: how it works, why a value is what it is, what it swallowed, what an edit changed, where the time goes. `debug` pauses a running Node program at a function or line, steps it and reads the frame, in VS Code or in the browser page. `explain` walks a person through a run in their editor or in the browser page, one line per message. `show` hands over a page where every value comes from a command: a tour of the whole run, or a code-history page around chosen steps. Use when asked to ask about, learn, debug, step, break, pause, explain, teach, walk through, review a change in, or "show me" what a JavaScript or TypeScript program did.
+  See what JavaScript or TypeScript code does with the `tracelight` CLI, the user's VS Code window and the browser page, in one of four modes given as the first argument. `ask` answers a question about code from a recording of it running, in chat: how it works, why a value is what it is, what it swallowed, what an edit changed, where the time goes. `debug` pauses a running Node program at a function or line, steps it and reads the frame, in VS Code or in the browser page. `explain` walks a person through a run in their editor or in the browser page, reaching requested stops and explaining new evidence at their pace. `show` hands over a page where every value comes from a command: a tour of the whole run, or a code-history page around chosen steps. Use when asked to ask about, learn, debug, step, break, pause, explain, teach, walk through, review a change in, or "show me" what a JavaScript or TypeScript program did.
 argument-hint: ask | debug | explain | show [what to look at]
 disable-model-invocation: true
 ---
@@ -17,7 +17,7 @@ The first word after the skill name is the mode: `/tracelight ask why is Ben's t
 |---|---|---|---|
 | `ask` | a question about what code does or did, answered from a recording | a short answer in chat with `file:line` and `#step`, the page offered in one line | [references/ask.md](references/ask.md) |
 | `debug` | pause a running program, step it, read or set the frame, check a breakpoint | the stops you saw, in chat, then clean up | [references/debug.md](references/debug.md) |
-| `explain` | teach a person a file while they watch their editor or the browser page | one line and a few sentences per message, their turn after each | [references/explain.md](references/explain.md) |
+| `explain` | teach a person a file while they watch their editor or the browser page | lead through meaningful stops with brief observed evidence; honor their pace and explicit moves | [references/explain.md](references/explain.md) |
 | `show` | evidence someone will read, keep or send on | a tour or a code-history page, plus a short finding in chat | [references/show.md](references/show.md) |
 
 With no mode, pick by the verb the user used. "How does", "why is", "what does it do with",
@@ -36,6 +36,7 @@ Jobs that are not modes, and where each lives:
 | rerun code that calls an API without the network | any | [ask.md, "Offline"](references/ask.md#offline-record-and-replay-http) |
 | where the time goes | `ask` | [ask.md, "Where the time goes"](references/ask.md#where-the-time-goes) |
 | teach with narration bubbles in a browser, or debug without touching VS Code | `explain`, `debug` | [references/browser.md](references/browser.md) |
+| experiment with a function and copied paused inputs in the browser scratchpad | `explain`, `debug` | [references/scratchpad.md](references/scratchpad.md) |
 
 ## The three surfaces and the two products
 
@@ -168,8 +169,9 @@ and carry on with the CLI. Other agents skip this section.
 
 ## Stay out of the user's project
 
-Tracelight needs no harness. Use what the project already has: an existing test file, the entry
-point, a module the user named. Leave their repository exactly as you found it: its files, its
+Use what the project already has: an existing test file, the entry point, or a module the user
+named. For an installed library with no runnable example, a small SDK caller may live in a
+scratch directory outside the project. Explain that caller and use the real installed library. Leave their repository exactly as you found it: its files, its
 config (`package.json`, `tsconfig.json`, `.babelrc`, `vitest.config.ts`), its lockfiles
 (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`), its `node_modules`, its
 directories and its `.git`. Install nothing into it. If the code needs a database or an external

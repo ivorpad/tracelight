@@ -100,12 +100,10 @@ value a long way. Look in this order:
 1. **`exceptions RUN`**: one row per exception type, throw site and handler, uncaught first.
    `broad handler` marks a `catch` that takes every error; one that logs nothing and rethrows
    nothing is where work disappears. `caught outside stepped code` means Node, a package or a
-   promise's `.catch()` swallowed it. A throw inside an `async` function becomes a rejected
-   promise, and one that `Promise.allSettled`, a `.catch()` or an unawaited call absorbs may be
-   missing from `exceptions` (`no exceptions over 92 steps`). The walkthrough still has it, as
-   `out raised = RangeError` on the call, and `find RUN RangeError` finds the rejected value
-   (`{ status: 'rejected', reason: RangeError: ... }`). So "no exceptions" from async code is not
-   the end of the search: read the walkthrough's `out raised` lines too.
+   promise's `.catch()` swallowed it. Rejections raised in instrumented async functions and
+   consumed by `Promise.allSettled` or `.catch()` are retained in the finished exceptions report.
+   An unawaited rejection that terminates Node remains uncaught. Uninstrumented throw sites can
+   still be unknown; read the walkthrough's `out raised` lines and rejected values as well.
 2. **`origin RUN STEP [EXPR]`** on the exception's step: the chain from the failing statement back
    to where the bad value took its form, newest first, the root marked `▶`. Without `EXPR` it takes
    the value the exception is about when it can tell; when it cannot, it lists what the statement

@@ -23,6 +23,7 @@ import { StoryHoverProvider } from './features/storyHover';
 import { RecentFilesView } from './features/recentFiles';
 import { SnippetsFeature } from './features/snippets';
 import { PackageInstall } from './features/packageInstall';
+import { registerInvestigation } from './features/investigation';
 import { profileCommand } from './features/profiler';
 import { showInstrumentedFile } from './features/instrumentedView';
 import { clearLibraryCacheCommand } from './features/libraryCache';
@@ -480,6 +481,7 @@ export function activate(context: vscode.ExtensionContext): TracelightApi {
     const s = active();
     if (s && id) timeMachine.removeWatch(s, id);
   });
+  registerInvestigation(context, runtimeDir, active);
   reg('tracelight.viewCodeStory', () => codeStory.open());
   reg('tracelight.narrateWalkthrough', async () => {
     const s = requireSession();

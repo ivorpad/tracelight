@@ -8,7 +8,11 @@ import type { Link, PageHost } from './pageHost';
 import { renderValueNode } from '../src/views/valueText';
 
 export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentCommand): Promise<unknown> {
-  if (cmd.action !== 'state' && cmd.action !== 'say' && cmd.action !== 'clear' && cmd.action !== 'values' && cmd.action !== 'peek' && cmd.action !== 'inspect' && cmd.action !== 'debug' && cmd.action !== 'breakpoint' && cmd.action !== 'profile') await host.idle();
+  if (cmd.action === 'waitPause') {
+    const event = await host.waitForPause(cmd.after, cmd.timeoutMs);
+    return { ...event, ...(event.changed ? { state: debugSummary(host), source: host.pauseSource() } : {}) };
+  }
+  if (cmd.action !== 'state' && cmd.action !== 'say' && cmd.action !== 'clear' && cmd.action !== 'values' && cmd.action !== 'peek' && cmd.action !== 'inspect' && cmd.action !== 'debug' && cmd.action !== 'breakpoint' && cmd.action !== 'profile' && cmd.action !== 'scratchpad') await host.idle();
   switch (cmd.action) {
     case 'state':
       return host.state();
@@ -52,7 +56,7 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
     case 'values':
       return host.presentValues(cmd);
     case 'inspect':
-      return host.inspectValue(cmd.name, cmd.open);
+      return host.inspectValue(cmd.name, cmd.open, cmd.names);
     case 'peek':
       return host.peekValue(cmd.name);
     case 'start':
@@ -104,13 +108,17 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
       return { step, watches: host.panes.watchRows(step).map((w) => ({ exp: w.exp, ...(w.valueBag ? { value: renderValueNode(w.valueBag.data) } : {}), ...(w.text !== undefined ? { text: w.text } : {}), ...(w.error ? { error: w.error } : {}), ...(w.step !== undefined ? { at: w.step } : {}) })) };
     }
     case 'breakpoint': {
-      const path = host.main?.path;
+      const path = cmd.file ? host.resolvePresentationFile(cmd.file) : host.main?.path;
       if (!path) throw new Error('no file yet');
       const on = host.debug.setBreakpoint(path, cmd.line, cmd.on, cmd.condition);
-      return { line: cmd.line, on, breakpoints: host.debug.specs().map((b) => ({ line: b.line, ...(b.condition ? { condition: b.condition } : {}) })) };
+      return { file: path, line: cmd.line, on, breakpoints: host.debug.specs().map((b) => ({ file: b.path, line: b.line, ...(b.condition ? { condition: b.condition } : {}) })) };
     }
     case 'debug':
       return debugCommand(host, cmd);
+    case 'scratchpad':
+      if (!host.onScratchpad) throw new Error('Scratchpad is unavailable');
+      await host.onScratchpad(cmd.open, cmd.line);
+      return { open: cmd.open, liveExecutionChanged: false };
     case 'story': {
       if (!(await host.openStory())) throw new Error('no recorded run to tell: run the file first');
       return host.storyText();
@@ -172,7 +180,12 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
 export function debugSummary(host: PageHost): unknown {
   const s = host.debug.state();
   if (!s) return { running: false };
-  return { running: s.running, paused: s.paused, reason: s.reasonText, location: s.location, stack: s.stack.map((f) => ({ name: f.name, file: f.file, line: f.line })), locals: s.locals.map((v) => ({ name: v.name, text: v.text })), output: s.output.map((c) => c.text).join('').slice(-2000) };
+  return { running: s.running, paused: s.paused, reason: s.reasonText, location: s.location,
+    runId: host.debug.run?.runId, step: host.debug.paused?.step, frame: host.debug.selectedFrame,
+    source: host.pauseSource(),
+    stack: s.stack.map((f) => ({ name: f.name, file: f.file, line: f.line })),
+    locals: s.locals.map((v) => ({ name: v.name, text: v.text, ...(v.valueBag ? { valueBag: v.valueBag } : {}) })),
+    output: s.output.map((c) => c.text).join('').slice(-2000) };
 }
 
 function afterMove(host: PageHost, say: string | undefined): PageState {
@@ -213,6 +226,8 @@ export function webMcpTools(host: PageHost, link: Link): WebMcpTool[] {
     },
   });
   return [
+    tool('tracelight_scratchpad', 'Open an editable TypeScript scratchpad from the current source function and captured paused inputs, or close it. Auto run executes only the scratch copy in an isolated worker. Local helpers and project imports resolve from this file. External effects require explicit mocks. Never steps or evaluates in the live debugger.', { open: { type: 'boolean' }, line: { type: 'integer', minimum: 1 } }, ['open'], i => ({ action: 'scratchpad', open: i['open'] === true, ...(typeof i['line'] === 'number' ? { line: i['line'] } : {}) })),
+    tool('tracelight_wait_pause', 'Wait for a new live debugger pause caused by manual Step, Step into, Step over, Step out or Continue. Call without after to obtain the current cursor, then wait with after equal to the previous cursor. Returns nearby source, stack, pause provenance and captured structured value bags together after locals and the editor are ready. Use these values directly for explanation without extra inspect, peek or evaluate calls; preserve capped/unavailable markers. Re-arm after explaining each changed pause. Does not step, evaluate, or open an overlay. Event-driven within an active agent session; cannot wake an idle chat. Timeout is at most 25000 ms.', { after: { type: 'integer', minimum: 0 }, timeoutMs: { type: 'integer', minimum: 0, maximum: 25000 } }, [], i => ({ action: 'waitPause', ...(typeof i['after'] === 'number' ? { after: i['after'] } : {}), ...(typeof i['timeoutMs'] === 'number' ? { timeoutMs: i['timeoutMs'] } : {}) })),
     tool('tracelight_state', 'Where the Time Machine is in the recorded run: file, line, function, the source line, variables, call stack, logged values, output and errors.', {}, [], () => ({ action: 'state' })),
     tool('tracelight_goto', 'Move the Time Machine to a recorded step (0-based) and show it in the code pane.', { step: { type: 'integer', minimum: 0 }, say: SAY }, ['step'], (i) => ({ action: 'goto', step: Number(i['step']), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
     tool('tracelight_step', 'Step the Time Machine like a debugger, forwards or backwards: next (one recorded event), into, over, out, back, backOver, backOut.', { kind: { type: 'string', enum: ['next', 'into', 'over', 'out', 'back', 'backOver', 'backOut'] }, say: SAY }, ['kind'], (i) => ({ action: 'step', kind: String(i['kind']) as Extract<AgentCommand, { action: 'step' }>['kind'], ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
@@ -220,6 +235,7 @@ export function webMcpTools(host: PageHost, link: Link): WebMcpTool[] {
     tool('tracelight_say', 'Add or update a labelled teaching note without editing or executing source. file anchors it across modules; noteId updates that note, kind distinguishes explanation from prediction. Empty text removes noteId, or all notes when omitted.', { text: { type: 'string' }, line: { type: 'integer', minimum: 1 }, file: { type: 'string' }, noteId: { type: 'string' }, kind: { type: 'string', enum: ['explanation', 'prediction'] } }, ['text'], (i) => (String(i['text'] ?? '') === '' ? { action: 'clear', ...(typeof i['noteId'] === 'string' ? { noteId: i['noteId'] } : {}) } : { action: 'say', text: String(i['text']), ...(typeof i['line'] === 'number' ? { line: i['line'] } : {}), ...(typeof i['file'] === 'string' ? { file: i['file'] } : {}), ...(typeof i['noteId'] === 'string' ? { noteId: i['noteId'] } : {}), ...(typeof i['kind'] === 'string' ? { kind: i['kind'] as 'explanation' | 'prediction' } : {}) })),
     tool('tracelight_values', 'Select existing bindings to emphasize beside source at the live pause. selected shows names, all restores automatic values, none hides them. Optional file must match the selected frame; line anchors the selected values there. Reads only supplied locals, never evaluates expressions or changes program state. Returns actual observed values with run/step/frame provenance.', { mode: { type: 'string', enum: ['selected', 'all', 'none'] }, names: { type: 'array', items: { type: 'string' } }, file: { type: 'string' }, line: { type: 'integer', minimum: 1 } }, ['mode'], (i) => ({ action: 'values', mode: i['mode'] as 'selected' | 'all' | 'none', ...(Array.isArray(i['names']) ? { names: i['names'] as string[] } : {}), ...(typeof i['file'] === 'string' ? { file: i['file'] } : {}), ...(typeof i['line'] === 'number' ? { line: i['line'] } : {}) })),
     tool('tracelight_peek', 'Show the syntax-highlighted hover for a binding or its serialized property in the current paused frame. Reads the captured value without evaluating an expression. An empty name dismisses the hover.', { name: { type: 'string' } }, ['name'], i => ({ action: 'peek', name: String(i['name'] ?? '') })),
+    tool('tracelight_inspect', 'Display a focused value card under the live paused line. Send all relevant captured binding names together in names in ONE call: at a call boundary include its actual arguments and relevant derived inputs. This replaces the card selection atomically. Expand only the fields being taught. Legacy name adds one binding. open=false closes the selected bindings. Function details show runtime source/location when captured, not an inferred callback identity. Never evaluates an expression, advances execution, or populates future results. Confirm visibility before explaining. The card clears when the pause changes.', { names: { type: 'array', items: { type: 'string' }, minItems: 1 }, name: { type: 'string' }, open: { type: 'boolean' } }, ['open'], i => ({ action: 'inspect', name: String(i['name'] ?? ''), ...(Array.isArray(i['names']) ? { names: i['names'] as string[] } : {}), open: i['open'] === true })),
     tool('tracelight_start', 'Start navigating the recorded run at its beginning.', {}, [], () => ({ action: 'start' })),
     tool('tracelight_stop', 'Stop navigating the recorded run.', {}, [], () => ({ action: 'stop' })),
     tool('tracelight_run', 'Run the file again and wait for it to finish; returns the new state.', {}, [], () => ({ action: 'run' })),
@@ -227,10 +243,10 @@ export function webMcpTools(host: PageHost, link: Link): WebMcpTool[] {
     tool('tracelight_var', 'Every recorded change of a variable in the run: step, line, function and value. Also opens the Variable History view.', { name: { type: 'string' } }, ['name'], (i) => ({ action: 'var', name: String(i['name'] ?? '') })),
     tool('tracelight_why', 'Why a variable had its value after a step (default: the Time Machine step): the statements and values it came from. An empty name explains the statement.', { name: { type: 'string' }, step: { type: 'integer', minimum: 0 } }, ['name'], (i) => ({ action: 'why', name: String(i['name'] ?? ''), ...(typeof i['step'] === 'number' ? { step: i['step'] } : {}) })),
     tool('tracelight_watch', 'Add a Time Machine watch expression (remove: true drops it); returns every watch value at the current step.', { exp: { type: 'string' }, remove: { type: 'boolean' } }, ['exp'], (i) => ({ action: 'watch', exp: String(i['exp'] ?? ''), ...(i['remove'] === true ? { remove: true } : {}) })),
-    tool('tracelight_breakpoint', 'Set, clear or toggle a breakpoint on a line of the file for the live debugger.', { line: { type: 'integer', minimum: 1 }, on: { type: 'boolean' }, condition: { type: 'string' } }, ['line'], (i) => ({ action: 'breakpoint', line: Number(i['line']), ...(typeof i['on'] === 'boolean' ? { on: i['on'] } : {}), ...(typeof i['condition'] === 'string' ? { condition: i['condition'] } : {}) })),
+    tool('tracelight_breakpoint', 'Set, clear or toggle a live breakpoint in the main file or a known imported source file.', { line: { type: 'integer', minimum: 1 }, file: { type: 'string' }, on: { type: 'boolean' }, condition: { type: 'string' } }, ['line'], (i) => ({ action: 'breakpoint', line: Number(i['line']), ...(typeof i['file'] === 'string' ? { file: i['file'] } : {}), ...(typeof i['on'] === 'boolean' ? { on: i['on'] } : {}), ...(typeof i['condition'] === 'string' ? { condition: i['condition'] } : {}) })),
     tool('tracelight_story', 'Open the Code Story of the recorded run (every pass through a scope, in execution order) in the code pane; returns its text and the row of the Time Machine step.', {}, [], () => ({ action: 'story' })),
     tool('tracelight_profile', 'Run the file once under the runtime profiler and show the hottest functions (self and total ms) in the code pane.', {}, [], () => ({ action: 'profile' })),
-    tool('tracelight_debug', 'Drive the live debugger (a real run, nothing recorded): start (runs to the first breakpoint, or pauses at the first statement when no breakpoint is set), restart, continue, step (into/over/out), pause, stop, state. Returns where it paused, the stack and the variables.', { op: { type: 'string', enum: ['start', 'restart', 'continue', 'step', 'pause', 'stop', 'state'] }, kind: { type: 'string', enum: ['into', 'over', 'out'] }, say: SAY }, ['op'], (i) => ({ action: 'debug', op: String(i['op']) as Extract<AgentCommand, { action: 'debug' }>['op'], ...(typeof i['kind'] === 'string' ? { kind: i['kind'] as 'into' | 'over' | 'out' } : {}), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
+    tool('tracelight_debug', 'Drive the live debugger and record that same execution for code history: start (runs to the first breakpoint, or pauses at the first statement when no breakpoint is set), restart, continue, step (into/over/out), pause, stop, state. Returns where it paused, the stack and the variables.', { op: { type: 'string', enum: ['start', 'restart', 'continue', 'step', 'pause', 'stop', 'state'] }, kind: { type: 'string', enum: ['into', 'over', 'out'] }, say: SAY }, ['op'], (i) => ({ action: 'debug', op: String(i['op']) as Extract<AgentCommand, { action: 'debug' }>['op'], ...(typeof i['kind'] === 'string' ? { kind: i['kind'] as 'into' | 'over' | 'out' } : {}), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
   ];
 }
 

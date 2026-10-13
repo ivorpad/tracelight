@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { buildRequest, runOnce } from '../src/cli.ts';
@@ -11,7 +11,7 @@ process.env.TRACELIGHT_CACHE_DIR ??= mkdtempSync(join(tmpdir(), 'tracelight-cach
 
 /** write `files` (relative path -> text) into a fresh directory; returns its path */
 export function project(files: Record<string, string>): string {
-  const dir = mkdtempSync(join(tmpdir(), 'tracelight-test-'));
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'tracelight-test-')));
   for (const [rel, text] of Object.entries(files)) {
     const p = join(dir, rel);
     mkdirSync(dirname(p), { recursive: true });

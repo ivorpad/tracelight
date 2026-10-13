@@ -42,7 +42,7 @@ export function resolveBreakpoint(files: DebugFile[], bp: ResolvableBreakpoint, 
   return bp.rid === null && byLine(files, bp, file);
 }
 
-function real(p: string): string {
+export function real(p: string): string {
   try {
     return fs.realpathSync(p);
   } catch {

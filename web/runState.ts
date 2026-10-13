@@ -6,6 +6,7 @@
  */
 import { FileTable } from '../src/session/fileTable';
 import { TraceModel } from '../src/timeMachine/traceModel';
+import { PartialScopes } from '../src/session/traceDelta';
 import { decodeSteps } from '../src/shared/protocol';
 import type { WalkthroughInputs } from '../src/session/walkthroughShared';
 import type { CoverageEvent, ErrorEvent, HttpExchangeEvent, LocalsEvent, LogEvent, RunEvent, RunFinishedEvent, StatementBinding, WatchEvent } from '../src/shared/protocol';
@@ -26,6 +27,8 @@ export interface RunData {
   trace: TraceModel | null;
   /** the raw trace event, kept for the saved-run document (`tracelight tour`) */
   traceEvent: Extract<RunEvent, { type: 'trace' }> | null;
+  partialSteps?: Int32Array;
+  partialScopes?: PartialScopes;
   locals: LocalsEvent['entries'];
   http: HttpExchangeEvent[];
   watch: WatchEvent[];
@@ -64,12 +67,26 @@ export function applyEvent(run: RunData, ev: RunEvent): boolean {
     case 'coverage':
       run.coverage.set(ev.fileId, ev);
       break;
-    case 'trace':
-      // partial deltas only matter for a live view of a long run; the final trace is authoritative
-      if (ev.partial) break;
+    case 'trace': {
+      let steps = decodeSteps(ev.steps);
+      let scopes = ev.scopes;
+      if (ev.partial) {
+        const offset = (ev.offset ?? 0) * 4;
+        const merged = new Int32Array(Math.max(run.partialSteps?.length ?? 0, offset + steps.length));
+        if (run.partialSteps) merged.set(run.partialSteps);
+        merged.set(steps, offset);
+        run.partialSteps = merged;
+        run.partialScopes ??= new PartialScopes();
+        scopes = run.partialScopes.apply(ev.scopes, steps, ev.offset ?? 0);
+        steps = merged;
+      } else {
+        run.partialSteps = undefined;
+        run.partialScopes = undefined;
+      }
       run.traceEvent = ev;
-      run.trace = new TraceModel(decodeSteps(ev.steps), ev.scopes, ev.truncated, (rid) => run.files.locate(rid), ev.cap === undefined ? undefined : { cap: ev.cap, stepsRun: ev.stepsRun, spentBy: ev.spentBy ?? [] });
+      run.trace = new TraceModel(steps, scopes, ev.truncated, (rid) => run.files.locate(rid), ev.cap === undefined ? undefined : { cap: ev.cap, stepsRun: ev.stepsRun, spentBy: ev.spentBy ?? [] });
       break;
+    }
     case 'locals':
       for (const e of ev.entries) run.locals.push(e);
       break;

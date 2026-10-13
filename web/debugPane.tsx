@@ -5,16 +5,33 @@
  * Debugger view keeps the watches, breakpoints, exceptions and output, as it does in VS Code.
  */
 import type { DebugHost } from './debugHost';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { ValueNode } from '../src/shared/protocol';
 import { pausedSummary, runtimeCapped } from './pausedValues';
+import { tokenize } from '../webview/highlight';
 
 type Inspector = Pick<DebugHost, 'expandNode'>;
 
-function ValueTree({ node, debug, name }: { node: ValueNode; debug: Inspector; name: string }) {
+export function ValueSyntax({ text }: { text: string }) {
+  return <>{tokenize(text).map((token, i) => <span key={i} class={`pkw-token-${token.cls}`}>{token.text}</span>)}</>;
+}
+
+export function ValueTree({ node, debug, name, initialOpen = false, onOpenSource }: { node: ValueNode; debug: Inspector; name: string; initialOpen?: boolean; onOpenSource?: (location: { path: string; line: number; column: number }) => void }) {
   const [value, setValue] = useState(node);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [message, setMessage] = useState('');
+  useEffect(() => { setValue(node); }, [node]);
+  useEffect(() => {
+    if (!initialOpen || !node.expandable) return;
+    let active = true;
+    setMessage('Loading…');
+    void debug.expandNode(node).then(more => {
+      if (!active) return;
+      if (more) setValue(more);
+      setMessage(more ? '' : 'More detail is unavailable for this pause.');
+    }).catch(err => { if (active) setMessage(err instanceof Error ? err.message : String(err)); });
+    return () => { active = false; };
+  }, [node, initialOpen]);
   const toggle = async () => {
     setOpen(!open);
     if (open || !value.expandable) return;
@@ -25,21 +42,35 @@ function ValueTree({ node, debug, name }: { node: ValueNode; debug: Inspector; n
       setMessage(more ? '' : 'More detail is unavailable for this pause.');
     } catch (err) { setMessage(err instanceof Error ? err.message : String(err)); }
   };
-  const expandable = !!value.props?.length || !!value.expandable;
-  return <div class="pkw-value-tree">
-    {expandable ? <button class="pkw-value-toggle" aria-expanded={open} onClick={() => void toggle()}>{open ? '▾' : '▸'} {name} <span>{value.value ?? value.type}</span></button>
-      : <div>{name} <span>{value.value ?? value.type}</span></div>}
-    {runtimeCapped(value) ? <div class="pkw-value-note">Runtime preview is truncated{value.expandable ? '; expand for more detail.' : '; more detail is unavailable.'}</div> : null}
-    {open ? <div class="pkw-value-children">{message ? <div class="pkw-value-note">{message}</div> : null}{value.props?.map((p, i) => <ValueTree key={`${p.id}:${i}`} node={p} name={p.name} debug={debug} />)}</div> : null}
+  const container = !!value.props?.length || !!value.expandable;
+  const string = value.type === 'str';
+  const expandable = container || !!value.functionSource || !!value.functionLocation || (string && ((value.value?.length ?? 0) > 80 || /[\r\n]/.test(value.value ?? '')));
+  const size = value.length ?? value.props?.length ?? 0;
+  const collectionPreview = value.type === 'list' ? size === 0 && !value.expandable ? '[]' : `Array(${size})`
+    : value.type === 'dict' ? container ? '{…}' : '{}' : value.type;
+  const preview = open && container ? collectionPreview
+    : string ? JSON.stringify(value.value ?? '') : value.value ?? collectionPreview;
+  const row = <><i class={`codicon codicon-${expandable ? open ? 'chevron-down' : 'chevron-right' : 'blank'}`} />{name ? <><span class="pkw-value-name">{name}</span><span class="pkw-value-colon">:</span></> : null}<span class="pkw-value-preview"><ValueSyntax text={preview} /></span></>;
+  return <div class={`pkw-value-tree${open ? ' open' : ''}`}>
+    {expandable ? <button class="pkw-value-toggle" aria-label={`Inspect ${name}`} aria-expanded={open} onClick={() => void toggle()}>{row}</button>
+      : <div class="pkw-value-row">{row}</div>}
+    {open ? <div class="pkw-value-children">{message ? <div class="pkw-value-note">{message}</div> : null}
+      {string ? <pre class="pkw-value-string">{value.value}</pre> : null}
+      {value.functionSource ? <pre class="pkw-function-source"><ValueSyntax text={value.functionSource} /></pre> : null}
+      {value.functionSourceCapped ? <div class="pkw-value-note">Runtime function preview limited to 2000 characters. Open source for its context.</div> : null}
+      {value.functionLocation && onOpenSource ? <button type="button" class="pkw-function-link" onClick={() => onOpenSource(value.functionLocation!)}>Open function source · line {value.functionLocation.line}</button> : null}
+      {value.functionSource && !value.functionLocation ? <div class="pkw-value-note">Source location unavailable for this runtime function.</div> : null}
+      {value.props?.map((p, i) => <ValueTree key={`${p.queryPath.join('/')}:${p.name}:${i}`} node={p} name={p.name} debug={debug} onOpenSource={onOpenSource} />)}
+      {runtimeCapped(value) ? <div class="pkw-value-note">{value.expandable ? 'Additional runtime detail can be loaded by expanding its fields.' : 'The runtime limited this value; no further detail is available.'}</div> : null}
+    </div> : null}
   </div>;
 }
 
 function ObservedBinding({ v, inspector, open, onToggle }: { open: boolean; onToggle: (name: string) => void; v: { name: string; text: string; valueBag?: { data: ValueNode; runtimeKey: string } }; inspector: Inspector }) {
   return <div class={`pkw-observed-binding${open ? ' pkw-observed-open' : ''}`}>
     <button class="pkw-observed-summary" aria-expanded={open} title={v.text} onClick={() => onToggle(v.name)}><span class="pkw-debug-name">{v.name}</span> <span class="pkw-observed-preview">{pausedSummary(v)}</span></button>
-    {open ? <div class="pkw-variable-detail"><div class="pkw-value-note">Valor observado en esta pausa</div><pre>{v.text}</pre>
-      {runtimeCapped(v.valueBag?.data, v.text) ? <div class="pkw-value-note">Vista del runtime truncada. Expande el árbol para el detalle disponible.</div> : null}
-      {v.valueBag ? <ValueTree node={v.valueBag.data} name={v.name} debug={inspector} /> : null}
+    {open ? <div class="pkw-variable-detail"><div class="pkw-value-note">Valor observado en esta pausa</div>
+      {v.valueBag ? <ValueTree node={v.valueBag.data} name={v.name} debug={inspector} /> : <pre><ValueSyntax text={v.text} /></pre>}
     </div> : null}
   </div>;
 }
@@ -51,13 +82,13 @@ export function ObservedBindings({ locals, inspector, expanded, onToggle }: { ex
 }
 
 function Variable({ v, debug }: { v: { name: string; text: string; valueBag?: { data: ValueNode } }; debug: Inspector }) {
-  return <details class="pkw-variable">
+  if (v.valueBag) return <div class="pkw-variable" data-variable-name={v.name}><ValueTree node={v.valueBag.data} name={v.name} debug={debug} /></div>;
+  return <details class="pkw-variable" data-variable-name={v.name}>
     <summary class="pkw-debug-row" title="Expand the value from this paused frame">
-      <span class="pkw-debug-name">{v.name}</span><span class="pkw-debug-value">{v.text}</span>
+      <span class="pkw-debug-name">{v.name}</span><span class="pkw-debug-value"><ValueSyntax text={v.text} /></span>
     </summary>
-    <div class="pkw-variable-detail"><pre>{v.text}</pre>
-      {runtimeCapped(v.valueBag?.data, v.text) ? <div class="pkw-value-note">Runtime text is truncated. The tree below contains the available detail.</div> : null}
-      {v.valueBag ? <ValueTree node={v.valueBag.data} name={v.name} debug={debug} /> : null}
+    <div class="pkw-variable-detail"><pre><ValueSyntax text={v.text} /></pre>
+      {runtimeCapped(undefined, v.text) ? <div class="pkw-value-note">The runtime limited this preview; no structured detail is available.</div> : null}
     </div>
   </details>;
 }
@@ -83,8 +114,8 @@ function Btn({ icon, title, disabled, onClick }: { icon: string; title: string; 
   );
 }
 
-export function DebugPane({ debug, onShowView, onLayout = () => {}, learning = false, expanded = true, onToggleTools = () => {} }: {
-  debug: DebugHost; onShowView: () => void; onLayout?: () => void; learning?: boolean; expanded?: boolean; onToggleTools?: () => void;
+export function DebugPane({ debug, onShowView, onLayout = () => {}, learning = false, expanded = true, onToggleTools = () => {}, onReturnToPause }: {
+  debug: DebugHost; onShowView: () => void; onLayout?: () => void; learning?: boolean; expanded?: boolean; onToggleTools?: () => void; onReturnToPause?: () => void;
 }) {
   const state = debug.state();
   if (!state) return null;
@@ -114,6 +145,7 @@ export function DebugPane({ debug, onShowView, onLayout = () => {}, learning = f
           {learning ? paused ? `Pausa · ${state.location}` : live ? 'En ejecución' : 'Finalizado' : paused ? `${state.reasonText} · ${state.location}` : state.reasonText}
         </span>
         <span class="pkw-spacer" />
+        {paused && onReturnToPause ? <button type="button" class="pkw-text-btn" title="Return to the live paused line without executing code" onClick={onReturnToPause}>Back to pause</button> : null}
         {learning ? <>
           {live && !paused ? <Btn icon="debug-pause" title="Pause" onClick={() => act('pause')} /> : <Btn icon="debug-continue" title="Continue (F5)" disabled={!paused} onClick={() => act('continue')} />}
           <button type="button" class="pkw-btn" title="Step: next executed statement, including calls" aria-label="Step" disabled={!paused} onClick={() => act('stepInto')}><i class="codicon codicon-debug-step-into pkw-step-forward" /></button>
@@ -122,7 +154,6 @@ export function DebugPane({ debug, onShowView, onLayout = () => {}, learning = f
           <Btn icon="debug-step-out" title="Step out (Shift+F11)" disabled={!paused} onClick={() => act('stepOut')} />
           <Btn icon="debug-restart" title="Restart" onClick={() => act('restart')} />
           {live ? <Btn icon="debug-stop" title="Stop" onClick={() => act('stop')} /> : null}
-          <button type="button" class="pkw-btn" title="Variables and call stack" aria-label="Variables and call stack" aria-expanded={expanded} onClick={onToggleTools}><i class="codicon codicon-symbol-variable" /></button>
           {expanded ? <button class="pkw-text-btn" onClick={onShowView}>Puntos de pausa</button> : null}
         </> : <>
           {live && !paused ? <Btn icon="debug-pause" title="Pause" onClick={() => act('pause')} /> : <Btn icon="debug-continue" title="Continue (F5)" disabled={!paused} onClick={() => act('continue')} />}
@@ -134,6 +165,8 @@ export function DebugPane({ debug, onShowView, onLayout = () => {}, learning = f
           {live ? <Btn icon="debug-stop" title="Stop" onClick={() => act('stop')} /> : null}
           <Btn icon="output" title="Watches, breakpoints and output (the Debugger view)" onClick={onShowView} />
         </>}
+        <button type="button" class="pkw-btn" title="Variables and call stack" aria-label="Variables and call stack" aria-expanded={expanded} onClick={onToggleTools}><i class="codicon codicon-symbol-variable" /></button>
+        {paused && expanded ? <button type="button" class="pkw-btn" title="Close variables and call stack" aria-label="Close variables and call stack" onClick={onToggleTools}><i class="codicon codicon-close" /></button> : null}
       </div>
       {paused ? (
         <div class="pkw-debug-body" hidden={!expanded}>

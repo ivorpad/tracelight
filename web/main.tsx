@@ -21,6 +21,7 @@ import { CodePane } from './codePane';
 import { registerWebMcp, runAgentCommand } from './agent';
 import { DebugPane } from './debugPane';
 import { RecordingControls } from './recordingControls';
+import { Scratchpad } from './scratchpad';
 
 const params = new URLSearchParams(location.search);
 const layout = params.get('layout') === 'panel' ? 'panel' : params.get('layout') === 'code' ? 'code' : 'split';
@@ -92,6 +93,14 @@ const code = new CodePane(
 );
 
 const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+const storyCode = new CodePane($('pkw-story-code'), () => {}, () => {});
+let storyVisible = false;
+code.showStory = file => { storyCode.showFile(file); storyVisible = true; };
+code.storyShown = () => storyVisible;
+code.renderStory = decorations => storyCode.render(decorations);
+code.revealStory = line => storyCode.reveal(line);
+code.closeStory = () => { storyVisible = false; };
+storyCode.onLinePick = (_path, line, how) => host.storyPick(line, how === 'open');
 const link = new BridgeLink(wsUrl, (msg) => onBridge(msg), (connected) => {
   host.connected = connected;
   statusDot.className = connected ? 'pkw-dot ok' : 'pkw-dot off';
@@ -99,6 +108,10 @@ const link = new BridgeLink(wsUrl, (msg) => onBridge(msg), (connected) => {
 });
 host = new PageHost(link, code, toPanel);
 host.theme = theme === 'light' ? 'light' : 'dark';
+const scratchpad = new Scratchpad($('pkw-scratchpad'), host, code, () => { code.layout(); storyCode.layout(); });
+host.onScratchpad = async (open, line) => { if (open) await scratchpad.open(line); else scratchpad.close(); };
+code.onScratchpad = line => { void scratchpad.open(line).catch(e => host.notice(String(e), 'error')); };
+$('pkw-scratch-toggle').addEventListener('click', () => { void scratchpad.open().catch(e => host.notice(String(e), 'error')); });
 // for an agent driving the page with browser tools, and for debugging: the same calls the WebMCP tools make
 (window as unknown as { tracelight: PageHost }).tracelight = host;
 
@@ -113,9 +126,22 @@ host.notice = (text, level) => {
 };
 
 // the live debugger: breakpoints in the gutter (or F9), its controls under the code
-code.onNavigate = (path, line) => host.revealPath(path, line);
+code.onNavigate = (path, line) => host.navigateSource(path, line);
 code.onGutterClick = (path, line) => host.debug.setBreakpoint(path, line);
 code.onExpandValue = (node) => host.debug.expandNode(node);
+code.onInspectValue = (name) => {
+  toolsOpen = true;
+  renderDebug();
+  code.layout();
+  const row = [...debugPane.querySelectorAll<HTMLElement>('[data-variable-name]')]
+    .find(row => row.dataset.variableName === name);
+  if (!row) return;
+  const toggle = row.querySelector<HTMLButtonElement>('button.pkw-value-toggle');
+  if (toggle?.getAttribute('aria-expanded') === 'false') toggle.click();
+  if (row instanceof HTMLDetailsElement) row.open = true;
+  (toggle ?? row.querySelector<HTMLElement>('summary'))?.focus();
+  row.scrollIntoView({ block: 'nearest' });
+};
 // the Code Story and the profile: a row picked goes to its step, Ctrl/Cmd+click opens its source
 code.onLinePick = (path, line, how) => host.linePick(path, line, how);
 
@@ -176,19 +202,31 @@ function setPresentation(next: 'learn' | 'debug'): void {
   host.scheduleRender(true);
 }
 function renderDebug(): void {
+  const historyShown = host.storyShown();
+  document.body.dataset.story = historyShown ? 'shown' : 'hidden';
+  code.layout();
+  storyCode.layout();
+  $('pkw-story-toggle').setAttribute('aria-pressed', String(historyShown));
+  const historyNotice = $('pkw-story-notice');
+  historyNotice.hidden = !historyShown;
+  historyNotice.textContent = host.debug.active ? host.historyFollowing ? 'Code history · following live execution' : 'Code history · reviewing an earlier step. Source remains at the live pause.' : 'Code history · recorded execution. Select a line to review that moment.';
+  $('pkw-story-follow').hidden = !historyShown || !host.debug.active || host.historyFollowing;
   document.body.classList.toggle('pkw-live-debug', host.debug.active);
   document.body.classList.toggle('pkw-live-active', host.debug.active);
   updateRecordingNotice();
-  if (presentation === 'learn' && !host.debug.active && host.nav.active && host.run?.trace?.valid(host.nav.step)) {
-    const at = host.state().location;
-    debugPane.classList.add('compact');
-    render(<RecordingControls step={host.nav.step} location={at ? `${at.file}:${at.line}` : ''}
+  if (!host.nav.active || !host.run?.trace?.valid(host.nav.step)) render(null, $('pkw-story-controls'));
+  if (presentation === 'learn' && host.nav.active && host.run?.trace?.valid(host.nav.step) && (historyShown || !host.debug.active)) {
+    const at = host.run.trace.location(host.nav.step);
+    const controlsPane = historyShown ? $('pkw-story-controls') : debugPane;
+    if (!historyShown) debugPane.classList.add('compact');
+    render(<RecordingControls step={host.nav.step} location={at ? `${host.displayPath(at.fileId)}:${at.range[0]}` : ''}
       canAdvance={host.run.trace.valid(host.nav.step + 1)} advance={() => host.goto(host.nav.step + 1)}
-      canStep={host.run.trace.canStep(host.nav.step)} move={kind => host.move(kind)} restart={() => host.goto(0)} stop={() => host.stop()} />, debugPane);
-    return;
+      canStep={host.run.trace.canStep(host.nav.step)} move={kind => host.move(kind)} restart={() => host.goto(0)} stop={() => host.closeStory()} />, controlsPane);
+    if (!historyShown) return;
   }
   debugPane.classList.toggle('compact', !host.debug.paused || !toolsOpen);
   render(<DebugPane debug={host.debug} learning={presentation === 'learn'} expanded={toolsOpen}
+    onReturnToPause={host.viewingFunctionSource ? () => { void host.returnToPause().catch(e => host.notice(String(e), 'error')); } : undefined}
     onToggleTools={() => { toolsOpen = !toolsOpen; renderDebug(); code.layout(); host.scheduleRender(true); }}
     onShowView={showDebuggerView} onLayout={() => { code.layout(); host.scheduleRender(true); }} />, debugPane);
   $('pkw-debug').classList.toggle('active', host.debug.active);
@@ -196,6 +234,12 @@ function renderDebug(): void {
 document.addEventListener('keydown', (e) => {
   const key = e.key === 'F5' ? (e.shiftKey ? 'stop' : 'continue') : e.key === 'F10' ? 'stepOver' : e.key === 'F11' ? (e.shiftKey ? 'stepOut' : 'stepInto') : null;
   if (!key) return;
+  if (host.storyShown()) {
+    e.preventDefault();
+    if (key === 'stop') host.closeStory();
+    else if (key === 'stepInto' || key === 'stepOver' || key === 'stepOut') host.move(key === 'stepInto' ? 'into' : key === 'stepOut' ? 'out' : 'over');
+    return;
+  }
   if (!host.debug.active && presentation === 'learn' && host.nav.active) {
     if (key === 'stepOver' || key === 'stepInto' || key === 'stepOut') { e.preventDefault(); host.move(key === 'stepOver' ? 'over' : key === 'stepInto' ? 'into' : 'out'); }
     return;
@@ -252,6 +296,27 @@ $('pkw-tm').addEventListener('click', () => (host.nav.active ? host.stop() : hos
 $('pkw-debug').addEventListener('click', () => (host.debug.active ? showDebuggerView() : host.debug.start(code.dirtyContent())));
 $('pkw-learn').addEventListener('click', () => setPresentation('learn'));
 $('pkw-tools').addEventListener('click', () => setPresentation('debug'));
+$('pkw-story-toggle').addEventListener('click', () => {
+  if (presentation !== 'learn') setPresentation('learn');
+  if (host.storyShown()) host.closeStory();
+  else void host.openStory();
+});
+$('pkw-story-follow').addEventListener('click', () => host.followLiveHistory());
+let historyVisible = true;
+try { historyVisible = localStorage.getItem('tracelight.web.historyVisible') !== 'false'; } catch { /* use the default */ }
+function updateHistoryVisibility(): void {
+  document.body.dataset.history = historyVisible ? 'shown' : 'hidden';
+  $('pkw-history-toggle').setAttribute('aria-pressed', String(historyVisible));
+  $('pkw-history-toggle').title = historyVisible ? 'Hide inline values' : 'Show inline values';
+  code.layout();
+  host.scheduleRender(true);
+}
+$('pkw-history-toggle').addEventListener('click', () => {
+  historyVisible = !historyVisible;
+  try { localStorage.setItem('tracelight.web.historyVisible', String(historyVisible)); } catch { /* preference lasts for this visit */ }
+  updateHistoryVisibility();
+});
+updateHistoryVisibility();
 $('pkw-learn').setAttribute('aria-pressed', String(presentation === 'learn'));
 $('pkw-tools').setAttribute('aria-pressed', String(presentation === 'debug'));
 $('pkw-layout').addEventListener('click', () => {
@@ -265,6 +330,51 @@ $('pkw-layout').addEventListener('click', () => {
 });
 
 // splitter between the code pane and the panel
+const storySplit = $('pkw-story-split');
+let historyWidth = 32;
+try {
+  const saved = Number(localStorage.getItem('tracelight.web.historyWidth'));
+  if (saved >= 20 && saved <= 60) historyWidth = saved;
+} catch { /* use the default width */ }
+function resizeHistory(width: number): void {
+  historyWidth = Math.max(20, Math.min(60, width));
+  $('pkw-main').style.setProperty('--pkw-history-width', `${historyWidth}%`);
+  storySplit.setAttribute('aria-valuenow', String(Math.round(historyWidth)));
+  storySplit.setAttribute('aria-orientation', innerWidth <= 760 ? 'horizontal' : 'vertical');
+  code.layout();
+  storyCode.layout();
+}
+function saveHistoryWidth(): void {
+  try { localStorage.setItem('tracelight.web.historyWidth', String(historyWidth)); } catch { /* keep this visit's width */ }
+}
+resizeHistory(historyWidth);
+storySplit.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  storySplit.setPointerCapture(e.pointerId);
+  const move = (ev: PointerEvent) => {
+    const rect = $('pkw-main').getBoundingClientRect();
+    resizeHistory(innerWidth <= 760 ? (rect.bottom - ev.clientY) / rect.height * 100 : (rect.right - ev.clientX) / rect.width * 100);
+  };
+  const up = () => {
+    storySplit.removeEventListener('pointermove', move);
+    storySplit.removeEventListener('pointerup', up);
+    storySplit.removeEventListener('pointercancel', up);
+    saveHistoryWidth();
+  };
+  storySplit.addEventListener('pointermove', move);
+  storySplit.addEventListener('pointerup', up);
+  storySplit.addEventListener('pointercancel', up);
+});
+storySplit.addEventListener('keydown', e => {
+  const delta = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? 2 : e.key === 'ArrowRight' || e.key === 'ArrowDown' ? -2 : 0;
+  if (!delta) return;
+  e.preventDefault();
+  resizeHistory(historyWidth + delta);
+  saveHistoryWidth();
+});
+window.addEventListener('resize', () => resizeHistory(historyWidth));
+
 const split = $('pkw-split');
 split.addEventListener('pointerdown', (e) => {
   split.setPointerCapture(e.pointerId);

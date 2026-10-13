@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LOG_PATH, PageHost, PROFILE_PATH, type CodeDecorations, type CodeView, type Link } from '../../web/pageHost';
 import { STORY_PATH } from '../../web/story';
+import { applyEvent, emptyRun } from '../../web/runState';
 import { runAgentCommand, webMcpTools } from '../../web/agent';
 import { packSteps } from '../../src/timeMachine/traceModel';
 import type { BridgeFile, BridgeToPage, PageToBridge, RequestBody } from '../../web/bridgeProtocol';
@@ -12,6 +13,12 @@ const SOURCE = ['def add(a, b):', '    s = a + b', '    return s', '', 'x = add(
 const MAIN: BridgeFile = { path: '/w/demo.py', displayName: 'demo.py', language: 'python', content: SOURCE };
 
 class FakeCode implements CodeView {
+  valueUiState?: CodeView['valueUiState'];
+  cardUpdates: string[][] = [];
+  inspectValues(names: string[], open: boolean) {
+    this.cardUpdates.push(names);
+    return names.map(name => ({ name, open, visible: open }));
+  }
   async peekValue(name: string) {
     if (name && !this.last?.liveValues?.locals.some(v => v.name === name)) throw new Error('unknown binding');
     return { name, visible: !!name };
@@ -106,6 +113,21 @@ function setup() {
 }
 
 describe('PageHost', () => {
+  it('assembles live trace deltas and replaces them with the authoritative final trace', () => {
+    const run = emptyRun('d-delta', SOURCE);
+    const events = runEvents(run.runId);
+    applyEvent(run, events[1]!);
+    const trace = events[5] as Extract<RunEvent, { type: 'trace' }>;
+    const steps = Buffer.from(trace.steps, 'base64');
+    applyEvent(run, { ...trace, partial: true, offset: 0, steps: steps.subarray(0, 3 * 16).toString('base64'), scopes: trace.scopes.map(s => ({ ...s, last: s.first })) });
+    expect(run.trace?.count).toBe(3);
+    applyEvent(run, { ...trace, partial: true, offset: 3, steps: steps.subarray(3 * 16).toString('base64'), scopes: [] });
+    expect(run.trace?.count).toBe(6);
+    expect(run.trace?.location(4)?.range[0]).toBe(3);
+    applyEvent(run, trace);
+    expect(run.trace?.count).toBe(6);
+    expect(run.partialSteps).toBeUndefined();
+  });
   it('loads discovered dependency sources for language checking without navigating to them', () => {
     const { feed, code, link } = setup();
     const dependency = { ...(runEvents('w-1')[1] as Extract<RunEvent, { type: 'file.instrumented' }>), seq: 20, fileId: 2, path: '/w/worker.ts' };
@@ -147,7 +169,7 @@ describe('PageHost', () => {
   it('uses the selected debug file and local function ranges, excluding the module wrapper', async () => {
     const { host, link, feed, code } = setup();
     feed({ type: 'debug.begin', runId: 'd-files', content: SOURCE });
-    feed({ type: 'debug.event', event: { type: 'file.instrumented', runId: 'd-files', seq: 1, fileId: 2, path: '/w/worker.ts', rangeBase: 100, ranges: [[1, 0, 9, 0], [1, 0, 8, 1]], statements: [1], functions: [{ rid: 0, name: '<module>', bodyRange: [1, 0, 9, 0] }, { rid: 1, name: 'processNext', bodyRange: [1, 0, 8, 1] }], magic: [] } });
+    feed({ type: 'debug.event', event: { type: 'file.instrumented', runId: 'd-files', seq: 1, fileId: 2, path: '/w/worker.ts', rangeBase: 100, ranges: [[1, 0, 9, 0], [1, 0, 8, 1], [4, 12, 4, 28]], statements: [1], functions: [{ rid: 0, name: '<module>', bodyRange: [1, 0, 9, 0] }, { rid: 1, name: 'processNext', bodyRange: [1, 0, 8, 1] }, { rid: 2, name: '<arrow>', bodyRange: [4, 12, 4, 28] }], magic: [] } });
     link.replies.push({ type: 'debug.result', id: 1, locals: [{ name: 'queue', text: '[1, 2, 3]' }] });
     feed({ type: 'debug.event', event: { type: 'debug.paused', runId: 'd-files', seq: 2, step: 4, rid: 101, fileId: 2, line: 4, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'processNext', fileId: 2, line: 4 }] } });
     feed({ type: 'file', file: { path: '/w/worker.ts', displayName: 'worker.ts', language: 'typescript', content: 'function processNext(queue) {\n\n\n queue.shift();\n}' } });
@@ -155,7 +177,7 @@ describe('PageHost', () => {
     host.render();
     expect(code.shown).toBe('/w/worker.ts');
     expect(code.last?.paused).toBe(4);
-    expect(code.last?.liveValues).toMatchObject({ start: 1, end: 8, excluded: [], locals: [{ name: 'queue', text: '[1, 2, 3]' }] });
+    expect(code.last?.liveValues).toMatchObject({ start: 1, end: 8, excluded: [[4, 4]], locals: [{ name: 'queue', text: '[1, 2, 3]' }] });
   });
 
   it('feeds the panel what the extension would: init, entries, timeline, walkthrough, exceptions', () => {
@@ -229,7 +251,7 @@ describe('PageHost', () => {
   it('declares WebMCP tools that run the same commands', async () => {
     const { host, link } = setup();
     const tools = webMcpTools(host, link);
-    expect(tools.map((t) => t.name)).toEqual(['tracelight_state', 'tracelight_goto', 'tracelight_step', 'tracelight_line', 'tracelight_say', 'tracelight_values', 'tracelight_peek', 'tracelight_start', 'tracelight_stop', 'tracelight_run', 'tracelight_eval', 'tracelight_var', 'tracelight_why', 'tracelight_watch', 'tracelight_breakpoint', 'tracelight_story', 'tracelight_profile', 'tracelight_debug']);
+    expect(tools.map((t) => t.name)).toEqual(['tracelight_scratchpad', 'tracelight_wait_pause', 'tracelight_state', 'tracelight_goto', 'tracelight_step', 'tracelight_line', 'tracelight_say', 'tracelight_values', 'tracelight_peek', 'tracelight_inspect', 'tracelight_start', 'tracelight_stop', 'tracelight_run', 'tracelight_eval', 'tracelight_var', 'tracelight_why', 'tracelight_watch', 'tracelight_breakpoint', 'tracelight_story', 'tracelight_profile', 'tracelight_debug']);
     const step = tools.find((t) => t.name === 'tracelight_step')!;
     const out = await step.execute({ kind: 'into' });
     expect(JSON.parse(out.content[0]!.text)).toMatchObject({ moved: true });
@@ -348,8 +370,12 @@ describe('PageHost views', () => {
     const [, file] = runEvents('d-1');
     feed({ type: 'debug.event', event: file! });
     link.replies.push({ type: 'debug.result', id: 1, locals: [{ name: 'a', text: '1' }, { name: 'b', text: '2' }] });
+    const baseline = await host.waitForPause();
+    const nextPause = runAgentCommand(host, link, { action: 'waitPause', after: baseline.cursor, timeoutMs: 500 });
     feed({ type: 'debug.event', event: { runId: 'd-1', seq: 3, type: 'debug.paused', step: 3, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'breakpoint', breakpoint: { path: MAIN.path, line: 2 }, stack: [{ frameId: 0, name: 'add', fileId: 1, line: 2 }, { frameId: 1, name: '<module>', fileId: 1, line: 5 }] } });
     for (let i = 0; i < 5; i++) await tick();
+    expect(await nextPause).toMatchObject({ changed: true, cursor: baseline.cursor + 1, state: { paused: true, locals: [{ name: 'a', text: '1' }, { name: 'b', text: '2' }] } });
+    expect(await host.waitForPause(baseline.cursor + 1, 0)).toEqual({ changed: false, cursor: baseline.cursor + 1 });
     expect(link.debugRequests[0]).toEqual({ type: 'debug', runId: 'd-1', action: 'locals' });
     const st = last(panel, 'debug.session')!.state!;
     expect(st).toMatchObject({ paused: true, reasonText: 'breakpoint', location: 'demo.py:2', stack: [{ name: 'add', file: 'demo.py', line: 2 }, { name: '<module>', file: 'demo.py', line: 5 }], locals: [{ name: 'a', text: '1' }, { name: 'b', text: '2' }] });
@@ -358,6 +384,8 @@ describe('PageHost views', () => {
     expect(code.last?.inline.size).toBe(0);
     expect(code.last?.coverage.size).toBe(0);
     expect(code.last?.liveValues?.locals).toEqual(st.locals);
+    expect(host.debug.history).toMatchObject([{ step: 3, path: MAIN.path, line: 2, name: 'add', reason: 'breakpoint', locals: [{ name: 'a', text: '1' }, { name: 'b', text: '2' }] }]);
+    expect(code.last?.historyValues?.[0]?.snapshot).toBe('d-1:3:0');
     const requestCount = link.debugRequests.length;
     expect(await runAgentCommand(host, link, { action: 'values', mode: 'selected', names: ['a'], file: 'demo.py', line: 2 })).toMatchObject({ observed: { runId: 'd-1', step: 3, frame: 0, file: MAIN.path }, shown: [{ name: 'a', text: '1' }] });
     expect(code.last?.liveValues?.ghostNames).toEqual(['a']);
@@ -370,12 +398,41 @@ describe('PageHost views', () => {
     const badInspect = await inspect.execute({ name: 'a + b' });
     expect(badInspect.isError).toBe(true);
     expect(link.debugRequests.length).toBe(requestCount);
+    const cardTool = webMcpTools(host, link).find(t => t.name === 'tracelight_inspect')!;
+    const card = await cardTool.execute({ name: 'a', open: true });
+    expect(JSON.parse(card.content[0]!.text)).toMatchObject({ name: 'a', open: true, visible: true, observed: { runId: 'd-1', step: 3, frame: 0, line: 2 } });
+    expect(code.revealed.at(-1)).toBe(2);
+    expect(link.debugRequests.length).toBe(requestCount);
+    expect((await cardTool.execute({ name: 'a + b', open: true })).isError).toBe(true);
+    const batch = await cardTool.execute({ names: ['a', 'b'], open: true });
+    expect(JSON.parse(batch.content[0]!.text)).toMatchObject({ names: ['a', 'b'], open: true, values: [{ name: 'a', visible: true }, { name: 'b', visible: true }] });
+    expect(code.cardUpdates).toEqual([['a', 'b']]);
+    expect(link.debugRequests.length).toBe(requestCount);
+    expect((await cardTool.execute({ names: ['a', 'missing'], open: true })).isError).toBe(true);
+    expect(code.cardUpdates).toHaveLength(1);
+    code.valueUiState = () => [{ name: 'a', open: true, visible: true }, { name: 'b', open: true, visible: true }];
+    host.navigateSource('/w/callback.js', 12);
+    feed({ type: 'file', file: { path: '/w/callback.js', displayName: 'callback.js', language: 'javascript', content: '\n'.repeat(11) + 'event => process(event)' } });
+    expect(code.shownPath()).toBe('/w/callback.js');
+    expect(code.revealed.at(-1)).toBe(12);
+    await host.returnToPause();
+    expect(code.shownPath()).toBe(MAIN.path);
+    expect(code.revealed.at(-1)).toBe(2);
+    expect(code.last?.paused).toBe(2);
+    expect(code.cardUpdates.at(-1)).toEqual(['a', 'b']);
+    expect(link.debugRequests.length).toBe(requestCount);
+    const bag = { runtimeKey: 'a', data: { id: 'a', type: 'number', value: '1', queryPath: [] } };
+    host.debug.locals!.locals[0]!.valueBag = bag;
+    const context = await runAgentCommand(host, link, { action: 'debug', op: 'state' });
+    expect(context).toMatchObject({ runId: 'd-1', step: 3, frame: 0, source: [{ line: 1, text: 'def add(a, b):' }, { line: 2, text: '    s = a + b' }, { line: 3, text: '    return s' }, { line: 4, text: '' }, { line: 5, text: 'x = add(1, 2)' }], locals: [{ name: 'a', text: '1', valueBag: bag }, { name: 'b', text: '2' }] });
+    expect(link.debugRequests.length).toBe(requestCount);
     await expect(runAgentCommand(host, link, { action: 'values', mode: 'selected', names: ['a + b'] })).rejects.toThrow('not in the current paused frame');
     expect(panel).toContainEqual({ type: 'showView', view: 'debug' });
     feed({ type: 'debug.event', event: { runId: 'd-1', seq: 4, type: 'debug.resumed', step: 3, action: 'step', kind: 'over' } });
     host.render();
     expect(code.last?.liveValues).toBeUndefined();
     expect(code.last?.inline.size).toBe(0);
+    expect(host.debug.history[0]?.locals).toEqual([{ name: 'a', text: '1' }, { name: 'b', text: '2' }]);
     // A resume removes live values but still hides the earlier recording until the run ends.
     feed({ type: 'debug.event', event: { runId: 'd-1', seq: 5, type: 'debug.paused', step: 4, rid: 3, fileId: 1, line: 3, scopeId: 1, depth: 1, reason: 'step', stack: [{ frameId: 0, name: 'add', fileId: 1, line: 3 }] } });
     link.replies.push({ type: 'debug.result', id: 2 });
@@ -386,7 +443,10 @@ describe('PageHost views', () => {
     expect(last(panel, 'debug.session')!.state).toMatchObject({ running: false, paused: false, reasonText: 'ended' });
     host.render();
     expect(code.last?.liveValues).toBeUndefined();
-    expect(code.last?.inline.get(6)).toBe('3');
+    expect(code.last?.inline.get(6)).toBeUndefined();
+    expect(host.debug.history).toHaveLength(2);
+    feed({ type: 'debug.begin', runId: 'd-2', content: SOURCE });
+    expect(host.debug.history).toEqual([]);
   });
 
   it('starts the live debugger at the first breakpoint, at the first statement only when none can hit', () => {
@@ -438,12 +498,65 @@ describe('PageHost views', () => {
     expect(v.changes).toEqual([expect.objectContaining({ step: 3, line: 2, text: '3' })]);
     const why = (await runAgentCommand(host, link, { action: 'why', name: 's', step: 4 })) as { root: { name: string } };
     expect(why.root.name).toBe('s');
-    expect(await runAgentCommand(host, link, { action: 'breakpoint', line: 3 })).toEqual({ line: 3, on: true, breakpoints: [{ line: 3 }] });
-    expect(await runAgentCommand(host, link, { action: 'breakpoint', line: 3 })).toEqual({ line: 3, on: false, breakpoints: [] });
+    expect(await runAgentCommand(host, link, { action: 'breakpoint', line: 3 })).toEqual({ file: MAIN.path, line: 3, on: true, breakpoints: [{ file: MAIN.path, line: 3 }] });
+    expect(await runAgentCommand(host, link, { action: 'breakpoint', line: 3 })).toEqual({ file: MAIN.path, line: 3, on: false, breakpoints: [] });
   });
 });
 
 describe('PageHost: the views VS Code opens as editors', () => {
+  it('follows this live execution, reviews earlier steps explicitly, and returns to its pause without executing', async () => {
+    const { host, code, feed, link } = setup();
+    let storyVisible = false;
+    let storyFile: BridgeFile | undefined;
+    let storyDecorations: CodeDecorations | undefined;
+    Object.assign(code, {
+      showStory: (file: BridgeFile) => { storyFile = file; storyVisible = true; },
+      storyShown: () => storyVisible,
+      renderStory: (decorations: CodeDecorations) => { storyDecorations = decorations; },
+      revealStory: () => {},
+      closeStory: () => { storyVisible = false; },
+    });
+    feed({ type: 'debug.begin', runId: 'd-history', content: SOURCE });
+    feed({ type: 'debug.event', event: runEvents('d-history')[1]! });
+    feed({ type: 'debug.event', event: runEvents('d-history')[5]! });
+    feed({ type: 'debug.event', event: { runId: 'd-history', seq: 3, type: 'debug.paused', step: 3, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'add', fileId: 1, line: 2 }] } });
+    await tick();
+    const requests = link.debugRequests.length;
+    expect(await host.openStory()).toBe(true);
+    host.goto(3);
+    expect(code.shown).toBe(MAIN.path);
+    expect(storyFile?.path).toBe(STORY_PATH);
+    expect(storyDecorations?.box).not.toBeNull();
+    expect(storyVisible).toBe(true);
+    expect(host.debug.paused?.step).toBe(3);
+    expect(link.debugRequests.length).toBe(requests);
+    expect(host.run?.runId).toBe('d-history');
+    expect(host.historyFollowing).toBe(true);
+    host.goto(1);
+    expect(host.historyFollowing).toBe(false);
+    feed({ type: 'debug.event', event: { runId: 'd-history', seq: 10, type: 'debug.paused', step: 4, rid: 3, fileId: 1, line: 3, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'add', fileId: 1, line: 3 }] } });
+    await tick();
+    expect(host.nav.step).toBe(1);
+    host.followLiveHistory();
+    await tick();
+    expect(host.nav.step).toBe(4);
+    expect(host.historyFollowing).toBe(true);
+    host.closeStory();
+    expect(storyVisible).toBe(false);
+    expect(code.shown).toBe(MAIN.path);
+    expect(code.revealed.at(-1)).toBe(3);
+    expect(host.debug.paused?.step).toBe(4);
+    expect(link.debugRequests.filter(r => r.type === 'debug' && 'action' in r && r.action !== 'locals')).toHaveLength(0);
+  });
+
+  it('never opens a previous recording as the history of an unrecorded live run', async () => {
+    const { host, feed } = setup();
+    feed({ type: 'debug.begin', runId: 'd-no-record', content: SOURCE });
+    expect(await host.openStory()).toBe(false);
+    expect(host.trace).toBeNull();
+    expect(host.run?.runId).toBe('d-no-record');
+  });
+
   it('shows the Code Story in the code pane, following the Time Machine step', async () => {
     const { host, code } = setup();
     expect(await host.openStory()).toBe(true);

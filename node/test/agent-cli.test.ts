@@ -60,6 +60,7 @@ before(() => {
   saved = join(dir, 'main.json');
   kept = join(dir, 'k.json');
   save('main.ts', 'main.json');
+  save('main.ts', 'without-locals.json', '--no-locals');
   save('stale.mjs', 'stale.json');
   save('k.mjs', 'k.json', '--keep');
 });
@@ -182,7 +183,7 @@ test('values and find redact secrets', async () => {
 });
 
 test('values on an assignment with nothing logged names the variable for var', async () => {
-  const r = await cli('values', saved, '--line', 'main.ts:8');
+  const r = await cli('values', join(dir, 'without-locals.json'), '--line', 'main.ts:8');
   assert.match(r.out, /^0 values on main\.ts:8\nno value was logged there; `var label` lists every change of it/);
 });
 

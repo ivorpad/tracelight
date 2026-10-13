@@ -24,6 +24,9 @@
     <button id="pkw-tools" type="button" aria-pressed="false">Depurar</button>
   </div>
   <span id="pkw-webmcp" class="pkw-chip" title="This page offers its Time Machine to an agent in the browser as WebMCP tools (tracelight_state, tracelight_step, tracelight_say, ...)" hidden>WebMCP</span>
+  <button id="pkw-story-toggle" class="pkw-text-btn" type="button" title="Show executed code in order" aria-pressed="false" aria-controls="pkw-story-panel"><i class="codicon codicon-book"></i> Code history</button>
+  <button id="pkw-history-toggle" class="pkw-btn" type="button" title="Hide inline values" aria-label="Inline values" aria-pressed="true" aria-controls="pkw-code"><i class="codicon codicon-symbol-variable"></i></button>
+  <button id="pkw-scratch-toggle" class="pkw-text-btn" type="button" title="Experiment with copied inputs"><i class="codicon codicon-edit"></i> Scratchpad</button>
   <span id="pkw-runtime" class="pkw-runtime"></span>
   <span id="pkw-status" class="pkw-dot off"></span>
   <button id="pkw-run" class="pkw-btn" type="button" title="Run again"><i class="codicon codicon-play"></i></button>
@@ -36,6 +39,14 @@
     <div id="pkw-code"></div>
     <div id="pkw-debugpane"></div>
   </section>
+  <div id="pkw-story-split" role="separator" aria-label="Resize code history" aria-orientation="vertical" aria-valuemin="20" aria-valuemax="60" aria-valuenow="32" tabindex="0"></div>
+  <aside id="pkw-story-panel" aria-label="Code history">
+    <div id="pkw-story-notice" class="pkw-story-notice" role="status"></div>
+    <button id="pkw-story-follow" class="pkw-text-btn" type="button" hidden>Return to current pause</button>
+    <div id="pkw-story-code"></div>
+    <div id="pkw-story-controls"></div>
+  </aside>
+  <aside id="pkw-scratchpad" aria-label="Scratchpad" hidden></aside>
   <div id="pkw-split" role="separator" aria-orientation="vertical"></div>
   <section id="pkw-panel"><div class="pkw-recording-notice" role="status">Grabación anterior · estos resultados son de otra ejecución.</div><div id="root"></div></section>
 </main>

@@ -1,5 +1,8 @@
 import { defineConfig } from '@vscode/test-cli';
 import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+const shortTemp = process.platform === 'win32' ? tmpdir() : '/tmp';
 
 // A fresh TRACELIGHT_HOME per run: sessions, the relaunch memory, recent files and the library
 // cache of the test window never meet the user's ~/.tracelight or another e2e run. Short and under
@@ -9,9 +12,10 @@ import { mkdtempSync } from 'node:fs';
 // Note: @vscode/test-electron always passes --disable-workspace-trust, so the untrusted-workspace
 // gate (tracelight.untrustedWorkspaceBehavior) cannot be exercised here.
 export default defineConfig({
+  ...(process.env.TRACELIGHT_TEST_CODE ? { useInstallation: { fromPath: process.env.TRACELIGHT_TEST_CODE } } : {}),
   files: ['test/e2e/tracelight.test.js', 'test/e2e/library-cache.test.js'],
   workspaceFolder: './examples',
   mocha: { ui: 'bdd', timeout: 180_000 },
-  launchArgs: ['--disable-workspace-trust'],
-  env: { TRACELIGHT_E2E: '1', TRACELIGHT_HOME: mkdtempSync('/tmp/tl-e2e-') },
+  launchArgs: ['--disable-workspace-trust', `--user-data-dir=${mkdtempSync(join(shortTemp, 'tl-code-'))}`],
+  env: { TRACELIGHT_E2E: '1', TRACELIGHT_HOME: mkdtempSync(join(shortTemp, 'tl-e2e-')) },
 });

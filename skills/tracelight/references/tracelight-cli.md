@@ -353,7 +353,7 @@ JSON: `{step, file, line, function, statement, error?: {type, message, caught}, 
 
 ## Comparing two runs after an edit
 
-**`diff BEFORE.json AFTER.json [--limit K]`** or **`diff BEFORE.json --live`** answers "what did my
+**`diff BEFORE.json AFTER.json [--limit K] [--ignore NAME]`** or **`diff BEFORE.json --live`** answers "what did my
 edit change": every statement that did something different, with the values it assigned, the arm
 a branch took, how often a loop ran, the calls it made with their arguments, what it printed and
 what it threw. Record the before, edit, then record the after (or let the open session re-run,
@@ -713,3 +713,51 @@ the project's `package.json`, and a `.tracelight` JSON file in the workspace or 
 directory. It loads the workspace's `.env` into the program's environment before those. A CLI run
 reads none of them: pass the environment in the shell, the options as flags. Both read the inline
 config `({ ... })` at the top of the main file.
+
+## Investigate, learn and verify a fix
+
+```sh
+tracelight investigate RUN [--value NAME] [--at STEP]
+tracelight learn RUN [--at STEP] [--prediction TEXT] [--reveal]
+tracelight pin RUN --out PATH
+tracelight verify RUN [--after PATH | --rerun] [--out PATH]
+        [--ignore NAME] [--expect NAME=TEXT] [--test-out PATH]
+```
+
+`investigate` combines variable history, provenance, exceptions and uncovered branches.
+`learn` offers checkpoints with values hidden until `--reveal`; a prediction is kept beside
+what the recording shows. Both report missing or bounded evidence.
+
+`pin` copies a recording to a private file and refuses to overwrite an existing file.
+`verify` compares that baseline with an existing after-run, or explicitly reruns its entry
+with the saved arguments. Recorded HTTP switches to replay. Supply reviewed expectations
+such as `--expect total=42` to check final recorded values. A comparison without expectations
+does not declare the fix correct. A failed expectation returns exit status 1.
+`--test-out` exports a Node regression test for those explicit expectations.
+
+`diff --ignore NAME` and `verify --ignore NAME` omit exact named value/log facts, for example
+a recorded timestamp. They still compare calls, decisions and printed output. Ignored names
+are listed in the report so the comparison's limits remain visible.
+
+```sh
+tracelight run FILE [--cwd DIRECTORY]
+```
+
+`--cwd` sets the project working directory and file-selection root for a file entry.
+
+## Run the normal project command
+
+```sh
+tracelight launch --out DIRECTORY [--cwd DIRECTORY] [--only PATTERN]
+        [--exclude PATTERN] [--http record|replay] -- COMMAND [ARGS...]
+```
+
+For example, `tracelight launch --out ./recordings -- node --test --test-name-pattern checkout test/checkout.test.ts`
+keeps Node's test selection, output, arguments and exit status. `--out` must be a new directory.
+Each observed Node process or worker gets its own recording. `index.json` names them, with the
+process and parent identifiers. Use `story`, `investigate` and other verbs on those recordings.
+The preload is inherited through `NODE_OPTIONS`; `TRACELIGHT_LAUNCH_CONFIG` points it to the
+private launch configuration. Children that replace their environment and test runners that
+execute transformed modules outside Node's load hooks are not automatically recorded.
+Detached processes may finish after the command's index is written. `launch` records execution;
+use `debug` for a live breakpoint session.

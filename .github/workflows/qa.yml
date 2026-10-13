@@ -1,0 +1,29 @@
+name: QA packages
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            node/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix node
+      - run: npm test
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tracelight-${{ runner.os }}-${{ runner.arch }}
+          path: '*.vsix'

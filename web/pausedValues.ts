@@ -2,7 +2,7 @@ import type { LocalVar } from './debugHost';
 import type { ValueNode } from '../src/shared/protocol';
 
 export function runtimeCapped(node?: ValueNode, text = ''): boolean {
-  return !!(node?.capped || node?.cappedProps || node?.cappedElements || /…\(\+\d+ chars\)|\.\.\. \d+ more (?:items|characters)/.test(text));
+  return !!(node?.capped || node?.cappedProps || node?.cappedElements || /…\(\+[\d,]+ chars\)|\.\.\. \d+ more (?:items|characters)/.test(text));
 }
 
 export interface PausedValues {
@@ -74,7 +74,7 @@ export function pausedOccurrences(
       const local = locals.get(r.name);
       if (r.scope < 0 || r.scope !== resolve(r.name)) continue;
       const line = offsets.findIndex((offset) => offset > r.start);
-      if (line < pause.start || line > pause.end || pause.excluded?.some(([a, b]) => a <= line && line <= b)) continue;
+      if (line < pause.start || line > pause.end) continue;
       const unavailable = !local || scopes[r.scope]!.pending?.some(p => p.name === r.name && at < p.until);
       out.push({ line, start: r.start - offsets[line - 1]!, end: r.end - offsets[line - 1]!, local: unavailable ? { name: r.name, text: 'Not available in this pause' } : local!, path: r.path, unavailable: !!unavailable });
     }
@@ -180,13 +180,23 @@ export function prettyPausedText(text: string): string {
     else if (/\s/.test(c)) { if (out && !/\s$/.test(out)) out += ' '; }
     else out += c;
   }
-  return quote ? text : out.trimEnd();
+  return out.trimEnd();
 }
 
-export function pausedHover(local: LocalVar): string {
+/** Bound the popup, keeping the captured text unchanged for expansion and copying. */
+export function pausedHoverPreview(text: string): string {
+  const pretty = prettyPausedText(text);
+  const lines = pretty.split('\n');
+  const shown = lines.slice(0, 10).join('\n');
+  if (shown.length > 600) return shown.slice(0, 599).trimEnd() + '…';
+  return shown + (lines.length > 10 ? '\n…' : '');
+}
+
+export function pausedHover(local: LocalVar, snapshot?: string, command = 'tracelight.inspectPausedValue'): string {
   // A runtime value can contain Markdown. Keep all of it inside an inert code block.
   const runs = local.text.match(/`+/g) ?? [];
   const fence = '`'.repeat(Math.max(3, ...runs.map((r) => r.length + 1)));
-  return `Paused frame · ${local.name}\n\n${fence}javascript\n${prettyPausedText(local.text)}\n${fence}` +
-    (runtimeCapped(local.valueBag?.data, local.text) ? '\n\nRuntime preview is truncated. Expand this variable in the Debugger for available detail.' : '');
+  return `Paused frame · ${local.name}\n\n${fence}javascript\n${pausedHoverPreview(local.text)}\n${fence}` +
+    (runtimeCapped(local.valueBag?.data, local.text) ? '\n\nRuntime preview is truncated.' : '') +
+    (snapshot && local.text !== 'Not available in this pause' ? `\n\n[Expand value in Debugger](command:${command}?${encodeURIComponent(JSON.stringify([{ name: local.name.split('.')[0], snapshot }]))})` : '');
 }

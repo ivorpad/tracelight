@@ -129,3 +129,52 @@ for (const c of [
     });
   });
 }
+
+// Recorded evidence through the real extension host, including failures absorbed by a promise combinator.
+describe('investigation evidence in the editor', function () {
+  this.timeout(180_000);
+  let api, file, doc, session;
+  before(async () => {
+    file = path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, '_e2e_investigation.mjs');
+    fs.writeFileSync(file, [
+      'async function rejected() { await Promise.resolve(); throw new Error("absorbed fixture"); }',
+      'function change() {',
+      '  const state = { total: 1 };',
+      '  const alias = state;',
+      '  alias.total = 3;',
+      '  const total = state.total;',
+      '  return total;',
+      '}',
+      'const total = change();',
+      'const settled = await Promise.allSettled([rejected()]);',
+      'console.log(total, settled[0].status);',
+    ].join('\n'));
+    doc = await vscode.workspace.openTextDocument(file);
+    await vscode.window.showTextDocument(doc);
+    api = vscode.extensions.getExtension(EXT_ID).exports;
+    await vscode.commands.executeCommand(`${BRAND}.startOnCurrentFile`);
+    session = await waitFor(() => api.manager.sessionForDocument(doc), 'an investigation session');
+    await api.waitForIdle(session, 60_000);
+    await vscode.commands.executeCommand(`${BRAND}.recordForInvestigation`);
+    await api.waitForIdle(session, 60_000);
+  });
+  after(() => { api?.manager.stopAll(); fs.rmSync(file, { force: true }); });
+  it('shows alias mutations and their provenance without rerunning', async () => {
+    const history = await api.variableHistory(session, 'state');
+    const last = history.changes.at(-1);
+    assert.match(last.text, /total: 3/);
+    assert.equal(last.line, 5);
+    const why = await api.provenance(session, last.step, 'state');
+    assert.ok(why);
+    assert.ok(JSON.stringify(why).includes('total: 3'));
+    assert.ok(api.graph(session));
+  });
+  it('surfaces absorbed async failures and opens populated Code Story', async () => {
+    const report = api.exceptions(session);
+    assert.ok(report.rows.some(r => r.kind === 'caught' && r.message === 'absorbed fixture'));
+    await vscode.commands.executeCommand(`${BRAND}.viewCodeStory`);
+    const editor = await waitFor(() => vscode.window.visibleTextEditors.find(editor => editor.document.uri.scheme === 'tracelight-code-timeline'), 'Code Story');
+    assert.match(editor.document.getText(), /alias\.total = 3/);
+    await waitFor(() => api.storyValues(editor).length > 0, () => `Code Story values: ${JSON.stringify({ entries: session.state.entries.map(e => ({ text: e.text, step: e.step, rid: e.rid })), mode: vscode.workspace.getConfiguration('tracelight').get('story.values'), count: session.trace.count, content: editor.document.getText().slice(-1500) })}`, 5000);
+  });
+});

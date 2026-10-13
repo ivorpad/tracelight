@@ -15,7 +15,7 @@ const ROOT = path.resolve(__dirname, '../..');
 const ENTRY = path.join(ROOT, 'node/bin/tracelight.mjs');
 const haveRuntime = fs.existsSync(path.join(ROOT, 'node/node_modules/oxc-parser'));
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'pk-dbgjs-'));
-const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pk-dbgjs-ws-'));
+const DIR = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pk-dbgjs-ws-')));
 const FILE = path.join(DIR, 'app.mjs');
 const SOURCE = [
   'function add(a, b) {',

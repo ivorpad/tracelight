@@ -95,7 +95,7 @@ const INSPECT = {
 } as const;
 
 /** async_hooks bookkeeping Node stores on promises and resources while AsyncLocalStorage is active */
-const ASYNC_SYMBOLS = /,? ?\[Symbol\((?:async_id_symbol|trigger_async_id_symbol|kResourceStore)\)\]: [^,} ]*/g;
+const ASYNC_SYMBOLS = /,? ?(?:\[)?Symbol\((?:async_id_symbol|trigger_async_id_symbol|kResourceStore)\)(?:\])?: [^,} ]*/g;
 
 /** The full display text of a value, unbounded (the caller cuts it). Never throws. */
 export function displayText(v: unknown): string {
@@ -112,7 +112,7 @@ export function displayText(v: unknown): string {
   }
   try {
     const text = inspect(v, INSPECT);
-    return text.includes('[Symbol(') ? text.replace(ASYNC_SYMBOLS, '').replace(/\{ \}/g, '{}') : text;
+    return text.includes('Symbol(') ? text.replace(ASYNC_SYMBOLS, '').replace(/\{ \}/g, '{}') : text;
   } catch {
     try {
       return `<${Object.prototype.toString.call(v).slice(8, -1)}>`;

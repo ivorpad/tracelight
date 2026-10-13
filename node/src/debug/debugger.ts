@@ -23,7 +23,7 @@
  * scopes from the trace; without: per-call ids and frame exits) are the same two.
  */
 import { parseSync } from 'oxc-parser';
-import { resolveBreakpoint, type DebugFile } from './breakpoints.ts';
+import { real, resolveBreakpoint, type DebugFile } from './breakpoints.ts';
 import { describeFallback, type Described } from './describe.ts';
 
 export const STEP_KINDS = ['into', 'over', 'out'] as const;
@@ -236,7 +236,7 @@ export class Debugger {
 
   /** the line breakpoints as given, for a worker thread's own V8 breakpoints (a worker runs its files uninstrumented) */
   lineBreakpoints(): { path: string; line: number; condition: string | null; echo: Record<string, unknown> }[] {
-    return this.breakpoints.filter((bp) => !bp.function && !bp.error && bp.path && bp.line > 0).map((bp) => ({ path: bp.path, line: bp.line, condition: bp.condition, echo: bp.toJSON() }));
+    return this.breakpoints.filter((bp) => !bp.function && !bp.error && bp.path && bp.line > 0).map((bp) => ({ path: real(bp.path), line: bp.line, condition: bp.condition, echo: bp.toJSON() }));
   }
 
   /** what a recorded worker thread traps on itself (threads/worker.ts): it resolves the names against its own files */

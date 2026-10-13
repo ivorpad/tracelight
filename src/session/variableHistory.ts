@@ -92,6 +92,7 @@ interface LocalRecord {
   step: number;
   scopeId: number;
   text: string;
+  objectId?: number;
 }
 
 export class History {
@@ -108,7 +109,7 @@ export class History {
         if (!ch.name) continue;
         let list = this.localsByName.get(ch.name);
         if (!list) this.localsByName.set(ch.name, (list = []));
-        list.push({ step: entry.step, scopeId: entry.scopeId, text: ch.text });
+        list.push({ step: entry.step, scopeId: entry.scopeId, text: ch.text, objectId: ch.objectId });
       }
     }
     for (const list of this.localsByName.values()) list.sort((a, b) => a.step - b.step);
@@ -174,6 +175,15 @@ export class History {
     return !!here && !!there && there.fileId === here.fileId && here.range[0] <= there.range[0] && there.range[0] <= binding.loop;
   }
 
+  private objectAt(name: string, step: number, scope: number): number | undefined {
+    const records = this.localsByName.get(name) ?? [];
+    for (let i = records.length - 1; i >= 0; i--) {
+      const record = records[i]!;
+      if (record.step <= step && record.scopeId === scope) return record.objectId;
+    }
+    return undefined;
+  }
+
   /** The step whose statement made the change observed at `observed`. */
   private attribute(observed: number, scopeId: number, changed: string): number {
     const own = this.bindingAt(observed);
@@ -182,6 +192,14 @@ export class History {
     if (prev >= 0) {
       const binding = this.bindingAt(prev);
       if (binding && binding.assigns.some((a) => matchesName(a, changed))) return prev;
+      const id = this.objectAt(changed, observed, scopeId);
+      if (id !== undefined && this.objectAt(changed, prev, scopeId) === id && binding) {
+        const targets = binding.assigns;
+        if (targets.some(target => {
+          const root = /^[A-Za-z_$][\w$]*/.exec(target)?.[0];
+          return root && this.objectAt(root, prev, scopeId) === id;
+        })) return prev;
+      }
     }
     return observed;
   }

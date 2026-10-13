@@ -16,6 +16,7 @@ registerVerb({
     p.addArgument('--live', { action: 'store_true', help: 'the open VS Code session is the after (setting tracelight.agentAccess)' });
     p.addArgument('--session', { metavar: 'NAME|PATH', help: "with --live: the session's file name or descriptor path, when more than one is open" });
     p.addArgument('--limit', { type: 'int', default: 40, metavar: 'K', help: 'at most this many statements (default 40)' });
+    p.addArgument('--ignore', { action: 'append', default: [], metavar: 'NAME', help: 'ignore value or log facts with this exact name (repeatable); decisions and errors remain compared' });
     p.setDefaults({ run: null });
   },
   // the live session is opened the way `walkthrough --live` opens it

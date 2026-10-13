@@ -576,6 +576,31 @@
         "title": "Show Debugger",
         "category": "Tracelight",
         "icon": "$(debug-alt)"
+      },
+      {
+        "command": "tracelight.recordForInvestigation",
+        "title": "Record for Investigation",
+        "category": "Tracelight"
+      },
+      {
+        "command": "tracelight.investigateValue",
+        "title": "Investigate a Value",
+        "category": "Tracelight"
+      },
+      {
+        "command": "tracelight.learnRun",
+        "title": "Learn from This Run",
+        "category": "Tracelight"
+      },
+      {
+        "command": "tracelight.pinRun",
+        "title": "Pin Run as Baseline",
+        "category": "Tracelight"
+      },
+      {
+        "command": "tracelight.verifyFix",
+        "title": "Verify Fix against Baseline",
+        "category": "Tracelight"
       }
     ],
     "menus": {
@@ -1719,7 +1744,7 @@
             "null"
           ],
           "default": null,
-          "markdownDescription": "Characters one recorded value keeps in its inline text. Unset: 120 for a local variable, 200 for a logged value. `0` keeps the whole value up to a ceiling of 1,000,000 characters. A cut value ends in `…(+N chars)`. Same as `tracelight run --max-value-chars`."
+          "markdownDescription": "Characters one recorded value keeps in its inline text. Unset: 120 for a local variable, 200 for a logged value. `0` keeps the whole value up to a ceiling of 1,000,000 characters. A cut value ends in `\u2026(+N chars)`. Same as `tracelight run --max-value-chars`."
         },
         "tracelight.timeMachine.autoLog": {
           "type": "boolean",
@@ -1884,7 +1909,7 @@
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "tracelight-web": "node dist/web/server.js",
-    "package": "node esbuild.mjs --production && vsce package --no-dependencies",
+    "package": "node scripts/package.mjs",
     "typecheck": "tsc --noEmit -p .",
     "test": "npm run typecheck && vitest run && npm run test:node",
     "test:node": "npm test --prefix node",

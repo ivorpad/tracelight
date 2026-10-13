@@ -36,6 +36,7 @@ import { completionsFor, type Completion } from './complete.ts';
 import { showsValue } from './repl.ts';
 import { predict, regionsOf, type FrameView, type Regions, type Verdict } from './predict.ts';
 import { expressionName } from './describe.ts';
+import { functionSourceAt } from './functionSource.ts';
 import { MASK, secrets } from '../secrets.ts';
 
 export interface AgentData {
@@ -221,7 +222,32 @@ async function describe(remote: Remote, name: string): Promise<{ text: string; v
     arguments: [argOf(remote), { value: name }], returnByValue: true, silent: true,
   });
   if (r.exceptionDetails) return { text: String(r.exceptionDetails.exception?.description ?? 'error').split('\n')[0]!, valueBag: null };
-  return r.result.value;
+  const described = r.result.value;
+  if (remote.type === 'function' && remote.objectId && described.valueBag?.data) {
+    const node = described.valueBag.data;
+    if (remote.description) {
+      const source = secrets.scrub(remote.description);
+      node.functionSource = source.slice(0, 2000);
+      if (source.length > 2000) node.functionSourceCapped = true;
+    }
+    try {
+      const properties = await post('Runtime.getProperties', { objectId: remote.objectId, ownProperties: true });
+      const loc = properties.internalProperties?.find((p: any) => p.name === '[[FunctionLocation]]')?.value?.value;
+      const path = loc && urlPath(scriptUrls.get(loc.scriptId) ?? '');
+      if (path) {
+        node.functionLocation = { path, line: loc.lineNumber + 1, column: (loc.columnNumber ?? 0) + 1 };
+        // Runtime identity supplies the location. Show the corresponding original
+        // callback rather than the tracing wrappers in V8's description.
+        const original = functionSourceAt(path, fs.readFileSync(path, 'utf8'), loc.lineNumber + 1);
+        if (original) {
+          const source = secrets.scrub(original);
+          node.functionSource = source.slice(0, 2000);
+          node.functionSourceCapped = source.length > 2000;
+        }
+      }
+    } catch { /* Native or bound functions may have no source location. */ }
+  }
+  return described;
 }
 
 async function textOf(remote: Remote, name: string): Promise<string> {

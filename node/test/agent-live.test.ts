@@ -268,7 +268,7 @@ async function newBridge(token?: string, events: Msg[] = []): Promise<FakeBridge
 }
 
 beforeEach(async () => {
-  const root = mkdtempSync(join(tmpdir(), 'agent-live-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'agent-live-')));
   sessions = join(root, 'home', 'sessions');
   mkdirSync(sessions, { recursive: true });
   work = join(root, 'work');
@@ -754,7 +754,7 @@ test('the three routes: a matching debug socket, a run socket, else the URI', as
     const found = await startViaUri(launch, null, { timeout: 10 });
     assert.equal(found.kind, 'debug');
     assert.ok(readFileSync(record, 'utf8').startsWith('vscode://ivor.tracelight/debug?'));
-    process.env[`${ENV}CODE`] = '/bin/true';
+    process.env[`${ENV}CODE`] = process.platform === 'darwin' ? '/usr/bin/true' : '/bin/true';
     rmSync(join(sessions, '1-9.json'));
     await assert.rejects(startViaUri(launch, null, { timeout: 0.5 }), (e: AgentError) => /did not start a debug session for app\.ts/.test(e.message) && e.hint!.startsWith('look at the VS Code window first') && e.hint!.includes(`\`${NAME} state --live\` is the next command`));
   } finally {

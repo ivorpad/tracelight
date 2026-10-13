@@ -18,7 +18,7 @@
  * extension and the skill read.
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, writeFileSync, realpathSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { instrument } from './instrument.ts';
 import { ENV, NAME, RUNTIME_VERSION } from './protocol.ts';
@@ -36,6 +36,8 @@ type Msg = Record<string, any>;
 
 export interface RunArgs {
   file: string;
+  cwd?: string;
+  workspaceRoot?: string;
   save?: string;
   json: boolean;
   timeoutMs: number;
@@ -87,6 +89,7 @@ function parseRunArgs(args: string[]): RunArgs {
     else if (a === '--trace-context') out.traceContext = Number(args[++i]);
     else if (a === '--watch') (out.watch ??= []).push(args[++i]!);
     else if (a === '--instrumented') out.instrumented = true;
+    else if (a === '--cwd') out.cwd = resolve(args[++i]!);
     else if (a === '--node') out.node = args[++i];
     else if (!out.file) out.file = a;
     else out.argv.push(a);
@@ -107,7 +110,7 @@ export function buildRequest(path: string, content: string, a: Partial<RunArgs>,
   const mode = a.mode && a.mode !== 'normal' ? a.mode : undefined;
   if (a.recordLocals ?? !!a.save) config.recordLocals = true;
   if (a.http && a.http !== 'off') config.http = a.http;
-  const req: Msg = { type: 'run', id: 1, runId, file: { path, displayName: path.split('/').pop(), content }, workspaceRoot: dirname(path), cwd: dirname(path), argv: a.argv ?? [], env: {}, config, ...(mode ? { mode } : {}) };
+  const req: Msg = { type: 'run', id: 1, runId, file: { path, displayName: path.split('/').pop(), content }, workspaceRoot: a.workspaceRoot ?? a.cwd ?? dirname(path), cwd: a.cwd ?? dirname(path), argv: a.argv ?? [], env: {}, config, ...(mode ? { mode } : {}) };
   if (a.watch?.length) req.watch = a.watch.map((exp, i) => ({ id: `w${i}`, exp }));
   if (a.traceContext !== undefined) req.traceContext = { step: a.traceContext, prefetch: 10 };
   if (a.node) req.node = a.node;
@@ -146,7 +149,7 @@ function display(path: string, root: string): string {
 
 /** run `a.file` once and, with `a.save`, write the saved run; the MCP server's `tracelight_run` too */
 export async function recordRun(a: RunArgs): Promise<{ meta: Msg; events: Msg[]; finished: Msg; files: Msg[]; request: Msg }> {
-  const path = resolve(a.file);
+  const path = realpathSync(resolve(a.file));
   const content = readFileSync(path, 'utf8');
   const runId = `cli-${Date.now()}`;
   const request = buildRequest(path, content, a, runId);
@@ -183,11 +186,12 @@ export async function recordRun(a: RunArgs): Promise<{ meta: Msg; events: Msg[];
     language: 'javascript',
     node: ready.nodeVersion ?? process.versions.node,
     python: ready.nodeVersion ?? process.versions.node,
-    executable: process.execPath,
+    executable: a.node ?? process.execPath,
     runId,
     file: path,
     workspaceRoot: request.workspaceRoot,
     argv: request.argv,
+    cwd: request.cwd,
     config: request.config,
     started: started.toISOString().replace(/\.\d+Z$/, '+00:00'),
     durationMs: finished.durationMs,
@@ -316,6 +320,8 @@ async function command(argv: string[]): Promise<number> {
     case 'serve':
       await new Runner().serve();
       return 0;
+    case 'launch':
+      return (await import('./launch.ts')).launch(argv.slice(1));
     case 'run':
       return cmdRun(rest);
     case 'instrument':

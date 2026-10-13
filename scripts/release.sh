@@ -25,7 +25,7 @@ fi
 
 VERSION=$(python3 scripts/version.py "$@" --next)
 TAG="v$VERSION"
-VSIX="tracelight-$VERSION.vsix"
+VSIX=""
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   echo "release: $TAG already exists. Force a level or a number to go past it." >&2
   exit 1
@@ -53,8 +53,8 @@ else
 fi
 
 echo "==> build"
-node esbuild.mjs --production
-./node_modules/.bin/vsce package --no-dependencies
+node scripts/package.mjs
+VSIX=$(node scripts/package.mjs --name)
 
 echo "==> install"
 code --install-extension "$PWD/$VSIX" --force

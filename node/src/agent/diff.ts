@@ -261,13 +261,15 @@ function channelOrder(x: Channel, y: Channel): number {
   return x.length - y.length;
 }
 
-export async function diffSides(a: Side, b: Side, opts: { limit?: number } = {}): Promise<Msg> {
+export async function diffSides(a: Side, b: Side, opts: { limit?: number; ignore?: string[] } = {}): Promise<Msg> {
   const limit = opts.limit ?? 40;
   const rawA = await a.collect();
   const rawB = await b.collect();
   const withLocals = a.recordedLocals && b.recordedLocals;
-  const factsA = comparable(rawA, withLocals);
-  const factsB = comparable(rawB, withLocals);
+  const ignored = new Set(opts.ignore ?? []);
+  const keep = (fact: Msg): boolean => !(['value', 'log'].includes(fact.channel[0]) && ignored.has(fact.channel[1]));
+  const factsA = comparable(rawA, withLocals).filter(keep);
+  const factsB = comparable(rawB, withLocals).filter(keep);
   for (const side of [a, b]) if (!side.recordedLocals) side.notes.push(localsNote(side));
   const entries: Msg[] = [];
   const indexA = new Map<string, number>();
@@ -349,7 +351,7 @@ export async function diffSides(a: Side, b: Side, opts: { limit?: number } = {})
     a: { run: a.label, file: a.main, count: a.count, exitCode: a.exitCode },
     b: { run: b.label, file: b.main, count: b.count, exitCode: b.exitCode },
     matching: { same: counts.same, edited: counts.edited, added: counts.added, removed: counts.removed },
-    notes: [...a.notes, ...b.notes],
+    notes: [...a.notes, ...b.notes, ...(ignored.size ? ['Ignored value/log names: ' + [...ignored].join(', ') + '. Calls, printed output and decisions are still compared.'] : [])],
     firstDifference: first,
     total: changed.length,
     shown: Math.min(changed.length, limit),
@@ -414,10 +416,10 @@ export async function openPair(args: Msg, openLive: (file: string | null) => Pro
 /** `source` is the pair `openPair` made, or (in the shell) the live session as the after */
 export async function diffCommand(args: Msg, source: unknown): Promise<Msg> {
   const limit = Math.max(1, Number(args.limit ?? 40) || 40);
-  if (source instanceof DiffPair) return diffSides(source.a, source.b, { limit });
+  if (source instanceof DiffPair) return diffSides(source.a, source.b, { limit, ignore: args.ignore ?? [] });
   const runs: string[] = (args.runs ?? []).filter(Boolean).map(String);
   if (runs.length !== 1) throw new AgentError('in the shell, diff takes one saved run, the before; the live session is the after', 'e.g. `diff before.json`');
-  return diffSides(await Side.open('a', runs[0]!, new SavedRun(runs[0]!)), await Side.open('b', '--live', source as RunSource), { limit });
+  return diffSides(await Side.open('a', runs[0]!, new SavedRun(runs[0]!)), await Side.open('b', '--live', source as RunSource), { limit, ignore: args.ignore ?? [] });
 }
 
 // -- text -----------------------------------------------------------------------------------------------------

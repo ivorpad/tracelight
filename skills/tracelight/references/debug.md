@@ -151,8 +151,9 @@ the same words without `--live`, one connection instead of a new Node process pe
 
 When the person watches a browser rather than their editor, or VS Code is not the place to pause
 (another person's window, a machine without it), the browser page has a debugger of its own. It
-runs the file for real on a second runtime, records nothing, and shows each stop in the page with
-the stack and the variables. [browser.md](browser.md) has the commands and their replies.
+runs the file for real on a second runtime, records that same execution, and shows each stop
+with its stack and variables. Code history follows the pause, with explicit review of earlier
+recorded events. [browser.md](browser.md) has the commands and their replies.
 
 ```sh
 tracelight web app.ts --port 4790 --open          # in the background; the person opens the page
@@ -166,7 +167,7 @@ tracelight web ctl --port 4790 debug stop
 
 It starts like the VS Code debugger (to the first breakpoint, or the first statement when none
 is set), and `ctl eval` at a pause runs in the paused frame. It differs in what it lacks: no
-`exec`, break-when watch, function breakpoint or recording, and a pause request on a program that
+`exec`, break-when watch or function breakpoint, and a pause request on a program that
 is already paused waits 10 seconds. Breakpoints are lines of the main file. Finish clean there too:
 `break LINE off` for each line you set, `debug stop`, and stop the page if nobody uses it.
 

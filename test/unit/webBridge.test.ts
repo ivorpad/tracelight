@@ -94,6 +94,7 @@ describe('web bridge helpers', () => {
     expect(parseCtl(['profile'])).toEqual({ action: 'profile' });
     expect(parseCtl(['inspect', 'open', 'queue'])).toEqual({ action: 'inspect', name: 'queue', open: true });
     expect(parseCtl(['inspect', 'close', 'queue'])).toEqual({ action: 'inspect', name: 'queue', open: false });
+    expect(parseCtl(['inspect', 'open', 'message', 'config', 'emit'])).toEqual({ action: 'inspect', name: 'message', names: ['message', 'config', 'emit'], open: true });
     expect(() => parseCtl(['inspect', 'toggle', 'queue'])).toThrow('open|close NAME');
   });
 

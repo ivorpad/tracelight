@@ -69,6 +69,7 @@ export class History {
   readonly valuesByContext = new Map<string, Msg[]>();
   /** every step was observed, so a name with no recorded change at the next step of its scope kept its object */
   readonly observedAll: boolean;
+  private readonly objectIds = new Map<string, [number, number, number | undefined][]>();
   private readonly moduleScopeCache = new Map<number, Set<number>>();
 
   constructor(run: SavedRun) {
@@ -80,6 +81,10 @@ export class History {
       for (const ch of entry.changes ?? []) {
         const name = ch.name;
         if (!name) continue;
+        {
+          const records = this.objectIds.get(name) ?? [];
+          records.push([step, sid, ch.objectId]); this.objectIds.set(name, records);
+        }
         if (!this.localsByName.has(String(name))) this.localsByName.set(String(name), []);
         this.localsByName.get(String(name))!.push([step, sid, String(ch.text ?? '')]);
       }
@@ -213,6 +218,10 @@ export class History {
     return !!(here && there && there[0] === here[0] && Number(here[1][0]) <= Number(there[1][0]) && Number(there[1][0]) <= Number(end));
   }
 
+  private objectAt(name: string, step: number, scope: number): number | undefined {
+    return this.objectIds.get(name)?.findLast(([s, sid]) => s <= step && sid === scope)?.[2];
+  }
+
   /** the step whose statement made the change observed at `observed` */
   attribute(observed: number, scopeId: number, changed: string): number {
     const own = this.bindingAt(observed);
@@ -221,6 +230,14 @@ export class History {
     if (prev >= 0) {
       const binding = this.bindingAt(prev);
       if (binding && (binding.assigns ?? []).some((a) => matchesName(a, changed))) return prev;
+      const id = this.objectAt(changed, observed, scopeId);
+      if (id !== undefined && this.objectAt(changed, prev, scopeId) === id && binding) {
+        const targets = binding.assigns ?? [];
+        if (targets.some(target => {
+          const root = /^[A-Za-z_$][\w$]*/.exec(target)?.[0];
+          return root && this.objectAt(root, prev, scopeId) === id;
+        })) return prev;
+      }
     }
     return observed;
   }

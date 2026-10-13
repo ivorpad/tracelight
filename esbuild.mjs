@@ -44,6 +44,7 @@ const webServer = {
   platform: 'node',
   format: 'cjs',
   target: 'node20',
+  external: ['esbuild', 'typescript'],
 };
 
 const webPage = {
@@ -87,6 +88,12 @@ copyCodicons('dist');
 mkdirSync('dist/web', { recursive: true });
 cpSync('web/index.html', 'dist/web/index.html');
 cpSync('media/logo.png', 'dist/web/logo.png');
+// The web scratchpad compiles copied TypeScript at runtime.
+for (const dependency of ['typescript', 'esbuild', '@esbuild']) {
+  // Replace executables with fresh inodes so macOS does not retain stale code-signing cache entries.
+  rmSync(`dist/web/node_modules/${dependency}`, { recursive: true, force: true });
+  cpSync(`node_modules/${dependency}`, `dist/web/node_modules/${dependency}`, { recursive: true, dereference: true });
+}
 
 const builds = [extension, webview, webServer, webPage];
 if (watch) {

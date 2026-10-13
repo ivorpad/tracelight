@@ -24,3 +24,5 @@ import './verbs/coverage.ts';
 import './verbs/history.ts';
 import './verbs/narrate.ts';
 import './verbs/tour.ts';
+
+import './verbs/workflows.ts';

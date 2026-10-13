@@ -106,3 +106,25 @@ test('first values: undefined given by let or a missing argument is recorded, a 
   assert.ok(!changes.includes('total=undefined'), changes.join(' '));
   assert.ok(changes.includes('total=1'), changes.join(' '));
 });
+
+
+test('records alias writes, nested mutations and same-size Map changes without invoking getters', async () => {
+  const r = await record(`
+let reads = 0;
+const state = { count: 1, nested: { ready: false }, get computed() { reads++; return 99; } };
+const alias = state;
+alias.count = 2;
+alias.nested.ready = true;
+const map = new Map([['a', 1]]);
+map.set('a', 2);
+const done = reads;
+console.log(state, map, done);
+`, { recordLocals: true, maxValueChars: 0 });
+  const changes = r.events.filter(e => e.type === 'locals').flatMap(e => e.entries).flatMap((e: any) => e.changes);
+  const states = changes.filter((c: any) => c.name === 'state');
+  assert.ok(states.some((c: any) => c.text.includes('count: 2') && c.text.includes('ready: true')));
+  assert.equal(new Set(states.map((c: any) => c.objectId)).size, 1);
+  assert.equal(changes.find((c: any) => c.name === 'alias').objectId, states[0].objectId);
+  assert.ok(changes.some((c: any) => c.name === 'map' && c.text.includes("'a' => 2")));
+  assert.equal(changes.find((c: any) => c.name === 'done').text, '0');
+});

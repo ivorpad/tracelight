@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Scratchpad bootstrap is passed as data, fixing the escaping error that prevented startup.
+  Encoding, URL, cloning and performance APIs are available before dependencies initialize.
+  Copied functions, arrows and explicit imports avoid captured-name collisions; external calls
+  still require mocks.
+- Variable recording detects alias writes and same-size object mutations. Finished exception
+  reports retain errors absorbed by promise combinators. Symlinked projects and worker
+  breakpoints use canonical paths without machine-specific setup.
+- Added Investigate a Value, Learn from This Run, Pin Run as Baseline and Verify Fix commands.
+  Matching CLI workflows expose the same evidence, ignore selected comparison values and export
+  regression tests for explicit expectations. Incomplete recordings cannot verify a fix.
+- `tracelight launch` records a project's normal command and inherited Node children, including
+  selected Node tests. Each process/thread produces a separate recording and the launch index
+  preserves its exit status. `run --cwd` supports project working directories.
+- Packages carry their actual platform target; the QA workflow builds separate native packages.
+
 - `tracelight web FILE` serves the browser page from the installed extension, and `tracelight web
   ctl ...` drives it, so an agent needs no checkout: the vsix now ships `dist/web`. It names the
   bridge it runs (`tracelight web -h`), says to pass `--port` when 4777 is taken, and says what to

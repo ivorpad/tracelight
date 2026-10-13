@@ -29,6 +29,7 @@
  *   may ignore; its `parent` stays the module).
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { inspect } from 'node:util';
 import { encodeSteps, FLAG_ERROR, FLAG_SCOPE_ENTRY, FLAG_UNWINDING } from '../protocol.ts';
 import { cutText, displayText, valueChars, valueText, type ValueText } from './valueText.ts';
 import { bareName } from './localsPlan.ts';
@@ -75,6 +76,8 @@ export interface LocalsChange {
   text: string;
   truncated?: true;
   length?: number;
+  objectId?: number;
+  snapshotIncomplete?: true;
 }
 
 export interface LocalsEntry {
@@ -188,7 +191,9 @@ export class Recorder {
   private localNames = new Map<number, readonly string[]>();
   /** recordLocals: rid -> which of its names are hoisted `var`s (localsPlan `HOISTED`), when any is */
   private localHoisted = new Map<number, readonly boolean[]>();
-  private snaps = new Map<number, Map<string, [unknown, number]>>();
+  private snaps = new Map<number, Map<string, [unknown, number | string]>>();
+  private objectIds = new WeakMap<object, number>();
+  private nextObjectId = 1;
   readonly localsEntries: LocalsEntry[] = [];
   private localsFlushed = 0;
 
@@ -528,10 +533,10 @@ export class Recorder {
       } catch {
         return;
       }
-      const prev = new Map<string, [unknown, number]>();
+      const prev = new Map<string, [unknown, number | string]>();
       for (let i = 0; i < names.length; i++) {
         const v = values[i];
-        if (typeof v !== 'function') prev.set(names[i]!, [v, sizeOf(v)]);
+        if (typeof v !== 'function') prev.set(names[i]!, [v, this.mutationStamp(v)]);
       }
       this.snaps.set(scope, prev);
     } finally {
@@ -670,7 +675,16 @@ export class Recorder {
     }
   }
 
-  /** recordLocals: the names whose value changed since this scope's last snapshot (identity, and length for arrays, maps and sets) */
+  /** Compare bounded contents as well as identity, including writes through aliases. */
+  private mutationStamp(value: unknown): number | string {
+    if (value === null || typeof value !== 'object') return sizeOf(value);
+    try {
+      return inspect(value, { depth: 8, maxArrayLength: 256, maxStringLength: 4096,
+        customInspect: false, getters: false, showProxy: true, breakLength: Infinity, compact: true });
+    } catch { return '<uninspectable>'; }
+  }
+
+  /** Locals are snapshots at statement entry, so writes appear at the next observed step. */
   private snapshot(step: number, rid: number, scope: number, getter: LocalsGetter): void {
     if (this.localsEntries.length >= MAX_LOCALS_ENTRIES) return;
     const names = this.localNames.get(rid);
@@ -693,7 +707,7 @@ export class Recorder {
       for (let i = 0; i < names.length; i++) {
         const v = values[i];
         if (typeof v === 'function') continue;
-        const len = sizeOf(v);
+        const len = this.mutationStamp(v);
         const was = prev.get(names[i]!);
         if (was !== undefined && Object.is(was[0], v) && was[1] === len) continue;
         if (was === undefined && v === undefined && hoisted !== undefined && hoisted[i]) {
@@ -702,7 +716,13 @@ export class Recorder {
         }
         prev.set(names[i]!, [v, len]);
         const t = valueText(names[i]!, v, this.valueChars);
-        (changes ??= []).push({ name: names[i]!, ...t });
+        let objectId: number | undefined;
+        if (v !== null && typeof v === 'object') {
+          objectId = this.objectIds.get(v);
+          if (objectId === undefined) { objectId = this.nextObjectId++; this.objectIds.set(v, objectId); }
+        }
+        const snapshotIncomplete = typeof len === 'string' && /\[Object\]|\[Array\]|\[Map\]|\[Set\]|\[Getter|more items|more characters|uninspectable/.test(len + t.text);
+        (changes ??= []).push({ name: names[i]!, ...t, ...(objectId !== undefined ? { objectId } : {}), ...(snapshotIncomplete ? { snapshotIncomplete: true as const } : {}) });
       }
       if (changes !== null) this.localsEntries.push({ step, scopeId: scope, changes });
     } finally {
