@@ -14,6 +14,19 @@ export function configureLanguageService(): void {
   }
 }
 
+const sources = new Map<string, string>();
+/** Supply real project sources even when their editor tabs have never been opened. */
+export function registerLanguageSource(path: string, content: string): void {
+  if (!/\.[cm]?[jt]sx?$/.test(path)) return;
+  const uri = monaco.Uri.file(path).toString();
+  if (sources.get(uri) === content) return;
+  sources.set(uri, content);
+  const libraries = [...sources].map(([filePath, content]) => ({ filePath, content }));
+  for (const defaults of [monaco.languages.typescript.typescriptDefaults, monaco.languages.typescript.javascriptDefaults]) {
+    defaults.setExtraLibs(libraries);
+  }
+}
+
 export async function staticHover(model: monaco.editor.ITextModel, position: monaco.Position): Promise<monaco.languages.Hover | undefined> {
   try {
     const factory = await (model.getLanguageId() === 'typescript' ? monaco.languages.typescript.getTypeScriptWorker() : monaco.languages.typescript.getJavaScriptWorker());

@@ -58,6 +58,7 @@ export interface CodeView {
   valueUiState?(): { name: string; open: boolean; visible: boolean }[];
   presentationReady?(): Promise<void>;
   setNotes?(notes: TeachingNote[]): void;
+  cacheFile?(file: BridgeFile): void;
   showFile(file: BridgeFile, opts?: { keepDirty?: boolean }): void;
   shownPath(): string | undefined;
   render(d: CodeDecorations): void;
@@ -227,6 +228,8 @@ export class PageHost {
         this.runtime = msg.runtime;
         break;
       case 'file':
+        this.languageSourcesPending.delete(msg.file.path);
+        this.code.cacheFile?.(msg.file);
         if (this.main && msg.file.path === this.main.path) {
           this.main = msg.file;
           if (this.code.shownPath() === msg.file.path) this.code.showFile(msg.file);
@@ -263,6 +266,7 @@ export class PageHost {
         this.debug.onBegin(msg.runId, msg.content);
         break;
       case 'debug.event':
+        if (msg.event.type === 'file.instrumented') this.ensureLanguageSource(msg.event.path);
         this.debug.onEvent(msg.event);
         break;
       case 'debug.end':
@@ -281,11 +285,26 @@ export class PageHost {
     this.onChange();
   }
 
+  private readonly languageSourcesPending = new Set<string>();
+  private ensureLanguageSource(path: string): void {
+    if (!this.code.cacheFile || path === this.main?.path || !/\.[cm]?[jt]sx?$/.test(path) || this.languageSourcesPending.has(path)) return;
+    const content = this.sources.get(path);
+    if (content !== undefined) {
+      this.code.cacheFile({ path, content, displayName: path.split('/').pop()!, language: languageOf(path) });
+      return;
+    }
+    this.languageSourcesPending.add(path);
+    this.link.send({ type: 'file.read', path });
+  }
+
   private onEvent(ev: RunEvent): void {
     if (this.incoming && ev.runId === this.incoming.runId) this.adoptIncoming();
     const run = this.run;
     if (!run || !applyEvent(run, ev)) return;
     switch (ev.type) {
+      case 'file.instrumented':
+        this.ensureLanguageSource(ev.path);
+        break;
       case 'log':
         if (!this.nav.active || ev.step <= this.nav.step) this.queueEntry(ev);
         this.scheduleRender();

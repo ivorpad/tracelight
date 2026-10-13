@@ -21,6 +21,8 @@ class FakeCode implements CodeView {
   narration: { text: string; line: number } | null = null;
   revealed: number[] = [];
   cursor: number | undefined;
+  languageFiles = new Map<string, BridgeFile>();
+  cacheFile(file: BridgeFile): void { this.languageFiles.set(file.path, file); }
   files = new Map<string, BridgeFile>();
   showFile(file: BridgeFile): void {
     this.shown = file.path;
@@ -100,6 +102,22 @@ function setup() {
 }
 
 describe('PageHost', () => {
+  it('loads discovered dependency sources for language checking without navigating to them', () => {
+    const { feed, code, link } = setup();
+    const dependency = { ...(runEvents('w-1')[1] as Extract<RunEvent, { type: 'file.instrumented' }>), seq: 20, fileId: 2, path: '/w/worker.ts' };
+    feed({ type: 'event', event: dependency });
+    feed({ type: 'event', event: { ...dependency, seq: 21 } });
+    expect(link.sent.filter(m => m.type === 'file.read' && m.path === dependency.path)).toHaveLength(1);
+    const file = { path: dependency.path, displayName: 'worker.ts', language: 'typescript', content: 'export const n = 2;' };
+    feed({ type: 'file', file });
+    expect(code.languageFiles.get(file.path)).toEqual(file);
+    expect(code.shown).toBe(MAIN.path);
+    expect(code.files.has(file.path)).toBe(false);
+    feed({ type: 'debug.begin', runId: 'd-dependencies', content: SOURCE });
+    feed({ type: 'debug.event', event: { ...dependency, runId: 'd-dependencies', seq: 1 } });
+    expect(link.sent.filter(m => m.type === 'file.read' && m.path === dependency.path)).toHaveLength(1);
+  });
+
   it('ignores locals and expansions arriving after a frame change or resume', async () => {
     const { host, link, feed } = setup();
     feed({ type: 'debug.begin', runId: 'd-race', content: SOURCE });

@@ -13,7 +13,7 @@ import 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/goToCommands';
 import 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/peek/referencesController';
 import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController';
 import 'monaco-editor/esm/vs/editor/contrib/parameterHints/browser/parameterHints';
-import { configureLanguageService, staticHover } from './languageService';
+import { configureLanguageService, registerLanguageSource, staticHover } from './languageService';
 import type { BridgeFile, TeachingNote } from './bridgeProtocol';
 import { PROFILE_PATH, type CodeDecorations, type CodeView } from './pageHost';
 import { STORY_PATH } from './story';
@@ -120,6 +120,8 @@ export class CodePane implements CodeView {
     this.editor.onDidChangeModelContent(() => {
       this.decorations.clear();
       this.hideValueHover();
+      const model = this.editor.getModel();
+      if (model?.uri.scheme === 'file') registerLanguageSource(model.uri.fsPath, model.getValue());
       if (this.applying || this.shown !== this.mainPath) return;
       this.onEdit(this.editor.getValue());
     });
@@ -174,6 +176,11 @@ export class CodePane implements CodeView {
     this.showFile(file);
   }
 
+  cacheFile(file: BridgeFile): void {
+    const current = this.models.get(file.path);
+    registerLanguageSource(file.path, file.path === this.mainPath && this.dirty ? current!.getValue() : file.content);
+  }
+
   showFile(file: BridgeFile, opts: { keepDirty?: boolean } = {}): void {
     if (!this.mainPath) this.mainPath = file.path;
     let model = this.models.get(file.path);
@@ -194,6 +201,7 @@ export class CodePane implements CodeView {
       this.clearZone();
       this.editor.setModel(model);
     }
+    registerLanguageSource(file.path, model.getValue());
     this.shown = file.path;
     this.shownDisplay = file.displayName;
     this.applyNavigation();
