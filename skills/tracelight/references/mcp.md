@@ -255,6 +255,7 @@ selectors to the tools.
 | read named variable values | action `locals`, `names`, optional `frame` |
 | local/global/all scope selection | frame lexical scopes only; no equivalent selector |
 | evaluate expression | `tracelight_value` action `eval`, `expression`, optional `frame`, `live: true` |
+| debug status, optionally waiting for a pause (`waitForPauseSeconds`) | `tracelight_map` action `state` with `live: true` reads it without waiting; `continue` and `pause` wait for their own stop unless `no_wait`; no tool waits for a pause the person causes by stepping in VS Code (the page's WebMCP `tracelight_wait_pause` does, for up to 25 seconds) |
 
 This maps the operations and their limits; it does not establish interchangeable sessions or
 tested DebugMCP compatibility. Tracelight adds recorded provenance, reverse history and saved

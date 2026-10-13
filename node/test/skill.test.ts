@@ -1,16 +1,19 @@
 /**
- * The skill (`skills/tracelight`) names everything an agent can drive: every verb with each of its
- * flags in that verb's own synopsis, `run` and the other top-level commands, the MCP tools and
- * their arguments, the browser page's `ctl` commands, its HTTP API and WebMCP tools, the band's
- * keys, and every TRACELIGHT_ variable. A flag added without a line in the skill fails here.
+ * A documentation contract, not evidence that the skill teaches well: the skill
+ * (`skills/tracelight`) names everything an agent can drive, every verb with each of its flags in
+ * that verb's own synopsis, `run` and the other top-level commands, the MCP tools and their
+ * arguments, the browser page's `ctl` commands, its HTTP API and WebMCP tools, the band's keys, and
+ * every TRACELIGHT_ variable, and its links land. A flag added without a line in the skill fails
+ * here. What the learning patterns promise is run in learning-scenarios.test.ts, and the agent
+ * scenarios in skills/tracelight/evals/evals.json need a model run.
  *
  * A synopsis is a line that starts `tracelight VERB` (its continuation lines indented under it),
  * or a bold inline span `**`VERB ...`**`, in the skill's references.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, posix, resolve } from 'node:path';
 import { getVerb, parserFor, verbNames } from '../src/agent/commands.ts';
 import '../src/agent/verbs.ts';
 import { DEBUG_ACTIONS, MAP_ACTIONS, MOVES, VALUE_ACTIONS, toolDefinitions } from '../src/mcp/tools.ts';
@@ -39,6 +42,17 @@ export function synopses(text: string, name: string): string {
   const inline = new RegExp(`\\*\\*\`${name} ([^\`]*)\`\\*\\*`, 'g');
   for (const m of text.matchAll(inline)) out.push(m[0]);
   return out.join('\n');
+}
+
+/** every `tracelight web FILE ...` start command in TEXT: inline code spans, and lines inside code blocks */
+function webStarts(text: string): string[] {
+  const out = [...text.matchAll(/`([^`\n]*tracelight web [^`\n]*)`/g)].map((m) => m[1]!);
+  let fenced = false;
+  for (const line of text.split('\n')) {
+    if (/^\s*```/.test(line)) fenced = !fenced;
+    else if (fenced && line.includes('tracelight web ')) out.push(line);
+  }
+  return out.filter((c) => /tracelight web (?!ctl\b|-h\b)/.test(c));
 }
 
 const has = (text: string, word: string) => new RegExp(`(^|[^\\w-])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`).test(text);
@@ -115,10 +129,11 @@ test('the browser page: tracelight web, every ctl command and flag, the HTTP API
   if (!has(ctl, '--port')) missing.push('ctl --port');
   const main = server.slice(server.indexOf('export async function main'));
   const serve = synopses(page, 'web');
-  for (const f of new Set([...main.matchAll(/a === '(--[a-z-]+)'/g)].map((m) => m[1]!))) {
-    if (!has(f === '--no-watch' ? page : serve, f)) missing.push(`web ${f}`);
-  }
-  assert.ok(!has(serve, '--no-watch'), 'browser startup commands must keep watching enabled');
+  for (const f of new Set([...main.matchAll(/a === '(--[a-z-]+)'/g)].map((m) => m[1]!))) if (!has(serve, f)) missing.push(`web ${f}`);
+  // watching stays on in every start command the skill gives; the synopsis lists --no-watch as optional
+  assert.ok(serve.includes('[--no-watch]'), 'the synopsis lists --no-watch as an option');
+  const unwatched = [ALL, source('AGENTS.md'), source('docs/WEB.md')].flatMap(webStarts).filter((c) => c.replace(/\[--no-watch\]/g, '').includes('--no-watch'));
+  assert.deepEqual(unwatched, [], 'start browser sessions with watching enabled; --no-watch is for a person who asks for it');
   assert.ok(doc('SKILL.md').includes('Always start browser sessions with file watching enabled'));
   for (const p of new Set([...server.matchAll(/'(\/api\/[a-z]+)'/g)].map((m) => m[1]!))) if (!page.includes(p)) missing.push(p);
   for (const t of source('web/agent.ts').matchAll(/tool\('(tracelight_\w+)'/g)) if (!has(page, t[1]!)) missing.push(t[1]!);
@@ -149,4 +164,40 @@ test('every TRACELIGHT_ variable an agent can set is named', () => {
   for (const internal of ['TRACELIGHT_E2E', 'TRACELIGHT_BUILD']) names.delete(internal);
   assert.ok(names.size >= 10, [...names].join(' '));
   assert.deepEqual([...names].filter((n) => !has(ALL, n)).sort(), []);
+});
+
+/** GitHub's anchor for a heading: lower case, punctuation other than `-` and `_` dropped, each space a `-` */
+const slug = (heading: string) => heading.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
+
+test('every relative link in the skill reaches a file, and every #anchor a heading there', () => {
+  const anchors = new Map<string, Set<string>>();
+  const anchorsOf = (rel: string) => {
+    if (!anchors.has(rel)) {
+      const seen = new Map<string, number>();
+      const set = new Set<string>();
+      let fenced = false;
+      for (const line of readFileSync(join(SKILL, rel), 'utf8').split('\n')) {
+        if (/^\s*```/.test(line)) fenced = !fenced;
+        if (fenced || !/^#{1,6} /.test(line)) continue;
+        const base = slug(line.replace(/^#+ /, '').trim());
+        const n = seen.get(base) ?? 0;
+        seen.set(base, n + 1);
+        set.add(n ? `${base}-${n}` : base);
+      }
+      anchors.set(rel, set);
+    }
+    return anchors.get(rel)!;
+  };
+  const broken: string[] = [];
+  for (const from of ['SKILL.md', ...REFS]) {
+    for (const m of doc(from).matchAll(/\]\(([^)\s]+)\)/g)) {
+      const target = m[1]!;
+      if (/^[a-z]+:/.test(target)) continue;
+      const [file, anchor] = target.split('#');
+      const rel = file ? posix.normalize(posix.join(posix.dirname(from), file)) : from;
+      if (!existsSync(join(SKILL, rel))) broken.push(`${from}: ${target} (no file)`);
+      else if (anchor && rel.endsWith('.md') && !anchorsOf(rel).has(anchor)) broken.push(`${from}: ${target} (no heading)`);
+    }
+  }
+  assert.deepEqual(broken, []);
 });

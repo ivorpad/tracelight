@@ -313,8 +313,12 @@ need nothing else. The live tools need agent access. The arguments of each tool 
 ### Skill
 
 `skills/tracelight` is one skill with four modes: `ask` answers questions from a recording, `debug` pauses a program and steps it, `explain`
-walks a person through a run in their editor, and `show` builds a tour or a code-history page whose
-every value `tracelight history` generated from the run. `AGENTS.md` tells an agent where to start.
+helps a person understand code by running it in their editor or the browser page, with stops chosen
+by their questions, and `show` builds a tour or a code-history page whose every value `tracelight
+history` generated from the run. `AGENTS.md` tells an agent where to start. `node/test/skill.test.ts`
+holds the skill to the CLI's verbs and flags; `node/test/learning-scenarios.test.ts` runs the routes
+of `references/learning-patterns.md` on `examples/js/checkout`; `evals/evals.json` lists scenarios
+for a model run, which no test executes.
 
 ### Claude Code band
 
