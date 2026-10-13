@@ -4,6 +4,7 @@
   {
    "id": 0,
    "name": "show-me-rrf-demo",
+   "mode": "show",
    "prompt": "show me how the RRF demo works. the file is examples/js/rrf/demo.ts",
    "expected_output": "A rendered tour or code-history page plus a short chat answer grounded in the run.",
    "files": [],
@@ -21,6 +22,8 @@
   {
    "id": 1,
    "name": "why-contribution-value",
+   "mode": "show",
+   "mode_note": "No mode word: \"show me\" routes to show (SKILL.md, Pick the mode), so a page is the deliverable; a chat-only answer misroutes it.",
    "prompt": "in examples/js/rrf/demo.ts, contribution comes out as 0.015873 on some passes and 0.016393 on others. why? show me where that difference comes from.",
    "expected_output": "A rendered code-history page plus a short chat answer grounded in the run.",
    "files": [],
@@ -35,14 +38,17 @@
   {
    "id": 2,
    "name": "cold-explain-ranking-module",
+   "mode": "explain",
+   "mode_note": "explain needs no recording or page first; this case used to reward both.",
    "prompt": "explain how examples/js/rrf/api/ranking.ts actually works when the service uses it. i have not run anything yet.",
-   "expected_output": "A rendered code-history page plus a short chat answer grounded in the run.",
+   "expected_output": "A live session paused inside ranking.ts on a real request through api/server.ts, a short plan of stops, and an explanation of what each stop showed. No recording or page is a prerequisite.",
    "files": [],
    "assertions": [
-    "Made a recording of the module actually running instead of only reading the source",
-    "Exercised ranking.ts the way the service uses it (through api/server.ts, for example `tracelight run api/server.ts --save run.json -- --once`), not in isolation from the request path",
-    "Separates what the run shows from what was not observed, rather than asserting unobserved behaviour",
-    "Produced a rendered HTML code-history page",
+    "Read api/server.ts and api/ranking.ts (the caller and the module) before running, and proposed a few stops tied to questions, such as rank with the request payload and rrf with its rankings and k",
+    "Reached ranking.ts the way the service does, through api/server.ts on a real request: for example `tracelight debug api/server.ts --at rrf --args --once`, or the browser page started with `--no-run` and `debug start`, not ranking.ts in isolation",
+    "Did not make a recording or an HTML page as a prerequisite for the session",
+    "Actually paused inside ranking.ts and explained from the paused frame's values (rankings = { bm25: [ 'A', 'C', 'B', 'D' ], vector: [ 'C', 'E', 'A', 'B' ] }, k = 60)",
+    "Separates what the pauses showed from what was read in source or not observed (other k values, ties, error paths)",
     "Did not read or print the project's .env",
     "Left package.json, the lockfiles and node_modules as they were"
    ]
@@ -50,6 +56,7 @@
   {
    "id": 3,
    "name": "live-debug-handler",
+   "mode": "debug",
    "prompt": "the /rank endpoint in examples/js/rrf/api/server.ts is returning documents in the wrong order. pause it in the handler on a real request and show me what it actually received.",
    "expected_output": "The stops it saw, in chat, with the request payload, and the session cleaned up.",
    "files": [],
@@ -65,6 +72,7 @@
   {
    "id": 4,
    "name": "swallowed-error-origin",
+   "mode": "ask",
    "prompt": "examples/js/invoices/invoices.ts prints totals for Ana and Ben but Cy's invoice never shows up, and Ben's total is NaN. what is going on?",
    "expected_output": "A short chat answer grounded in the run, naming both causes and where each value came from.",
    "files": [],
@@ -75,6 +83,89 @@
     "Names the cause of NaN: parsePrice returns the string '1,299.00' unchanged, and multiplying it gives NaN",
     "Points at the root lines (the DISCOUNTS lookup, parsePrice) rather than only the line that threw",
     "Did not edit invoices.ts unless asked"
+   ]
+  },
+  {
+   "id": 5,
+   "name": "cold-live-checkout-from-test",
+   "mode": "explain",
+   "prompt": "explain examples/js/checkout/checkout.ts starting from its tests. i haven't run anything.",
+   "expected_output": "A live debugger session paused in placeOrder, entered from checkout.test.ts, with a short plan of stops and an explanation of what the first stops showed. No recording or page made first.",
+   "files": [],
+   "assertions": [
+    "Read checkout.test.ts and the code it calls (checkout.ts, payments.ts, events.ts) before launching, and proposed a few stops, each tied to a question",
+    "Entered the code through the real test file under the live debugger, for example `tracelight debug examples/js/checkout/checkout.test.ts --at placeOrder`, without making a recording or an HTML page first",
+    "Reported the actual pause: placeOrder under the first test, with that test's cart (country 'de', one KB-01 line, qty 2)",
+    "Treated the highlighted statement as not yet run, and labelled anything said about its result before stepping as an expectation",
+    "Asked no quiz or prediction questions",
+    "Left the example files, package.json and the lockfiles unchanged, and removed the breakpoints it added when the session ended"
+   ]
+  },
+  {
+   "id": 6,
+   "name": "adapter-identity-and-wiring",
+   "mode": "explain",
+   "prompt": "explain which charge actually runs when examples/js/checkout/checkout.ts calls this.gateway.charge for a German customer, and where that gateway comes from",
+   "expected_output": "The implementation named from runtime evidence (InvoiceGateway.charge at payments.ts:29, this = InvoiceGateway { dueDays: 14 }) and the wiring located in source and confirmed by the run (main.ts:35, gatewayFor at payments.ts:36).",
+   "files": [],
+   "assertions": [
+    "Ran the real entry with a German order (main.ts --country de, or a test that uses gatewayFor('de')) rather than constructing InvoiceGateway directly",
+    "Established the implementation by entering the call at checkout.ts:46 at runtime (live Step Into, or `tracelight step RUN N --into` on a recording), not only by reading the interface and its two classes",
+    "Named the class from the file and line or from `this` (`InvoiceGateway { dueDays: 14 }`), not from the frame name `charge` alone",
+    "Located the wiring: main.ts:35 passes gatewayFor(country) to the CheckoutService constructor, which stores it at checkout.ts:36, and payments.ts:36 returns an InvoiceGateway for 'de' and 'nl'",
+    "Kept what this German order showed apart from what was read in source, and did not describe CardGateway.charge as observed"
+   ]
+  },
+  {
+   "id": 7,
+   "name": "mid-walkthrough-jump",
+   "mode": "explain",
+   "prompt": "explain examples/js/checkout/main.ts --country de as a guided walkthrough, one stop at a time",
+   "turns": [
+    "explain examples/js/checkout/main.ts --country de as a guided walkthrough, one stop at a time",
+    "skip the pricing. what actually sends the receipt, and when does it run?"
+   ],
+   "expected_output": "After the second message the session goes straight to the receipt handler and explains the handoff through the event bus, without finishing the pricing stops first.",
+   "files": [],
+   "assertions": [
+    "Started the walkthrough from the real entry with --country de and stopped at its first stop with a short explanation",
+    "After the redirect, moved to the receipt in that same turn (a breakpoint in sendReceipt, main.ts:24-27, then continue, or the matching recorded step) without first explaining the remaining pricing stops",
+    "Skipped or removed the pricing stops it had added, keeping any breakpoints the user had set",
+    "Explained the handoff from evidence: publish at checkout.ts:48 queues the event and schedules flush with setImmediate (events.ts:17), and placeOrder returns and main prints 'placed ord-1 153.47 EUR inv-14d-15347' before sendReceipt runs",
+    "Described the handler's stack (sendReceipt ← flush ← <arrow> ← <module>) as starting at the event loop, with no placeOrder frame, and did not present <module> as its caller",
+    "Asked no quiz or prediction questions"
+   ]
+  },
+  {
+   "id": 8,
+   "name": "real-path-contrast",
+   "mode": "ask",
+   "prompt": "in examples/js/checkout, what actually changes between a US order and a German one? compare real runs, not the source.",
+   "expected_output": "A short chat answer from two real runs of main.ts that differ only in --country, naming the first meaningful divergence and what follows from it, with step numbers.",
+   "files": [],
+   "assertions": [
+    "Recorded the real entry twice with only --country changed and the same cart (for example `tracelight run main.ts --save us.json -- --country us` and the same with de) and compared them with `tracelight diff`",
+    "Named the first meaningful divergence, payments.ts:36 (the gatewayFor branch took false → true), rather than stopping at the changed input at main.ts:30",
+    "Reported the consequences with the diff's values: taxRate 0.07 → 0.19, total 138 → 153.47, CardGateway.charge(138, 'USD') only in the US run and InvoiceGateway.charge(153.47, 'EUR') only in the German one, and the two printed lines",
+    "Cited step numbers on each side that open those moments",
+    "If it also used a scratchpad copy, labelled that result as a scratchpad result and did not treat it as evidence of the wiring",
+    "Saved the recordings outside the repository, or said where .tracelight/runs files were written"
+   ]
+  },
+  {
+   "id": 9,
+   "name": "paused-edit-no-rerun",
+   "mode": "explain",
+   "prompt": "start examples/js/checkout/main.ts on the browser page with CHECKOUT_OUTBOX pointing at a scratch file, pause in placeOrder and leave it paused. i'll edit main.ts in vs code while it's paused. tell me what the page shows and whether anything ran again.",
+   "expected_output": "A page started with watching on and no startup run, paused in placeOrder; after the save, the refreshed source and the blocked position reported, and the outbox showing that nothing ran a second time.",
+   "files": [],
+   "assertions": [
+    "Started the bridge with `--no-run` and watching enabled (no `--no-watch`, which the user did not ask for), set a breakpoint that reaches placeOrder and used `debug start`",
+    "Checked the outbox before and after the save: no line while paused and still none after the save, so the save started no second execution; after continue, exactly one receipt line",
+    "Reported that the page shows the new main.ts and that the position is blocked as edited or stale, and did not explain the paused frame from the new lines",
+    "Explained that the paused run keeps the code it loaded, and that seeing the edit takes a deliberate restart or Run, which sends another receipt line",
+    "Did not restart, Run or save again on its own",
+    "At the end stopped the bridge and any headless browser it started, or said which port is still serving"
    ]
   }
  ]
