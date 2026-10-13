@@ -513,6 +513,7 @@ function reasonText(p: DebugPausedEvent): string {
       return s;
     }
     case 'watch':
+      if (p.watch?.error) return `watch ${p.watch.exp} failed: ${p.watch.error}`;
       return p.watch ? `watch ${p.watch.exp} → ${p.watch.text}` : 'watch';
     case 'pause':
       return 'paused on request';

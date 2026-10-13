@@ -130,6 +130,83 @@ for (const c of [
   });
 }
 
+for (const outsideWorkspace of [false, true]) describe(`external file changes ${outsideWorkspace ? 'outside' : 'inside'} the workspace`, function () {
+  this.timeout(180_000);
+  let api, root, file, dependency, doc, dependencyDoc, session;
+  const output = () => session.state.entries.map((e) => e.text ?? '').join('\n');
+  const idle = async () => api.waitForIdle(session, 60_000);
+  const changedRun = async (before, expected) => {
+    await waitFor(() => session.state.runId !== before, 'an external write to start a new run');
+    await idle();
+    assert.match(output(), expected);
+  };
+
+  before(async () => {
+    root = outsideWorkspace
+      ? fs.realpathSync(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'tl-external-')))
+      : vscode.workspace.workspaceFolders[0].uri.fsPath;
+    file = path.join(root, '_e2e_external.mjs');
+    dependency = path.join(root, '_e2e_external_dependency.mjs');
+    fs.writeFileSync(dependency, 'export const value = 1;\n');
+    fs.writeFileSync(file, 'import { value } from "./_e2e_external_dependency.mjs";\nconsole.log("external", value);\n');
+    doc = await vscode.workspace.openTextDocument(file);
+    dependencyDoc = await vscode.workspace.openTextDocument(dependency);
+    await vscode.window.showTextDocument(doc);
+    const ext = vscode.extensions.getExtension(EXT_ID);
+    api = await ext.activate();
+    session = await api.manager.start(doc, { runMode: 'onSave' });
+    await idle();
+    assert.match(output(), /external 1/);
+  });
+
+  after(async () => {
+    api?.manager.stopAll();
+    // Clear the deliberately unsaved edit before removing the fixtures.
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+    fs.rmSync(file, { force: true });
+    fs.rmSync(dependency, { force: true });
+    fs.rmSync(`${file}.tmp`, { force: true });
+    if (outsideWorkspace) fs.rmdirSync(root);
+  });
+
+  it('reruns On Save after an external write and an atomic replacement', async () => {
+    let before = session.state.runId;
+    fs.writeFileSync(file, 'import { value } from "./_e2e_external_dependency.mjs";\nconsole.log("changed", value);\n');
+    await changedRun(before, /changed 1/);
+    assert.equal(doc.isDirty, false);
+
+    before = session.state.runId;
+    fs.writeFileSync(`${file}.tmp`, 'import { value } from "./_e2e_external_dependency.mjs";\nconsole.log("replaced", value);\n');
+    fs.renameSync(`${file}.tmp`, file);
+    await changedRun(before, /replaced 1/);
+  });
+
+  it('reruns when an open imported file reloads from disk', async () => {
+    const before = session.state.runId;
+    fs.writeFileSync(dependency, 'export const value = 2;\n');
+    await changedRun(before, /replaced 2/);
+    assert.equal(dependencyDoc.isDirty, false);
+  });
+
+  it('refreshes On Demand source without running, and does not run unsaved On Save edits', async () => {
+    session.setRunMode('onDemand');
+    const before = session.state.runId;
+    fs.writeFileSync(file, 'console.log("demand");\n');
+    await waitFor(() => doc.getText().includes('"demand"'), 'VS Code to reload the source');
+    await new Promise((r) => setTimeout(r, 500));
+    assert.equal(session.state.runId, before);
+
+    session.setRunMode('onSave');
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(doc.uri, new vscode.Position(0, 0), '// unsaved\n');
+    await vscode.workspace.applyEdit(edit);
+    assert.equal(doc.isDirty, true);
+    await new Promise((r) => setTimeout(r, 500));
+    assert.equal(session.state.runId, before);
+  });
+});
+
 // Recorded evidence through the real extension host, including failures absorbed by a promise combinator.
 describe('investigation evidence in the editor', function () {
   this.timeout(180_000);

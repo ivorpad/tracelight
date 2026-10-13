@@ -90,7 +90,7 @@ In the browser, use WebMCP when available, otherwise `ctl`. A new page for live 
 without executing the program:
 
 ```sh
-tracelight web app.ts --port 4790 --no-run --no-watch
+tracelight web app.ts --port 4790 --no-run
 tracelight web ctl --port 4790 state
 tracelight web ctl --port 4790 break 22 on
 tracelight web ctl --port 4790 break 140 on --file /absolute/path/to/known/library.js
@@ -104,8 +104,9 @@ caller stop, enable library instrumentation if needed, and add the imported stop
 source becomes available. Do not run to completion to discover it. See [browser.md](browser.md)
 for supported controls and [debug.md](debug.md) for launches that do not pause as intended.
 
-`--no-run` skips the initial execution; `--no-watch` also prevents disk saves from launching
-one. Neither disables an explicit Run or scratchpad execution. An older bridge that rejects
+`--no-run` skips the initial execution. Always leave file watching enabled so disk saves
+refresh the source; execution follows the page's run mode. Explicit Run and scratchpad execution
+remain available. An older bridge that rejects
 `--no-run` cannot promise fresh browser exploration without an initial run: use a supported build,
 an existing paused session, or VS Code. Do not silently fall back to automatic execution.
 The browser records the same execution as it pauses for Code history. That is not a separate

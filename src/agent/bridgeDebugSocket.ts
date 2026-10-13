@@ -393,7 +393,8 @@ export class DebugSocketServer implements vscode.Disposable {
         return watches(ds, req);
       case 'locals':
         requirePaused(ds, 'list the locals');
-        return { locals: localsReply(await ds.debugLocals({ frameId: int(req.frameId) }), !!req.valueBag), modified: ds.modified };
+        return { locals: localsReply(await ds.debugLocals({ frameId: int(req.frameId), namesOnly: req.namesOnly === true,
+          names: Array.isArray(req.names) ? req.names.map(String) : undefined }), !!req.valueBag, req.namesOnly === true), modified: ds.modified };
       case 'eval': {
         const expression = typeof req.expression === 'string' ? req.expression.trim() : '';
         if (!expression) throw new BridgeError('eval needs expression', 'send {expression: "name.attr"}');

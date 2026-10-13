@@ -36,11 +36,27 @@ npm test --prefix node                      # node:test, about 300 tests in 15 s
 | `pure.ts`, `evaluate.ts` | side-effect-free evaluation (write check, V8 `throwOnSideEffect`, allowlisted methods); evaluate and complete after a run |
 | `http/` | `store.ts` (the recording file and its keys), `record.ts` (`@mswjs/interceptors` for http/https, `fetch`, XHR); `plugins/http.ts` loads it |
 | `agent/` | the agent verbs (`story`, `step`, `why`, `origin`, `tour`, `history`, `debug`, ...), registered in `agent/verbs.ts` |
-| `mcp/` | `tracelight mcp`: six tools over the agent verbs, answered in this process |
+| `mcp/` | twelve tools over the agent verbs and workflow helpers: live control, bounded evidence/verification, session state, recorded destinations and saved investigation checkpoints |
 
 On the extension's side, `src/runtime/language.ts` says which documents run,
 `src/runtime/interpreter.ts` `resolveNode` finds Node, `src/session/session.ts` starts the runner
 with the runtime's entry, and `esbuild.mjs` copies `node/` to `dist/node`.
+
+Session state (`mcp/session.ts`) lists sanitized descriptors without connecting when no source is
+selected. A selected live session receives only a `state` request: `livePause` is separate from
+`recordedSelection`, and `visibleEditor: null` avoids claiming a confirmed UI position. Saved
+context uses `agent/recorded.ts` source snapshots, never a later edit on disk.
+`mcp/seek.ts` locates exact recorded values or file/line hits without live navigation.
+`agent/investigation.ts` stores a question and named steps in a new artifact, references the saved
+recording by relative path and SHA256, and rejects changed recordings when reopening it. These
+helpers accept explicit selectors; free-text questions are metadata, not executable queries.
+
+Live MCP control is grouped into `tracelight_debug`, `tracelight_step` and `tracelight_value`.
+Breakpoints can carry `log_message` templates with `{expression}` substitutions and an optional
+condition. `locals` accepts `names_only` or a `names` filter for the requested frame's lexical
+scopes. A names-only read enumerates engine binding descriptors but does not serialize values,
+expand objects or call getters. These are expression watches and frame reads, not engine data
+breakpoints or a local/global/all scope selector.
 
 ## How a run works
 

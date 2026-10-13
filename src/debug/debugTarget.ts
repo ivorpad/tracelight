@@ -78,7 +78,7 @@ export interface DebugTarget {
   debugContinue(): Promise<void>;
   debugStep(kind: StepKind): Promise<void>;
   debugPause(): Promise<void>;
-  debugLocals(opts?: { frameId?: number }): Promise<LocalVar[]>;
+  debugLocals(opts?: { frameId?: number; namesOnly?: boolean; names?: string[] }): Promise<LocalVar[]>;
   /** side-effect-free, in the frame `frameId` names (innermost by default); undefined when it cannot answer */
   evaluate(expression: string, opts?: { frameId?: number }): Promise<{ text: string; valueBag?: ValueBag } | undefined>;
   /**

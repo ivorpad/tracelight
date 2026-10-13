@@ -104,6 +104,13 @@ describe('breakpoints', () => {
       { path: '/w/b.py', line: 1 },
     ]);
   });
+  it('keeps runtime logpoints distinct from pauses and from other templates at the same line', () => {
+    const pause = { path: '/w/a.py', line: 7 };
+    const log = { ...pause, logMessage: 'n={n}', condition: 'n > 0' };
+    expect(mergeBreakpoints([pause, log], [log, { ...log, logMessage: 'next={n + 1}' }, { ...pause, logMessage: '' }])).toEqual([
+      pause, log, { ...log, logMessage: 'next={n + 1}' }, { ...pause, logMessage: '' },
+    ]);
+  });
 });
 
 describe('moves at and behind the frontier', () => {

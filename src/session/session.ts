@@ -20,6 +20,7 @@ import { resolveSessionConfig, setting, type ResolvedSessionConfig } from '../co
 import { log } from '../util/log';
 import { freshNavState, type NavState, type RunMode, type SessionStatus, type WatchEntry } from './types';
 import { applyEditToDirtyLines } from './dirtyLines';
+import { isDiskReload } from './diskReload';
 import { PartialScopes } from './traceDelta';
 import { DebugController, type DebugStartOptions } from './debugController';
 import { appendOutput as appendToBuffer } from './outputBuffer';
@@ -569,7 +570,7 @@ export class Session extends EventEmitter<SessionEvents> {
     return this.debugCtl.setExceptions(mode);
   }
 
-  debugLocals(opts?: { frameId?: number }): Promise<LocalVar[]> {
+  debugLocals(opts?: { frameId?: number; namesOnly?: boolean; names?: string[] }): Promise<LocalVar[]> {
     return this.debugCtl.locals(opts);
   }
 
@@ -597,7 +598,10 @@ export class Session extends EventEmitter<SessionEvents> {
     this.markers.applyEdits(deltas);
     for (const delta of deltas) this.dirtyLines = applyEditToDirtyLines(this.dirtyLines, delta);
     this.emit('stateChanged');
+    // VS Code reloads an external write as a content change on a clean document,
+    // without an onDidSaveTextDocument event. Treat that reload as a save.
     if (this.runMode === 'auto') this.scheduleRun('edit');
+    else if (this.runMode === 'onSave' && isDiskReload(e.document)) this.scheduleRun('save', 0);
   }
 
   onDocumentSaved(): void {

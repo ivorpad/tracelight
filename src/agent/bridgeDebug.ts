@@ -6,22 +6,21 @@
  * frame's `locals` and the program's `output` so far, or
  * `{finished}` when the run ended instead. `debug` and `restart` run to the first breakpoint of the
  * session's files (`entryPause`); with none, or with `stopOnEntry`, they pause before the first
- * statement. Breakpoints an agent adds go into VS Code's own list, so the gutter shows
- * them and the host's breakpoint feature pushes them to the run in flight like any other. The
+ * statement. Ordinary breakpoints an agent adds go into VS Code's own list; API logpoints stay
+ * in the runtime's list so editor instrumentation does not log them twice. The
  * session API is src/session/debugController.ts; execute-or-replay is src/session/debugState.ts.
  */
-import * as vscode from 'vscode';
 import type { Session } from '../session/session';
 import type { TimeMachine } from '../timeMachine/navigator';
 import type { SliceOptions } from '../session/contextSlice';
-import { decideMove, entryPause, mergeBreakpoints, type BreakpointSpec, type DebugBreakpointEcho, type LocalVar, type NavigatorMoveKind, type PausedInfo } from '../session/debugState';
+import { decideMove, entryPause, mergeBreakpoints, type DebugBreakpointEcho, type LocalVar, type NavigatorMoveKind, type PausedInfo } from '../session/debugState';
 import { parseLaunch, type LaunchConfig } from '../debug/debugSessionState';
 import { clampCount, continueTo, continueUntil, execReply, stepCount, stepCountExtras, type StopRunner } from '../debug/debugExec';
 import { currentFunctionBreakpoints, currentSourceBreakpoints } from '../features/debugBreakpoints';
 import { redact } from '../util/redact';
 import { BridgeError, int, sliceOptions, type Request } from './bridgeSupport';
-import { applyWatchRequest, breakpointReply, displayWatchItems, exceptionMode, localsReply, nodeText, outputTail, parseBreakItems, parseTo, pathContext, pausedReply, type BreakItem } from './bridgeDebugShapes';
-import { applyAt, removeFunctionBreakpoints } from './bridgeDebugReply';
+import { applyWatchRequest, breakpointReply, displayWatchItems, exceptionMode, localsReply, nodeText, outputTail, parseTo, pathContext, pausedReply } from './bridgeDebugShapes';
+import { applyBreakpointRequest } from './bridgeDebugReply';
 import { preRecordingSlice, recordHere } from './bridgeRecordFrom';
 
 /** the rule every debug start shares (debugState.ts); re-exported for the bridge's tests and readers */
@@ -29,8 +28,6 @@ export { entryPause };
 
 /** A stop reply waits for the program: as long as it runs, within reason. */
 export const STOP_TIMEOUT_MS = 600_000;
-/** VS Code confirms a breakpoint change asynchronously; the reply waits for the list to show it. */
-const BREAKPOINT_SETTLE_MS = 1_500;
 
 /** The reply shapes, split out so this file stays about the handlers (bridgeDebugShapes.ts). */
 export { OUTPUT_TAIL, applyWatchRequest, breakpointReply, displayFile, displayWatchItems, exceptionMode, localsReply, nextWatchId, nodeText, outputTail, parseBreakItems, pathContext, pausedReply, resolveFile } from './bridgeDebugShapes';
@@ -256,7 +253,8 @@ export class BridgeDebug {
     const served = this.served(session, 'locals', req);
     if (served) return served;
     this.requirePaused(session, 'list the locals');
-    return { locals: localsReply(await session.debugLocals(), !!req.valueBag) };
+    return { locals: localsReply(await session.debugLocals({ frameId: typeof req.frameId === 'number' ? req.frameId : undefined,
+      namesOnly: req.namesOnly === true, names: Array.isArray(req.names) ? req.names.map(String) : undefined }), !!req.valueBag, req.namesOnly === true) };
   }
 
   /**
@@ -295,27 +293,7 @@ export class BridgeDebug {
     const ctx = pathContext(session);
     const mode = exceptionMode(req.exceptions);
     if (mode) await session.setDebugExceptions(mode);
-    await applyAt(ctx, req, session.debug.breakpoints, (specs) => session.setDebugBreakpoints(specs));
-    await removeFunctionBreakpoints(req, session.debug.breakpoints, (specs) => session.setDebugBreakpoints(specs));
-    const source = (): vscode.SourceBreakpoint[] => vscode.debug.breakpoints.filter((b): b is vscode.SourceBreakpoint => b instanceof vscode.SourceBreakpoint);
-    const matches = (b: vscode.SourceBreakpoint, it: BreakItem, withCondition: boolean): boolean => b.location.uri.scheme === 'file' && b.location.uri.fsPath === it.path && b.location.range.start.line === it.line - 1 && (!withCondition || (b.condition ?? '') === (it.condition ?? ''));
-    const toAdd: BreakItem[] = [];
-    const toRemove: vscode.SourceBreakpoint[] = [];
-    if (Array.isArray(req.set)) {
-      toRemove.push(...source());
-      await session.setDebugBreakpoints([]);
-      toAdd.push(...parseBreakItems(ctx, req.set));
-    }
-    if (Array.isArray(req.add)) for (const it of parseBreakItems(ctx, req.add)) if (!source().some((b) => matches(b, it, true)) && !toAdd.some((a) => a.path === it.path && a.line === it.line && (a.condition ?? '') === (it.condition ?? ''))) toAdd.push(it);
-    if (Array.isArray(req.remove)) {
-      const items = parseBreakItems(ctx, req.remove);
-      for (const b of source()) if (items.some((it) => matches(b, it, false)) && !toRemove.includes(b)) toRemove.push(b);
-      const own = session.debug.breakpoints.filter((bp) => !items.some((it) => it.path === bp.path && it.line === bp.line));
-      if (own.length !== session.debug.breakpoints.length) await session.setDebugBreakpoints(own);
-    }
-    if (toRemove.length) vscode.debug.removeBreakpoints(toRemove);
-    if (toAdd.length) vscode.debug.addBreakpoints(toAdd.map((it) => new vscode.SourceBreakpoint(new vscode.Location(vscode.Uri.file(it.path), new vscode.Position(it.line - 1, 0)), true, it.condition)));
-    if (toRemove.length || toAdd.length) await this.settleBreakpoints(() => toAdd.every((it) => source().some((b) => matches(b, it, true))) && toRemove.every((b) => !source().includes(b)));
+    await applyBreakpointRequest(ctx, req, () => session.debug.breakpoints, (specs) => session.setDebugBreakpoints(specs));
     let echo: DebugBreakpointEcho[] | undefined;
     if (session.debug.active && session.running) echo = await session.debugCtl.syncVsCodeBreakpoints()?.catch(() => undefined);
     return { breakpoints: breakpointReply(ctx, mergeBreakpoints(currentSourceBreakpoints(), currentFunctionBreakpoints(), session.debug.breakpoints), echo), exceptions: session.debug.exceptions };
@@ -437,14 +415,4 @@ export class BridgeDebug {
     return { ...this.deps.slice(session, info.step, opts), ...(await this.pauseExtras(session, info, opts)) };
   }
 
-  private settleBreakpoints(settled: () => boolean): Promise<void> {
-    return new Promise((resolve) => {
-      const started = Date.now();
-      const tick = (): void => {
-        if (settled() || Date.now() - started > BREAKPOINT_SETTLE_MS) resolve();
-        else setTimeout(tick, 40);
-      };
-      tick();
-    });
-  }
 }

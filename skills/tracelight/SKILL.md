@@ -8,6 +8,14 @@ disable-model-invocation: true
 
 # Tracelight
 
+## HARD rule: always start with file watching
+
+Always start browser sessions with file watching enabled, in every mode. Never pass
+`--no-watch`, including for learning or debugging. Watching is enabled by default. Use
+`--no-run` when startup must not execute the file; keep watching enabled so changes made
+in VS Code or by another agent appear in the open page. When reusing a session, verify
+that its source matches the file on disk and restart it with watching enabled if needed.
+
 ## HARD gate: confirm the visible position before teaching
 
 After each browser navigation, use its returned `position` or `tracelight_position` and require
@@ -247,7 +255,7 @@ none. Check with `state --live`, which moves nothing. On `no live session`, move
 it yourself with `tracelight run FILE --save run.json` and use `run.json` instead of `--live`, or
 ask the user to start Tracelight on the file if they want the editor to follow along.
 This recording fallback does not apply to live learning or debugging. Start or reuse the
-debugger for those; a new browser exploration uses `web FILE --no-run --no-watch` before setting
+debugger for those; a new browser exploration uses `web FILE --no-run` before setting
 breakpoints and issuing `web ctl debug start`.
 
 The CLI finds a live session by the file the command names, by the current directory's workspace,

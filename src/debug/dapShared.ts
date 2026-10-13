@@ -55,6 +55,7 @@ const REASONS: Record<PausedInfo['reason'], string> = { start: 'entry', breakpoi
 export function pausedBody(info: PausedInfo, where: string): DapStoppedBody {
   const body: DapStoppedBody = { reason: REASONS[info.reason] ?? info.reason, threadId: THREAD_ID, allThreadsStopped: true, description: `Paused at ${where} (${describe(info)})` };
   if (info.watch) body.text = `${info.watch.exp} → ${info.watch.text}`;
+  if (info.watch?.error) body.text = `watch ${info.watch.exp} failed: ${info.watch.error}`;
   if (info.conditionError) body.text = info.conditionError;
   if (info.exception) body.text = `${info.exception.type}: ${info.exception.message}`;
   return body;
@@ -78,6 +79,7 @@ export function describe(info: PausedInfo): string {
     case 'breakpoint':
       return info.breakpoint?.condition ? `breakpoint if ${info.breakpoint.condition}` : 'breakpoint';
     case 'watch':
+      if (info.watch?.error) return `watch ${info.watch.exp} failed: ${info.watch.error}`;
       return info.watch ? `watch ${info.watch.exp}: ${info.watch.text}` : 'watch';
     case 'exception':
       return info.exception ? exceptionText(info.exception) : 'exception';

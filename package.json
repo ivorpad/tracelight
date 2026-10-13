@@ -3,7 +3,7 @@
   "displayName": "Tracelight",
   "publisher": "ivor",
   "description": "JavaScript and TypeScript playground in your editor: live values, coverage, and a time-travel debugger with an interactive timeline.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/ivorpad/tracelight.git"
@@ -1691,7 +1691,7 @@
             "smart"
           ],
           "enumDescriptions": [
-            "Run when the file is saved (the default).",
+            "Run when the file is saved or an open file reloads after an external disk change (the default).",
             "Run only on Re-execute.",
             "Run on every edit, and for hovers, watches, Show Value and the Time Machine: a paid run each time for a file that calls an API.",
             "Scratch files run on every edit; files inside a project (package.json, tsconfig.json, jsconfig.json, deno.json or a lock file) run on save."

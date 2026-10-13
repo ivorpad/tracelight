@@ -198,7 +198,7 @@ can read yourself, the browser page's bridge folds it into the hottest functions
 browser open:
 
 ```sh
-tracelight web app.ts --port 4790 --no-watch > "$S/web.log" 2>&1 & pid=$!   # the bridge, in the background
+tracelight web app.ts --port 4790 > "$S/web.log" 2>&1 & pid=$!   # the bridge, in the background
 until curl -s -o /dev/null http://127.0.0.1:4790/; do sleep 0.2; done
 tracelight web ctl --port 4790 profile   # {path, totalMs, rows: [{name, file, line, selfMs, totalMs}]}, top 20 by self time
 kill $pid

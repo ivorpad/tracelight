@@ -388,9 +388,9 @@ export class DebugSession extends EventEmitter<DebugSessionEvents> {
     await this.action({ action: 'pause' });
   }
 
-  async debugLocals(opts: { frameId?: number } = {}): Promise<LocalVar[]> {
+  async debugLocals(opts: { frameId?: number; namesOnly?: boolean; names?: string[] } = {}): Promise<LocalVar[]> {
     this.requirePaused('list the locals');
-    const reply = await this.request({ action: 'locals', ...(opts.frameId ? { frameId: opts.frameId } : {}) });
+    const reply = await this.request({ action: 'locals', ...opts });
     if (reply['modified'] === true) this.modified = true;
     return (reply['locals'] as LocalVar[] | undefined) ?? [];
   }
@@ -564,7 +564,7 @@ export class DebugSession extends EventEmitter<DebugSessionEvents> {
     await this.request(body);
   }
 
-  private request(body: { action: 'continue' | 'step' | 'pause' | 'breakpoints' | 'watches' | 'locals' | 'exceptions'; kind?: StepKind; set?: BreakpointSpec[] | BreakWatchSpec[]; mode?: ExceptionMode; frameId?: number }): Promise<Record<string, unknown>> {
+  private request(body: { action: 'continue' | 'step' | 'pause' | 'breakpoints' | 'watches' | 'locals' | 'exceptions'; kind?: StepKind; set?: BreakpointSpec[] | BreakWatchSpec[]; mode?: ExceptionMode; frameId?: number; namesOnly?: boolean; names?: string[] }): Promise<Record<string, unknown>> {
     const runner = this.runner;
     if (!runner || !this.runId) return Promise.reject(new Error('the debug session has ended'));
     return runner.debug(this.runId, body);

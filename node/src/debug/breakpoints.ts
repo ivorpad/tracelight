@@ -12,6 +12,7 @@
  */
 import path from 'node:path';
 import fs from 'node:fs';
+import { parseSync } from 'oxc-parser';
 import type { Range } from '../protocol.ts';
 
 export interface DebugFile {
@@ -34,6 +35,37 @@ export interface ResolvableBreakpoint {
   rid: number | null;
   fileId: number | null;
   resolvedLine: number | null;
+}
+
+/** A condition or interpolation is one JavaScript expression, never several statements. */
+export function syntaxError(expression: string): string | null {
+  const res = parseSync('tracelight-condition.js', `(${expression}\n)`, { sourceType: 'script' });
+  if (res.errors.length) return `SyntaxError: ${res.errors[0]!.message}`;
+  const body = res.program.body;
+  return body.length === 1 && body[0]!.type === 'ExpressionStatement' ? null : 'SyntaxError: not one expression';
+}
+
+export type LogMessagePart = { text: string } | { expression: string };
+
+/** Braces interpolate expressions; doubled braces are literal braces. Parse nested JS braces too. */
+export function logMessageParts(template: string): { parts: LogMessagePart[]; error: string | null } {
+  const parts: LogMessagePart[] = [];
+  let text = '';
+  for (let i = 0; i < template.length;) {
+    if (template.startsWith('{{', i) || template.startsWith('}}', i)) {
+      text += template[i]; i += 2;
+    } else if (template[i] !== '{') text += template[i++];
+    else {
+      if (text) { parts.push({ text }); text = ''; }
+      let close = template.indexOf('}', i + 1);
+      while (close >= 0 && syntaxError(template.slice(i + 1, close))) close = template.indexOf('}', close + 1);
+      if (close < 0) return { parts: [], error: 'SyntaxError: logMessage needs a valid expression inside each {…}' };
+      parts.push({ expression: template.slice(i + 1, close).trim() });
+      i = close + 1;
+    }
+  }
+  if (text) parts.push({ text });
+  return { parts, error: null };
 }
 
 /** True when this call gave the breakpoint its rid. `file` is the file just instrumented, else all of them. */

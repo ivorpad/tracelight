@@ -135,6 +135,7 @@ export interface DebugBreakpointSpec {
   /** absent on a function breakpoint */
   line?: number;
   condition?: string;
+  logMessage?: string;
   /** a function's entry: a bare name, or `Class.method` */
   function?: string;
 }
@@ -157,6 +158,8 @@ export interface DebugRequest {
   mode?: DebugExceptionMode;
   /** with action `locals`: which frame of the pause, innermost 0; absent means 0 */
   frameId?: number;
+  namesOnly?: boolean;
+  names?: string[];
 }
 
 /** One completion for a watch expression (`complete` reply, DAP `completions`, the panel's dropdown). */
@@ -658,7 +661,7 @@ export interface DebugPausedEvent extends RunEventBase {
   kind?: DebugStepKind;
   breakpoint?: DebugBreakpointSpec & { rid?: number; fileId?: number; resolvedLine?: number; error?: string };
   conditionError?: string;
-  watch?: { id: string; exp: string; text: string };
+  watch?: { id: string; exp: string; text: string; error?: string };
   /** with reason `exception`: what was raised at this statement, and whether it reached the top */
   exception?: { type: string; message: string; uncaught: boolean };
   /** the thread being served: `threading.current_thread().name` and `threading.get_ident()` */

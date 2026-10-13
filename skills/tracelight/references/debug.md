@@ -187,7 +187,7 @@ with its stack and variables. Code history follows the pause, with explicit revi
 recorded events. [browser.md](browser.md) has the commands and their replies.
 
 ```sh
-tracelight web app.ts --port 4790 --no-run --no-watch --open
+tracelight web app.ts --port 4790 --no-run --open
 tracelight web ctl --port 4790 break 32 on
 tracelight web ctl --port 4790 debug start        # runs to the breakpoint: the stop, with the frame's locals
 tracelight web ctl --port 4790 eval "order.tier"  # in the paused frame
@@ -225,7 +225,7 @@ line you set, `debug stop`, and stop the page if nobody uses it.
 | "where did this bad value come from" | on a recording, `tracelight origin --live STEP` (or `origin run.json STEP`) with the exception's step from `exceptions`; fix the line marked root, not the line that threw |
 | "let it run, do not wait" | `tracelight continue --live --no-wait` |
 | "start over" / "stop" | `tracelight restart --live` / `tracelight stop --live` |
-| "debug it in the browser" | `tracelight web FILE --no-run --no-watch --open`, then `tracelight web ctl break LINE on` and `debug start`, `debug continue` |
+| "debug it in the browser" | `tracelight web FILE --no-run --open`, then `tracelight web ctl break LINE on` and `debug start`, `debug continue` |
 
 ## After an edit
 

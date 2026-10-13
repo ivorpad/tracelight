@@ -35,6 +35,27 @@ test('capabilities advertise record and recordFrom', () => {
   assert.ok(CAPABILITIES.includes('recordFrom'));
 });
 
+test('record: false change watches pause with live values without recording', async () => {
+  const d = new Driver();
+  try {
+    d.start({ 'main.js': 'let total = 0;\ntotal += 1;\ntotal += 2;\nconsole.log(total);\n' }, 'main.js', { record: false });
+    await d.paused();
+    await d.ask({ type: 'debug', action: 'step', kind: 'over' });
+    const initialized = await d.paused();
+    assert.equal(initialized.line, 2);
+    await d.ask({ type: 'debug', action: 'watches', set: [{ id: 'total', exp: 'total', breakWhen: 'change' }] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    const changed = await d.paused();
+    assert.equal(changed.reason, 'watch');
+    assert.equal(changed.line, 3);
+    assert.equal(changed.watch.text, '1');
+    await d.ask({ type: 'debug', action: 'watches', set: [] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    assert.equal((await d.next(m => m.type === 'run.finished')).exitCode, 0);
+    assert.ok(!d.seen.some(m => RECORDING.includes(m.type)));
+  } finally { d.close(); }
+});
+
 test('record: false is the Debugger: frame-chain pauses, the statement counter, output, nothing recorded', async () => {
   const d = new Driver();
   try {

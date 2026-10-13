@@ -22,8 +22,8 @@
  * resolution, the arming cell and `modified` follow debugger.py; the two modes (with a recording:
  * scopes from the trace; without: per-call ids and frame exits) are the same two.
  */
-import { parseSync } from 'oxc-parser';
-import { real, resolveBreakpoint, type DebugFile } from './breakpoints.ts';
+import { logMessageParts, real, resolveBreakpoint, syntaxError, type DebugFile } from './breakpoints.ts';
+export { syntaxError } from './breakpoints.ts';
 import { describeFallback, type Described } from './describe.ts';
 
 export const STEP_KINDS = ['into', 'over', 'out'] as const;
@@ -78,6 +78,7 @@ export interface BreakpointSpec {
   line?: number;
   function?: string;
   condition?: string;
+  logMessage?: string;
 }
 
 export class Breakpoint {
@@ -85,6 +86,7 @@ export class Breakpoint {
   line: number;
   function: string | null;
   condition: string | null;
+  logMessage: string | null;
   error: string | null = null;
   rid: number | null = null;
   fileId: number | null = null;
@@ -95,26 +97,20 @@ export class Breakpoint {
     this.line = Number(spec.line ?? 0) | 0;
     this.function = String(spec.function ?? '').trim() || null;
     this.condition = String(spec.condition ?? '').trim() || null;
+    this.logMessage = spec.logMessage == null ? null : String(spec.logMessage);
     if (this.condition) this.error = syntaxError(this.condition);
+    if (this.logMessage !== null && !this.error) this.error = logMessageParts(this.logMessage).error;
   }
 
   toJSON(): Record<string, unknown> {
     const out: Record<string, unknown> = { path: this.path, line: this.line };
     if (this.function) out.function = this.function;
     if (this.condition) out.condition = this.condition;
+    if (this.logMessage !== null) out.logMessage = this.logMessage;
     if (this.rid !== null) Object.assign(out, { rid: this.rid, fileId: this.fileId, resolvedLine: this.resolvedLine });
     if (this.error) out.error = this.error;
     return out;
   }
-}
-
-/** `SyntaxError: ...` when `expression` is not one JavaScript expression, else null. */
-export function syntaxError(expression: string): string | null {
-  const res = parseSync('tracelight-condition.js', `(${expression}\n)`, { sourceType: 'script' });
-  if (res.errors.length) return `SyntaxError: ${res.errors[0]!.message}`;
-  const body = res.program.body;
-  if (body.length !== 1 || body[0]!.type !== 'ExpressionStatement') return 'SyntaxError: not one expression';
-  return null;
 }
 
 /** What the worker reads back at a trap: why this statement may stop, and what still needs the frame. */
@@ -127,6 +123,7 @@ export interface Candidate {
   extra: Record<string, unknown>;
   /** a breakpoint whose condition the worker evaluates in the frame */
   condition: { bp: Record<string, unknown>; expression: string } | null;
+  logpoints: { bp: Record<string, unknown>; expression: string | null }[];
   /** break-when watches are set: the worker evaluates them in the frame */
   watches: boolean;
   /** this step is in the Time Machine's watch window: the worker evaluates these and emits `watch` events */
@@ -141,6 +138,8 @@ export class Debugger {
   breakpoints: Breakpoint[] = [];
   /** rid -> breakpoint, mutated in place */
   readonly byRid = new Map<number, Breakpoint>();
+  private readonly stoppingByRid = new Map<number, Breakpoint>();
+  private readonly logpointsByRid = new Map<number, Breakpoint[]>();
   watching = false;
   pending: Pending | null = null;
   /** the scope `onLeave` is waited for; -1 while no step waits for a frame exit */
@@ -241,7 +240,16 @@ export class Debugger {
 
   /** what a recorded worker thread traps on itself (threads/worker.ts): it resolves the names against its own files */
   functionBreakpoints(): { function: string; path: string; echo: Record<string, unknown> }[] {
-    return this.breakpoints.filter((bp) => bp.function && !bp.error?.startsWith('SyntaxError')).map((bp) => ({ function: bp.function!, path: bp.path, echo: bp.toJSON() }));
+    const groups = new Map<string, Breakpoint[]>();
+    for (const bp of this.breakpoints) {
+      if (!bp.function || bp.error?.startsWith('SyntaxError')) continue;
+      const key = JSON.stringify([bp.path, bp.function]);
+      const list = groups.get(key) ?? [];
+      list.push(bp);
+      groups.set(key, list);
+    }
+    return [...groups.values()].map(list => ({ function: list[0]!.function!, path: list[0]!.path,
+      echo: list.length === 1 ? list[0]!.toJSON() : { ...list[0]!.toJSON(), coincident: list.map(bp => bp.toJSON()) } }));
   }
 
   fileAdded(file: DebugFile): void {
@@ -254,7 +262,17 @@ export class Debugger {
 
   private index(): void {
     this.byRid.clear();
-    for (const bp of this.breakpoints) if (bp.rid !== null && !this.byRid.has(bp.rid)) this.byRid.set(bp.rid, bp);
+    this.stoppingByRid.clear();
+    this.logpointsByRid.clear();
+    for (const bp of this.breakpoints) {
+      if (bp.rid === null || bp.error?.startsWith('SyntaxError')) continue;
+      if (!this.byRid.has(bp.rid)) this.byRid.set(bp.rid, bp);
+      if (bp.logMessage !== null) {
+        const list = this.logpointsByRid.get(bp.rid) ?? [];
+        list.push(bp);
+        this.logpointsByRid.set(bp.rid, list);
+      } else if (!this.stoppingByRid.has(bp.rid)) this.stoppingByRid.set(bp.rid, bp);
+    }
     this.rearm();
   }
 
@@ -296,18 +314,19 @@ export class Debugger {
     }
     if (reason === null && this.pauseRequested) reason = 'pause';
     let condition: Candidate['condition'] = null;
-    if (reason === null && this.byRid.size) {
-      const bp = this.byRid.get(rid);
+    const logpoints = (this.logpointsByRid.get(rid) ?? []).map(bp => ({ bp: bp.toJSON(), expression: bp.condition }));
+    const bp = this.stoppingByRid.get(rid);
+    if (reason === null && bp) {
       if (bp) {
-        if (bp.condition && !bp.error) condition = { bp: bp.toJSON(), expression: bp.condition };
+        if (bp.condition) condition = { bp: bp.toJSON(), expression: bp.condition };
         else {
           reason = 'breakpoint';
           extra.breakpoint = bp.toJSON();
         }
       }
     }
-    if (reason === null && condition === null && !this.watching && stepWatches === null) return;
-    this.candidate = { n, rid, scope, reason, extra, condition, watches: reason === null && this.watching, stepWatches };
+    if (reason === null && condition === null && !logpoints.length && !this.watching && stepWatches === null) return;
+    this.candidate = { n, rid, scope, reason, extra, condition, logpoints, watches: reason === null && this.watching, stepWatches };
     this.trap();
     this.candidate = null;
     const action = this.resumeAction;
@@ -372,6 +391,10 @@ export class Debugger {
     const event = this.pausedEvent(n, rid, scope, reason, extra, frameStack, line, fileId);
     this.host.emit(event);
     return event;
+  }
+
+  logpointMessage(step: number, text: string, breakpoint: Record<string, unknown>): void {
+    this.host.emit({ type: 'output', stream: 'stdout', text: text + '\n', step, logpoint: breakpoint });
   }
 
   private pausedEvent(n: number, rid: number, scope: number, reason: string, extra: Record<string, unknown>, frameStack: unknown[], line: number | null, fileId: number): Record<string, unknown> {

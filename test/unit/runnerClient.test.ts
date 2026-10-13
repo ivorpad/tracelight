@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as path from 'node:path';
+import type { ChildProcess } from 'node:child_process';
 import { RunnerClient } from '../../src/runtime/runnerClient';
 import type { RunEvent, RunRequest } from '../../src/shared/protocol';
 
@@ -62,4 +63,30 @@ describe('RunnerClient', () => {
     expect(ready.executable).toBe('/fake/python');
     c.dispose();
   }, 15000);
+
+  it('handles stdin pipe errors and rejects every pending request, including during teardown', async () => {
+    const c = client();
+    try {
+      await c.start();
+      const proc = (c as unknown as { proc: ChildProcess }).proc;
+      // This fixture deliberately leaves evaluate requests unanswered. Attach rejection
+      // handlers before the deterministic stream error, avoiding a process timing race.
+      const pending = Promise.allSettled([
+        c.forward({ type: 'evaluate', runId: 'r-1', expression: 'first' }),
+        c.forward({ type: 'evaluate', runId: 'r-1', expression: 'second' }),
+      ]);
+      await new Promise<void>(resolve => setImmediate(resolve));
+      const error = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+      expect(() => proc.stdin!.emit('error', error)).not.toThrow();
+      const results = await pending;
+      expect(results).toHaveLength(2);
+      for (const result of results) {
+        expect(result.status).toBe('rejected');
+        if (result.status === 'rejected') expect(result.reason.message).toContain('Tracelight runner input failed: write EPIPE');
+      }
+      c.dispose();
+      // Teardown writes can fail after the client has detached from this process.
+      expect(() => proc.stdin!.emit('error', error)).not.toThrow();
+    } finally { c.dispose(); }
+  });
 });

@@ -244,6 +244,8 @@ live({
     debugLiveArg(p);
     p.addArgument('positions', { nargs: '*', metavar: 'FILE:LINE', help: 'add a breakpoint here (a function\'s first line pauses at every call; a blank line moves to the next statement)' });
     p.addArgument('--when', { metavar: 'EXPR', help: 'only pause when EXPR is true there (applies to the FILE:LINE given)' });
+    p.addArgument('--log-message', { metavar: 'TEXT', help: 'log TEXT with pure {expression} substitutions instead of pausing at the supplied FILE:LINE' });
+    p.addArgument('--clear', { action: 'store_true', help: 'remove all breakpoints from the selected session and editor' });
     p.addArgument('--at', { action: 'append', metavar: 'NAME|FILE:LINE', help: 'break at a function\'s entry by name (`--at rrf`, `--at Ranker.rank`), repeatable; the runtime resolves it, so a module imported later gets it too' });
     p.addArgument('--remove', { action: 'append', default: [], metavar: 'FILE:LINE|NAME', help: 'remove this breakpoint (repeatable): FILE:LINE for a line, NAME for the function breakpoint `--at NAME` set' });
     p.addArgument('--list', { action: 'store_true', help: 'list the breakpoints (the default with nothing else)' });
@@ -253,12 +255,13 @@ live({
     splitAt(args);
     const add = (args.positions || []).map((spec: string) => {
       const [f, l] = parseLine(spec, 'break');
-      return { file: f, line: l, ...(args.when ? { condition: args.when } : {}) };
+      return { file: f, line: l, ...(args.when ? { condition: args.when } : {}), ...(args.log_message !== undefined && args.log_message !== null ? { logMessage: args.log_message } : {}) };
     });
     if (args.when && !add.length) throw new AgentError('--when needs a FILE:LINE to apply to', 'e.g. `break --live demo.ts:12 --when \'payload === null\'`');
+    if (args.log_message !== undefined && args.log_message !== null && !add.length) throw new AgentError('--log-message needs a FILE:LINE');
     const remove = (args.remove || []).map(removeItem);
     for (const extra of args.also_at || []) await source.breakpoints({ at: extra });
-    return source.breakpoints({ add, remove, exceptions: args.on_exception ?? null, at: args.at ?? null });
+    return source.breakpoints({ add, remove, clear: !!args.clear, exceptions: args.on_exception ?? null, at: args.at ?? null });
   },
   render: renderBreak,
 });
@@ -283,8 +286,10 @@ live({
   configure(p) {
     debugLiveArg(p);
     p.addArgument('--frame', { type: 'int', default: null, metavar: 'N', help: 'which frame of the pause, innermost 0 (the stop\'s `stack` numbers them)' });
+    p.addArgument('--names-only', { action: 'store_true', help: 'return names and types without formatting their values' });
+    p.addArgument('--name', { action: 'append', default: [], metavar: 'NAME', help: 'only return this named binding; repeatable' });
   },
-  run: (source, args) => source.locals({ valueBag: !!args.json, frame: args.frame ?? null }),
+  run: (source, args) => source.locals({ valueBag: !!args.json, frame: args.frame ?? null, namesOnly: !!args.names_only, ...(args.name?.length ? { names: args.name } : {}) }),
   render: renderLocals,
 });
 

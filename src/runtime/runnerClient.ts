@@ -130,6 +130,12 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
       this.options.log?.(`runner stderr: ${text.trimEnd()}`);
       this.emit('stderr', text);
     });
+    proc.stdin?.on('error', (err) => {
+      // A failed write also emits on stdin; its callback alone cannot handle EPIPE.
+      if (this.proc !== proc) return;
+      this.options.log?.(`runner input error: ${err.message}`);
+      this.failPending(new Error(`Tracelight runner input failed: ${err.message}`));
+    });
     proc.on('error', (err) => {
       this.options.log?.(`runner spawn error: ${err.message}`);
       this.failPending(new Error(`Tracelight runner failed to start: ${err.message}`));

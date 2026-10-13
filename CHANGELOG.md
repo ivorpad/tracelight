@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- MCP now exposes saved-run investigations, explicit fix checks, session positions, recorded
+  destinations and reopenable investigation checkpoints with recording identity checks.
+- Conditional breakpoints and expression watches report evaluation failures without changing
+  program state. Conditional logpoints can share a location with stopping breakpoints, including
+  worker threads. Agents can list binding names and types or request selected values.
+- Recorded investigations use captured source and distinguish the statement that changed a value
+  from the step where its new value was observed. Runtime pipe errors reject pending requests.
+
+- Browser source refreshes after disk changes even when automatic execution is disabled.
+  The skill always starts browser sessions with watching enabled, including debug and learning.
+
+- VS Code On Save sessions rerun when the entry file or an open imported file reloads after
+  another editor or agent changes it on disk, including files outside the workspace. Unsaved
+  edits and On Demand still wait for a run.
 - Browser navigation confirms the rendered source and highlight after presentation, reports live
   and recorded positions separately, and refuses ambiguous control across multiple pages.
 - Scratchpad experiments prepare formatted code, copied inputs, receivers and labelled fixtures

@@ -335,8 +335,9 @@ export class LiveRun {
   }
 
   /** `at` is a function name whose entry pauses; the runtime resolves it, not the host */
-  breakpoints(opts: { add?: Msg[] | null; remove?: Msg[] | null; exceptions?: string | null; at?: string | null } = {}): Promise<Msg> {
+  breakpoints(opts: { add?: Msg[] | null; remove?: Msg[] | null; exceptions?: string | null; at?: string | null; clear?: boolean } = {}): Promise<Msg> {
     const req: Msg = { type: 'break' };
+    if (opts.clear) req.set = [];
     if (opts.add?.length) req.add = [...opts.add];
     if (opts.remove?.length) req.remove = [...opts.remove];
     if (opts.exceptions) req.exceptions = opts.exceptions;
@@ -353,8 +354,8 @@ export class LiveRun {
     return this.request(req);
   }
 
-  locals(opts: { valueBag?: boolean; frame?: number | null } = {}): Promise<Msg> {
-    const req: Msg = { type: 'locals' };
+  locals(opts: { valueBag?: boolean; frame?: number | null; namesOnly?: boolean; names?: string[] } = {}): Promise<Msg> {
+    const req: Msg = { type: 'locals', ...(opts.namesOnly ? { namesOnly: true } : {}), ...(opts.names ? { names: opts.names } : {}) };
     if (opts.valueBag) req.valueBag = true;
     if (opts.frame) req.frameId = opts.frame;
     return this.request(req);

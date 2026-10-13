@@ -47,7 +47,7 @@ that breakpoint it runs to the end without pausing, exits normally, and `stop --
 `0 steps`. The launch worked; the breakpoint did not. Only a stop whose `paused at` names the code
 you meant shows the debugger is ready.
 
-Breakpoints are the window's and they outlive a launch, so the first stop may be an earlier
+Ordinary breakpoints are the window's and they outlive a launch, so the first stop may be an earlier
 session's breakpoint. Run `break --live --list` after the first stop. Remove only the
 breakpoints you added and leave the user's alone.
 
@@ -184,11 +184,11 @@ Lines that ran in other functions have nothing, because nothing kept them; that 
 tracelight continue --live [--no-wait] [--until EXPR | --to FILE:LINE] [--no-start]
 tracelight step --live --into|--over|--out [--count N] [--scope]
 tracelight pause --live [--no-wait]
-tracelight locals --live [--frame N]
+tracelight locals --live [--frame N] [--names-only] [--name NAME]...
 tracelight eval --live EXPR [--frame N]
 tracelight exec --live SOURCE [--frame N]
-tracelight break --live [FILE:LINE ...] [--when EXPR] [--at NAME|FILE:LINE]... [--remove FILE:LINE|NAME]...
-                        [--list] [--on-exception off|uncaught|raised] [--no-start]
+tracelight break --live [FILE:LINE ...] [--when EXPR] [--log-message TEXT] [--at NAME|FILE:LINE]... [--remove FILE:LINE|NAME]...
+                        [--clear] [--list] [--on-exception off|uncaught|raised] [--no-start]
 tracelight watches --live [--add EXPR]... [--break-when change|true] [--remove ID]... [--list]
 tracelight stop --live
 tracelight restart --live [--stop-on-entry] [--no-start]
@@ -201,6 +201,17 @@ Every one takes `--session NAME|PATH` and `--json`, and none has a saved-run for
 `--frame N` sends `locals`, `eval` and `exec` to a caller frame; the stop's `stack:` numbers
 them, innermost 0. `--no-start` makes `continue`, `break` and `restart` fail when no debug session
 is running, instead of starting the last launch from this directory again (see Starting).
+
+`locals --names-only` returns binding names and types without serializing values, expanding
+objects or calling getters. It still enumerates engine descriptors, including primitive bindings.
+Repeat `--name NAME` to read only selected names from that frame's lexical scopes; there is no
+global/local/all selector.
+
+`break --live FILE:LINE --log-message 'total={total}'` logs without pausing there. `--when EXPR`
+can limit when it logs. These API logpoints are runtime breakpoints, listed by `--list` and
+removed by `--remove FILE:LINE`; they do not become editor instrumentation markers. `--clear`
+clears all breakpoints before adding those in the same command, including the user's editor
+breakpoints. Prefer removing only your own entries.
 
 `eval --live` reads without side effects: names, properties, subscripts, operators and pure
 calls (`Math`, `JSON`, non-mutating methods of `String`, `Array`, `Object`, `Map` and `Set`). V8
