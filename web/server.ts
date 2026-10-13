@@ -4,7 +4,7 @@
  * it changes on disk (save in VS Code or any editor), relays requests from the page, and lets an
  * agent drive the page over HTTP (`/api/state`, `/api/command`, the `ctl` subcommand).
  *
- *   node dist/web/server.js FILE [--port 4777] [--runtime js|"CMD ARGS"] [--open] [--no-run] [--no-watch]
+ *   node dist/web/server.js FILE [--port 4777] [--runtime js|"CMD ARGS"] [--node PATH] [--open] [--no-run] [--no-watch]
  *   node dist/web/server.js ctl state | goto N | step into|over|out|back|backOver|backOut | line N | say TEXT [--line N] | clear | run | eval EXPR
  *
  * Binds 127.0.0.1 only. A WebSocket or API call whose Origin or Host is not this server's is
@@ -37,8 +37,10 @@ export interface ServerOptions {
   file: string;
   port: number;
   host: string;
-  /** `js`, or a whole command line that speaks the protocol on stdio (`node path/to/runtime.js serve`) */
+  /** `js`, `node`, `bun`, or a whole command line that speaks the protocol on stdio. */
   runtime: string;
+  /** Node or Bun executable for every program child, independent of the protocol server. */
+  node?: string;
   watch: boolean;
   /** false opens the source without an initial execution; explicit runs still work */
   initialRun?: boolean;
@@ -69,10 +71,11 @@ export function splitCommand(line: string): string[] {
 
 /** The command the bridge spawns for `--runtime`, and the directory it starts in. */
 export function runtimeCommand(opts: Pick<ServerOptions, 'runtime' | 'distDir' | 'file'>): { command: string; args: string[]; cwd: string; env: Record<string, string> } {
-  if (opts.runtime === 'js') {
+
+  if (opts.runtime === 'js' || opts.runtime === 'node' || opts.runtime === 'bun') {
     const entry = path.join(runtimeRoot(opts.distDir), 'bin', 'tracelight.mjs');
     if (!fs.existsSync(entry)) throw new Error(`--runtime js needs ${entry}; build the runtime (npm ci --prefix node && npm run build) or pass --runtime "CMD ARGS"`);
-    return { command: process.execPath, args: [entry, 'serve'], cwd: path.dirname(opts.file), env: {} };
+    return { command: process.execPath, args: [entry, 'serve'], cwd: path.dirname(opts.file), env: opts.runtime === 'bun' ? { TRACELIGHT_NODE: 'bun' } : opts.runtime === 'node' ? { TRACELIGHT_NODE: process.execPath } : {} };
   }
   const [command, ...args] = splitCommand(opts.runtime);
   if (!command) throw new Error('--runtime is empty');
@@ -209,6 +212,7 @@ export class BridgeServer {
     const dir = path.dirname(this.file.path);
     const request: Omit<RunRequest, 'type' | 'id'> = {
       runId,
+      ...(this.opts.node ? { node: this.opts.node } : {}),
       file: { path: this.file.path, displayName: this.file.displayName, content: text },
       workspaceRoot: dir,
       cwd: dir,
@@ -275,6 +279,7 @@ export class BridgeServer {
     const base = runConfig(this.configPatch);
     const request: Omit<RunRequest, 'type' | 'id'> = {
       runId,
+      ...(this.opts.node ? { node: this.opts.node } : {}),
       file: { path: this.file.path, displayName: this.file.displayName, content: text },
       workspaceRoot: dir,
       cwd: dir,
@@ -325,6 +330,7 @@ export class BridgeServer {
       });
       await runner.run({
         runId,
+        ...(this.opts.node ? { node: this.opts.node } : {}),
         file: { path: this.file.path, displayName: this.file.displayName, content: text },
         workspaceRoot: dir,
         cwd: dir,
@@ -758,7 +764,7 @@ function loadRecent(file: string | undefined): RecentFile[] {
 /* ---------- command line ---------- */
 
 const USAGE = `usage:
-  tracelight-web FILE [--port N] [--runtime js|"CMD ARGS"] [--open] [--no-run] [--no-watch] [--verbose] [--only PATTERN]
+  tracelight-web FILE [--port N] [--runtime js|node|bun|"CMD ARGS"] [--node PATH] [--open] [--no-run] [--no-watch] [--verbose] [--only PATTERN]
   tracelight-web ctl [--port N] state | goto STEP | step into|over|out|back|backOver|backOut | line N
                  | position live|recorded|visible [--focus true|false]
                  | say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kind explanation|prediction]
@@ -964,6 +970,11 @@ export async function main(argv: string[]): Promise<number> {
     const a = argv[i]!;
     if (a === '--port') opts.port = Number(argv[++i]);
     else if (a === '--runtime') opts.runtime = argv[++i] ?? '';
+    else if (a === '--node') {
+      const executable = argv[++i];
+      if (!executable || executable.startsWith('--')) throw new Error('--node needs a Node or Bun executable path');
+      opts.node = executable;
+    }
     else if (a === '--only') (opts.only ??= []).push(argv[++i] ?? '');
     else if (a === '--open') opts.open = true;
     else if (a === '--no-run') opts.initialRun = false;

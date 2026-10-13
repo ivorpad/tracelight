@@ -20,7 +20,8 @@
  * snapshot it took on the way out (bounded). Its ids carry the prefix `w<threadId>|`.
  */
 import wt, { MessageChannel, type MessagePort } from 'node:worker_threads';
-import { stripTypeScriptTypes, syncBuiltinESMExports } from 'node:module';
+import { syncBuiltinESMExports } from 'node:module';
+import * as nodeModule from 'node:module';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
@@ -93,7 +94,7 @@ function runtimeSources(): [string, string][] {
     let text: string;
     try {
       text = readFileSync(url, 'utf8');
-      out.set(url.href, stripTypeScriptTypes(text));
+      out.set(url.href, nodeModule.stripTypeScriptTypes(text));
     } catch {
       continue; // the worker's own loader takes it
     }

@@ -24,6 +24,7 @@
  * Frames: the runtime's own frames (`runtimeRoots`) and Node's internals are dropped; what is left
  * is the chain `frameId` indexes, innermost 0. The first instrumented frame is the paused one.
  */
+import { BunInspector } from './bunInspector.ts';
 import { Session } from 'node:inspector/promises';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import fs from 'node:fs';
@@ -40,6 +41,7 @@ import { functionSourceAt } from './functionSource.ts';
 import { MASK, secrets } from '../secrets.ts';
 
 export interface AgentData {
+  inspectorUrl?: string;
   ctlFd?: number;
   eventFd: number;
   lock: SharedArrayBuffer;
@@ -54,8 +56,8 @@ export interface AgentData {
 
 const data = workerData as AgentData;
 const out = new LineWriter(data.eventFd, data.lock);
-const session = new Session();
-session.connectToMainThread();
+const session = data.inspectorUrl ? new BunInspector(data.inspectorUrl) : new Session();
+if (session instanceof Session) session.connectToMainThread();
 const post: Post = (method, params) => session.post(method as any, params as any);
 const GROUP = 'tracelight-req';
 /** the session of the stopped thread: the main thread's, or a worker's while one is held */
@@ -165,7 +167,7 @@ async function framesOf(callFrames: any[], urls = scriptUrls): Promise<Frame[]> 
       callFrameId: cf.callFrameId,
       name: cf.functionName || '<module>',
       path,
-      line: (cf.location?.lineNumber ?? 0) + 1,
+      line: (cf.location?.lineNumber ?? 0) + 1 - (data.inspectorUrl && byPath.has(path) ? 1 : 0),
       file: byPath.get(path) ?? null,
       scopeChain: scopes,
       isModule: !cf.functionName && !scopes.some((s: any) => s.type === 'local' && s.name),
@@ -444,7 +446,9 @@ async function onException(params: any): Promise<void> {
     await post('Debugger.resume');
     return;
   }
-  const v = await verdict(params.callFrames);
+  // JSC's exception locations cannot reliably predict catch regions. Keep the live frame
+  // snapshot and let actual uncaught completion decide, as for a deferred Node rejection.
+  const v = data.inspectorUrl ? 'unknown' : await verdict(params.callFrames);
   const uncaught = v === 'uncaught';
   const frames = all.slice(k);
   const frame = frames[0]!;

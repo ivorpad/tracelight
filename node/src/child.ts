@@ -11,7 +11,8 @@
  * child -> runner, NDJSON on fd 3: {kind: 'event', event} | {kind: 'reply', id, msg} | {kind: 'done', exitCode, stepCount, logCount}
  */
 import { Session } from 'node:inspector';
-import { createRequire, isBuiltin, registerHooks } from 'node:module';
+import { createRequire, isBuiltin } from 'node:module';
+import * as nodeModule from 'node:module';
 import { tmpdir } from 'node:os';
 import { existsSync, mkdtempSync, realpathSync, readFileSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, extname, isAbsolute, join, resolve, sep } from 'node:path';
@@ -37,6 +38,22 @@ import { pruneProfile, type CpuProfile } from './profile.ts';
 import { fingerprint, ID_FILE, ID_RANGE, newIds, ThreadHub, type Alias } from './threads/hub.ts';
 
 type Msg = Record<string, any>;
+
+/** The source-returning Bun plugin hook loses CommonJS export semantics. */
+function bunCommonJS(filename: string, source: string): boolean {
+  if (/\.(?:cjs|cts)$/i.test(filename)) return true;
+  const lang = /\.tsx$/i.test(filename) ? 'tsx' : /\.jsx$/i.test(filename) ? 'jsx' : /\.(?:ts|mts)$/i.test(filename) ? 'ts' : 'js';
+  const tree = parseSync(filename, source, { sourceType: 'unambiguous', lang }).program;
+  const visit = (node: any): boolean => {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some(visit);
+    if (node.type === 'MemberExpression' && node.object?.type === 'Identifier' &&
+      (node.object.name === 'exports' || node.object.name === 'module' &&
+        (node.property?.name === 'exports' || node.property?.value === 'exports'))) return true;
+    return Object.values(node).some(value => typeof value === 'object' && visit(value));
+  };
+  return visit(tree);
+}
 
 const EVENTS_FD = 3;
 /** what a debug run that records nothing never sends: all of it describes a recording (an uncaught `error` still goes out) */
@@ -246,7 +263,7 @@ export class RunChild {
     flush.unref();
     process.channel?.unref(); // the program's own work decides when it is done
     const wants = wantsDebugger(req);
-    const recordWorkers = this.unrecorded === null && this.mode !== 'profile' && this.config.workers;
+    const recordWorkers = !process.versions.bun && this.unrecorded === null && this.mode !== 'profile' && this.config.workers;
     // a worker's pause in a live debug run: its step in the merged trace, from the hub to the debugger (agent.ts)
     this.debugLive = wants === 'live';
     const pauseCell = wants === 'live' && recordWorkers ? new Int32Array(new SharedArrayBuffer(16)) : null;
@@ -265,6 +282,8 @@ export class RunChild {
         }
       } catch (e) {
         this.emit({ type: 'runner.error', message: (e as Error).message });
+        // A requested live session must never execute the program as a recording fallback.
+        if (wants === 'live') return this.finish(undefined, false, 1);
       }
     }
     if (this.unrecorded !== null && !this.dbgHooks) this.unrecorded = null; // no debugger: an ordinary recording run
@@ -333,7 +352,26 @@ export class RunChild {
 
   installLoader(req: Msg): void {
     const markers = req.markers ?? [];
-    registerHooks({
+    if (process.versions.bun) {
+      const bun = (globalThis as any).Bun;
+      bun.plugin({ name: 'tracelight-record', setup: (builder: any) => {
+        builder.onLoad({ filter: /\.(?:[cm]?js|[cm]?ts|jsx|tsx)$/ }, ({ path: loaded }: { path: string }) => {
+          const filename = realpathSync(loaded);
+          const kind = this.kindOf(filename);
+          if (!kind) return undefined;
+          const source = this.overrides.get(filename) ?? readFileSync(filename, 'utf8');
+          if (bunCommonJS(filename, source)) {
+            throw new Error('Bun onLoad source modules do not preserve CommonJS exports; CommonJS recording requires Node');
+          }
+          const info = this.instrumentFile(filename, source, 'module', kind === 'library' ? [] : markers, kind === 'library');
+          if (info.code === null) throw new InstrumentFailure(info.error ?? 'instrumentation failed');
+          // Skip Bun's reformatter so inspector lines match the instrumented source (+ pragma).
+          return { contents: `// @bun\n${info.code}`, loader: 'js' };
+        });
+      }});
+      return;
+    }
+    nodeModule.registerHooks({
       resolve: resolveTypeScript,
       load: (url, context, nextLoad) => {
         if (!url.startsWith('file:')) return nextLoad(url, context);
@@ -362,7 +400,7 @@ export class RunChild {
   startProfile(req: Msg): void {
     const source = this.overrides.get(this.mainPath) ?? readFileSync(this.mainPath, 'utf8');
     this.instrumentFile(this.mainPath, source, this.formatOf(this.mainPath, source), req.markers ?? []);
-    registerHooks({
+    nodeModule.registerHooks({
       resolve: resolveTypeScript,
       load: (url, context, nextLoad) => {
         if (!url.startsWith('file:')) return nextLoad(url, context);
@@ -419,7 +457,7 @@ export class RunChild {
       relocatable: library,
       snaps: isMain && this.mode === 'snaps',
       // insertions never add a line, so a library's stack lines are right without a map (2 s saved on typescript.js)
-      sourceMap: !library,
+      sourceMap: !library && !process.versions.bun,
       autoLog: isMain && this.config.autoLog,
       recordLocals: this.config.recordLocals,
       scopeProbe: isMain,
@@ -454,6 +492,7 @@ export class RunChild {
       }
     }
     const fileId = info.fileId;
+    if (process.versions.bun) info.runtimeLineOffset = 1;
     const ms = performance.now() - t0;
     this.tracer.addFile(info);
     this.debug?.debugger.fileAdded(debugFile(info));

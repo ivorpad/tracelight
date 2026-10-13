@@ -4,7 +4,11 @@ The runtime runs a JavaScript or TypeScript program under the tracer and answers
 over NDJSON (`docs/PROTOCOL.md`). The extension spawns it as `node dist/node/bin/tracelight.mjs
 serve` (from a checkout, `node/bin/tracelight.mjs`); the same entry is the `tracelight` CLI and
 `tracelight mcp`. It runs on Node 22.18 or newer, because it runs its TypeScript sources directly;
-the program itself may run on any Node from 22.15 (`--node PATH` or `$TRACELIGHT_NODE`).
+the program itself may run on any Node from 22.15 or native Bun (`--node PATH` or
+`$TRACELIGHT_NODE`; browser aliases `--runtime node` and `--runtime bun`). Node uses
+`module.registerHooks`; Bun uses `Bun.plugin` and the JavaScriptCore WebSocket inspector
+(`debug/bunInspector.ts`). TypeScript offset-preserving stripping for Bun is prepared by the
+host Node process (`stripForBun.mjs`), then the resulting program executes in Bun.
 
 ```sh
 npm ci --prefix node                        # oxc-parser, magic-string, @mswjs/interceptors

@@ -19,7 +19,7 @@ Contents: [Start it](#start-it) Â· [A page must be open](#a-page-must-be-open) Â
 ## Start it
 
 ```
-tracelight web FILE [--port N] [--open] [--no-run] [--no-watch] [--verbose] [--runtime js|"CMD ARGS"]
+tracelight web FILE [--port N] [--open] [--no-run] [--no-watch] [--verbose] [--runtime js|node|bun|"CMD ARGS"] [--node PATH]
 tracelight web -h | --help
 ```
 
@@ -47,6 +47,16 @@ It serves until it is stopped, so start it in the background (your harness's bac
 - `--runtime "CMD ARGS"` (or `$TRACELIGHT_RUNTIME`): any command that speaks the runtime's NDJSON
   protocol on stdio, started in the file's directory. `js`, the default for `.js`, `.mjs`, `.cjs`,
   `.jsx`, `.ts`, `.mts`, `.cts` and `.tsx`, is the runtime shipped next to the bridge.
+- `--runtime node` explicitly selects Node for the program; `--runtime bun` selects native Bun.
+  The CLI and bridge protocol server still run on Node. `--node PATH` selects a specific Node
+  or Bun executable and overrides the alias and `$TRACELIGHT_NODE`.
+  Bun recording, disk reloads, live breakpoints, stepping and captured locals use Bun's loader
+  and JavaScriptCore inspector. Bun worker recording and V8 CPU profiles are unavailable.
+  Pure evaluation and expression watches are refused because Bun's inspector cannot enforce
+  `throwOnSideEffect`; captured locals remain available. Explicit `exec` uses native evaluation.
+  Finished recordings without a debugger provide recorded values, not finished-run evaluation.
+  Bun's source-returning loader does not preserve CommonJS exports. Instrumented CommonJS
+  modules are refused with a runtime error; use Node for those modules.
 - Narrate and the tour on the page call a model through `$TRACELIGHT_EXPLAIN_COMMAND` (a command
   that reads the prompt on stdin), else `claude -p`, else `codex exec`.
 

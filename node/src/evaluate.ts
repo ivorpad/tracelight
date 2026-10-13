@@ -15,6 +15,7 @@ import type { Described } from './debug/describe.ts';
 let session: Session | null = null;
 
 function post(): Post {
+  if (process.versions.bun) throw new Error('Bun finished-run evaluation is unavailable without a live debugger; use recorded values or start a live session');
   if (!session) {
     session = new Session();
     session.connect();

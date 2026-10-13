@@ -101,6 +101,8 @@ export interface RunRequest {
   file?: { path: string; displayName: string; content?: string };
   /** a module to run instead of `file` (a debug launch); the runtime refuses it, Node has no module launch */
   module?: string;
+  /** Program executable, either Node or native Bun; the protocol server stays on Node. */
+  node?: string;
   workspaceRoot: string;
   cwd: string;
   argv: string[];

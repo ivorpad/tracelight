@@ -29,7 +29,9 @@
 import { parseSync } from './parse.ts';
 import { lowerTypeScript, MappedLineIndex, type Lowered } from './lower.ts';
 import MagicString from 'magic-string';
-import { stripTypeScriptTypes } from 'node:module';
+import * as nodeModule from 'node:module';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { LineIndex } from './lines.ts';
 import { walkTable, type WalkTable } from './walk.ts';
 import { bareName, planLocals } from './recorder/localsPlan.ts';
@@ -128,6 +130,8 @@ export interface InstrumentedFile {
    * pairs, where from `origCol` on the instrumented column is the source's plus `shift` (colMap.ts)
    */
   colMap?: [number, number[]][];
+  /** A runtime loader's extra prefix lines (Bun's precompiled marker). */
+  runtimeLineOffset?: number;
   /** project files: decisions, loops, returns and functions for the host's walkthrough (walk.ts) */
   walk?: WalkTable;
 }
@@ -202,7 +206,12 @@ export function stripTypes(source: string): string {
       return (emit as any).call(process, w, ...rest);
     }) as typeof process.emitWarning;
   }
-  return stripTypeScriptTypes(source, { mode: 'strip' });
+  if (process.versions.bun) {
+    const result = spawnSync(process.env.TRACELIGHT_HOST_NODE || 'node', [fileURLToPath(new URL('./stripForBun.mjs', import.meta.url))], { input: source, encoding: 'utf8', timeout: 10000, maxBuffer: 32 * 1024 * 1024 });
+    if (result.error || result.status !== 0) throw new Error(`Bun source preparation failed: ${result.error?.message ?? result.stderr.trim()}`);
+    return result.stdout;
+  }
+  return nodeModule.stripTypeScriptTypes(source, { mode: 'strip' });
 }
 
 class Instrumenter {
@@ -1253,7 +1262,7 @@ export function instrument(source: string, filename: string, fileId = 1, rangeBa
   const prefix = relocatable ? `${BASE}+` : '';
   const ms = new MagicString(js);
   // without a source map, the column shifts the insertions make, so stack columns map back
-  const shifts: number[] | null = options.sourceMap === false && options.library ? [] : null;
+  const shifts: number[] | null = options.sourceMap === false ? [] : null;
   for (const e of ins.edits) {
     const text = render(e.parts, global, prefix);
     if (e.op === 'open') ms.appendRight(e.pos, text);

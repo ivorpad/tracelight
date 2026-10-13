@@ -195,7 +195,8 @@ update and fails as `Cannot find module`. Look in this order:
 
 The CLI needs Node 22.18 or newer, since it runs its own TypeScript sources (`node --version`;
 `$TRACELIGHT_CLI_NODE` picks the one the `~/.local/bin` script uses). The program it runs needs
-22.15 or newer and may use another Node (`run --node PATH`, `$TRACELIGHT_NODE`). Verify a newly
+Node 22.15 or newer, or native Bun selected with `run --node bun` / `web --runtime bun`.
+`run --node PATH` and `$TRACELIGHT_NODE` select a specific program executable. Verify a newly
 resolved CLI once: `tracelight debug -h` prints that verb's usage and exits 0 (bare `tracelight -h` prints
 the verb list and exits 2). If none of the three gives that, stop there and tell the user which
 step failed.

@@ -22,7 +22,8 @@ const CHILD = fileURLToPath(new URL('./child.ts', import.meta.url));
 const KILL_GRACE_MS = 2000;
 
 /** node flags for a runtime process (type stripping before Node 22.18), then `entry` (the run child by default) */
-export function childArgs(entry: string = CHILD, version: string = process.versions.node): string[] {
+export function childArgs(entry: string = CHILD, version: string = process.versions.node, kind: 'node' | 'bun' = 'node'): string[] {
+  if (kind === 'bun') return [entry];
   const args = ['--disable-warning=ExperimentalWarning'];
   // type stripping is on by default from Node 22.18 / 23.6; earlier releases need the flag
   const [maj, min] = version.split('.').map(Number) as [number, number];
@@ -31,24 +32,36 @@ export function childArgs(entry: string = CHILD, version: string = process.versi
   return args;
 }
 
-const versions = new Map<string, string>();
+const versions = new Map<string, { version: string; kind: 'node' | 'bun' }>();
 /**
  * The Node that runs the program: the request's `node` (`run --node`), else `$${ENV}NODE`, else
  * this one. Another Node must be 22.15 or newer (module.registerHooks).
  */
-export function childNode(request: Msg): { exe: string; version: string } {
+export function childNode(request: Msg): { exe: string; version: string; kind: 'node' | 'bun' } {
   const want = (typeof request.node === 'string' && request.node) || process.env[`${ENV}NODE`] || '';
-  if (!want || want === process.execPath) return { exe: process.execPath, version: process.versions.node };
-  let version = versions.get(want);
-  if (version === undefined) {
-    const r = spawnSync(want, ['-p', 'process.versions.node'], { encoding: 'utf8', timeout: 10000 });
+  if (!want || want === process.execPath) return { exe: process.execPath, version: process.versions.node, kind: 'node' };
+  let runtime = versions.get(want);
+  if (runtime === undefined) {
+    const r = spawnSync(want, ['-p', 'JSON.stringify({node:process.versions.node,bun:process.versions.bun,registerHooks:typeof require("node:module").registerHooks,stripTypes:typeof require("node:module").stripTypeScriptTypes})'], { encoding: 'utf8', timeout: 10000 });
     if (r.error || r.status !== 0) throw new Error(`cannot run ${want}: ${r.error?.message ?? r.stderr.trim()}`);
-    version = r.stdout.trim();
-    versions.set(want, version);
+    let probe: { node?: string; bun?: string; registerHooks?: string; stripTypes?: string };
+    try { probe = JSON.parse(r.stdout.trim()); }
+    catch { throw new Error(`cannot identify ${want}: expected a Node runtime capability reply`); }
+    if (probe.bun) {
+      runtime = { version: probe.bun, kind: 'bun' };
+      versions.set(want, runtime);
+      return { exe: want, ...runtime };
+    }
+    if (probe.registerHooks !== 'function' || probe.stripTypes !== 'function') throw new Error(`${want} lacks Node module.registerHooks or stripTypeScriptTypes; ${NAME} needs Node 22.15 or newer`);
+    if (!probe.node) throw new Error(`cannot identify ${want}: missing Node version`);
+    runtime = { version: probe.node, kind: 'node' };
+    versions.set(want, runtime);
   }
+  if (runtime.kind === 'bun') return { exe: want, ...runtime };
+  const version = runtime.version;
   const [maj, min] = version.split('.').map(Number) as [number, number];
   if (maj < 22 || (maj === 22 && min < 15)) throw new Error(`${want} is Node ${version}; ${NAME} needs 22.15 or newer`);
-  return { exe: want, version };
+  return { exe: want, ...runtime };
 }
 
 class Child {
@@ -75,9 +88,9 @@ class Child {
     this.runner = runner;
     this.runId = runId;
     const node = childNode(request);
-    this.proc = spawn(node.exe, childArgs(CHILD, node.version), {
+    this.proc = spawn(node.exe, childArgs(CHILD, node.version, node.kind), {
       cwd: request.cwd || undefined,
-      env: { ...process.env, ...(request.env ?? {}), NODE_OPTIONS: '' },
+      env: { ...process.env, ...(request.env ?? {}), NODE_OPTIONS: '', TRACELIGHT_HOST_NODE: process.execPath },
       // fd 5: the control pipe of a debug run, read by the child's debugger thread while the program is paused
       stdio: ['ignore', 'pipe', 'pipe', 'pipe', 'ipc', 'pipe'],
       windowsHide: true,
@@ -254,7 +267,8 @@ export class Runner {
         case 'run': {
           if (this.child) this.child.kill();
           const runId = String(req.runId ?? `r-${Date.now()}`);
-          childNode(req); // a --node that cannot run is the request's error, before `ok`
+          const runtime = childNode(req); // an executable that cannot run is the request's error, before `ok`
+          if (runtime.kind === 'bun' && req.mode === 'profile') throw new Error('Bun CPU profiling is not supported: Tracelight profiles use the Node V8 profiler');
           this.send({ type: 'ok', id });
           await this.startPlugins(req, runId);
           this.child = new Child(this, runId, req);

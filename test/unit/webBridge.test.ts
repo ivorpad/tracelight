@@ -74,6 +74,8 @@ describe('web bridge helpers', () => {
     expect(() => runtimeCommand({ runtime: 'js', distDir: dist, file: '/w/a.ts' })).toThrow(/tracelight\.mjs/);
     fs.writeFileSync(path.join(root, 'node', 'bin', 'tracelight.mjs'), '');
     expect(runtimeCommand({ runtime: 'js', distDir: dist, file: '/w/a.ts' })).toEqual({ command: process.execPath, args: [path.join(root, 'node', 'bin', 'tracelight.mjs'), 'serve'], cwd: '/w', env: {} });
+    expect(runtimeCommand({ runtime: 'bun', distDir: dist, file: '/w/a.ts' }).env).toEqual({ TRACELIGHT_NODE: 'bun' });
+    expect(runtimeCommand({ runtime: 'node', distDir: dist, file: '/w/a.ts' }).env).toEqual({ TRACELIGHT_NODE: process.execPath });
     // the build's copy wins once it exists
     fs.mkdirSync(path.join(dist, 'node', 'bin'), { recursive: true });
     fs.writeFileSync(path.join(dist, 'node', 'bin', 'tracelight.mjs'), '');
@@ -224,11 +226,11 @@ describe('BridgeServer', () => {
     server = undefined;
   });
 
-  async function start(initialRun = true): Promise<{ url: string; port: number; file: string }> {
+  async function start(initialRun = true, node?: string): Promise<{ url: string; port: number; file: string }> {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pkw-'));
     const file = path.join(dir, 'scratch.py');
     fs.writeFileSync(file, 'print("ok")\n');
-    server = new BridgeServer({ file, port: 0, host: '127.0.0.1', runtime: `"${process.execPath}" "${fake}"`, watch: false, initialRun, open: false, distDir: dir, stateDir: dir });
+    server = new BridgeServer({ file, port: 0, host: '127.0.0.1', runtime: `"${process.execPath}" "${fake}"`, watch: false, node, initialRun, open: false, distDir: dir, stateDir: dir });
     await server.start();
     const port = Number(new URL(server.url).port);
     return { url: server.url, port, file };
@@ -257,6 +259,24 @@ describe('BridgeServer', () => {
       ws.onerror = () => reject(new Error('websocket failed'));
     });
   }
+
+  it('propagates the selected program executable to recording, live debug and profiling', async () => {
+    const { port } = await start(false, process.execPath);
+    const page = await connect(port);
+    await page.next(m => m.type === 'hello');
+    await server!.run('selected-executable');
+    const recorded = await page.next(m => m.type === 'event' && m.event.type === 'run.started') as Extract<BridgeToPage, { type: 'event' }>;
+    expect(recorded.event).toMatchObject({ programNode: process.execPath });
+    await server!.startDebug([], 'off');
+    const debug = await page.next(m => m.type === 'debug.event' && m.event.type === 'run.started') as Extract<BridgeToPage, { type: 'debug.event' }>;
+    expect(debug.event).toMatchObject({ programNode: process.execPath });
+    await server!.stopDebug();
+    const profile = await server!.profile();
+    expect(profile.error).toBeUndefined();
+    // The fake protocol peer writes the received executable into its profile URL.
+    expect(profile.summary?.rows[0]?.file).toContain(process.execPath);
+    page.ws.close();
+  });
 
   it('opens without executing and can start the debugger before any recording', async () => {
     const { port, file } = await start(false);

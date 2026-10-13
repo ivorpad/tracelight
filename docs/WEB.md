@@ -84,11 +84,24 @@ main file at a time, of one runtime's language.
 |---|---|
 | `--port N` | default 4777 (`TRACELIGHT_PORT`) |
 | `--runtime js` | the default for `.js`/`.mjs`/`.cjs`/`.jsx`/`.ts`/`.mts`/`.cts`/`.tsx`: `node <dist>/node/bin/tracelight.mjs serve`, else the checkout's `node/bin/tracelight.mjs` |
+| `--runtime node` / `--runtime bun` | select the program's engine explicitly; the bridge and protocol server stay on Node |
+| `--node PATH` | a specific Node or Bun executable for recording, watch reloads and live debug; overrides the runtime alias |
 | `--runtime "CMD ARGS"` | any command that speaks the protocol on stdio, started in the file's directory (`TRACELIGHT_RUNTIME`); the only way to run a file of another language |
 | `--open` | open the page in the default browser |
 | `--no-run` | serve the source without executing it on startup; explicit Run and Automatic page edits still execute it |
 | `--no-watch` | do not re-run on save |
 | `--verbose` | log the runtime's spawn, stderr and exits |
+
+Bun executes the actual program with `Bun.plugin` instrumentation and its JavaScriptCore
+WebSocket inspector. TypeScript source preparation uses the bridge's Node executable to keep
+source offsets intact. No Bun APIs are polyfilled. Live startup errors stop execution rather
+than falling back to a recording. Bun worker recording and V8 CPU profiling are unavailable;
+pure expression evaluation/watches are refused because its inspector cannot enforce
+`throwOnSideEffect`. Read captured locals, or use explicit live `exec`. Finished recordings
+without a live debugger support recorded values but not finished-run evaluation.
+CommonJS instrumentation is refused on Bun: its `onLoad` source result loses CommonJS default
+exports, and a precompiled CommonJS wrapper does not execute through that hook. Use Node for
+CommonJS modules. ESM JavaScript and TypeScript retain native Bun execution.
 
 ## Side by side with VS Code
 

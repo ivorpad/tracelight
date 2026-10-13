@@ -362,3 +362,24 @@ await fail('uncaught');` }, 'main.mjs');
   assert.deepEqual(errors.map(e => [e.message, e.handled]).sort(), [['caught', true], ['settled', true], ['uncaught', false]]);
   for (const error of errors) assert.ok(error.step >= 0);
 });
+
+
+test('TypeScript class interface and static async create retain valid syntax and source lines', async () => {
+  const source = `interface ModelRuntimeInterface { value: number }
+export class ModelRuntime implements ModelRuntimeInterface {
+  value = 42;
+  static async create(options = {}): Promise<ModelRuntime> {
+    return new ModelRuntime();
+  }
+}
+const instance = await ModelRuntime.create();
+console.log(instance.value);`;
+  const r = await run({ 'main.ts': source }, 'main.ts');
+  assert.equal(r.finished.exitCode, 0);
+  const output = r.logs().find(l => l.kind === 'log');
+  assert.equal(output?.text, '42');
+  assert.equal(r.line(output!.rid), 9);
+  const factory = r.scopes().find(s => s.name === 'create');
+  assert.ok(factory);
+  assert.equal(r.line(r.steps()[factory.first]![0]!), 4);
+});

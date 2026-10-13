@@ -10,6 +10,8 @@
  * The worker owns `ctlFd` from here on; `onExit` is called when the runner sends `exit` (or closes
  * the descriptor), after a paused program has been let go.
  */
+import * as inspector from 'node:inspector';
+import { createServer } from 'node:net';
 import { MessageChannel, Worker } from 'node:worker_threads';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -97,6 +99,7 @@ export async function startDebugger(host: DebugHost, request: DebugRequest, chan
   (globalThis as any).__tk_dbg = dbg;
   const lock = channel.lock ?? newLock();
   const workerData: AgentData = {
+    ...(process.versions.bun ? { inspectorUrl: await bunInspectorUrl() } : {}),
     ctlFd: channel.ctlFd,
     eventFd: channel.eventFd,
     lock,
@@ -139,4 +142,26 @@ export async function startDebugger(host: DebugHost, request: DebugRequest, chan
       await worker.terminate();
     },
   };
+}
+
+async function bunInspectorUrl(): Promise<string> {
+  if (!inspector.url()) {
+    // Bun's inspector.open(0) uses its default port rather than an ephemeral port.
+    const server = createServer();
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    const port = (server.address() as { port: number }).port;
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    inspector.open(port, '127.0.0.1');
+  }
+  // Bun publishes the URL asynchronously after open(), unlike Node.
+  const deadline = Date.now() + 10000;
+  do {
+    const url = inspector.url();
+    if (url) return url;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  } while (Date.now() < deadline);
+  throw new Error('Bun did not open its native inspector within 10 seconds');
 }

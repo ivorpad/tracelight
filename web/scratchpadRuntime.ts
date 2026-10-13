@@ -48,10 +48,13 @@ export function scratchFunction(source: string, line: number): { code: string; n
       : ts.visitEachChild(node, visit, context);
     return ts.visitNode(root, visit) as typeof root;
   }]);
-  let code = ts.createPrinter().printNode(ts.EmitHint.Unspecified, typed.transformed[0]!, sf).replace(/^export\s+/, '');
+  const declaration = typed.transformed[0]!;
+  const standalone = ts.isMethodDeclaration(declaration)
+    ? ts.factory.createFunctionDeclaration(declaration.modifiers?.filter(m => m.kind === ts.SyntaxKind.AsyncKeyword), declaration.asteriskToken, name, declaration.typeParameters, declaration.parameters, declaration.type, declaration.body)
+    : declaration;
+  let code = ts.createPrinter().printNode(ts.EmitHint.Unspecified, standalone, sf).replace(/^export\s+/, '');
   typed.dispose();
   if (binding && (ts.isArrowFunction(found) || ts.isFunctionExpression(found))) code = `const ${binding} = ${code};`;
-  if (ts.isMethodDeclaration(found)) code = code.replace(/^(async\s+)?/, '$1function ');
   let requiresReceiver = false;
   const receiver = (node: ts.Node): void => {
     if (node.kind === ts.SyntaxKind.ThisKeyword || node.kind === ts.SyntaxKind.SuperKeyword) requiresReceiver = true;

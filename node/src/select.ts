@@ -11,9 +11,11 @@
  */
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { realpathSync } from 'node:fs';
 
 /** the runtime's own files and dependencies, which load lazily during a run and are never the program's */
 const RUNTIME_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const RUNTIME_DEPS = (() => { try { return realpathSync(resolve(RUNTIME_ROOT, 'node_modules')); } catch { return resolve(RUNTIME_ROOT, 'node_modules'); } })();
 
 export const SOURCE_EXTS = new Set(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', '.tsx']);
 
@@ -80,6 +82,7 @@ export function kindOf(path: string, sel: Selection): Kind | null {
   if (!SOURCE_EXTS.has(extname(path).toLowerCase()) && path !== sel.mainPath) return null;
   if (path === sel.mainPath) return 'project';
   if (path.startsWith(RUNTIME_ROOT + sep)) return null;
+  if (path.startsWith(RUNTIME_DEPS + sep)) return null;
   const library = path.split(sep).includes('node_modules');
   const inProject = path.startsWith(sel.root + sep) || path.startsWith(resolve(sel.mainPath, '..') + sep);
   if (!library && !inProject) return null;

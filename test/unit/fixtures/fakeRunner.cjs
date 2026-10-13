@@ -12,7 +12,7 @@ rl.on('line', (line) => {
       break;
     case 'run': {
       send({ type: 'ok', id: msg.id });
-      send({ type: 'run.started', runId: msg.runId, seq: 1, pid: 42 });
+      send({ type: 'run.started', runId: msg.runId, seq: 1, pid: 42, programNode: msg.node });
       if (msg.config && msg.config.debug) {
         // a live debug run: pause at the first statement until `debug continue`
         send({ type: 'debug.paused', runId: msg.runId, seq: 2, step: 0, rid: 0, fileId: 1, line: 1, scopeId: 0, depth: 0, reason: 'start', stack: [{ frameId: 0, name: '<module>', fileId: 1, line: 1 }] });
@@ -21,7 +21,7 @@ rl.on('line', (line) => {
       if (msg.mode === 'profile') {
         // a flat profile as the Python runtime writes it: `add` 2 ms of samples
         const file = require('node:path').join(require('node:os').tmpdir(), `fake-${process.pid}-${Date.now()}.cpuprofile`);
-        const nodes = [{ id: 1, callFrame: { functionName: '(root)', url: '', lineNumber: -1 }, hitCount: 0, children: [2] }, { id: 2, callFrame: { functionName: 'add', url: 'file://' + msg.file.path, lineNumber: 0 }, hitCount: 2, children: [], callCount: 4, totalTime: 2.5 }];
+        const nodes = [{ id: 1, callFrame: { functionName: '(root)', url: '', lineNumber: -1 }, hitCount: 0, children: [2] }, { id: 2, callFrame: { functionName: 'add', url: 'file://' + (msg.node || msg.file.path), lineNumber: 0 }, hitCount: 2, children: [], callCount: 4, totalTime: 2.5 }];
         require('node:fs').writeFileSync(file, JSON.stringify({ nodes, startTime: 0, endTime: 2000, samples: [2, 2], timeDeltas: [1000, 1000] }));
         send({ type: 'run.finished', runId: msg.runId, seq: 2, exitCode: 0, durationMs: 2, timedOut: false, stopped: false, stepCount: 0, logCount: 0, profile: { path: file } });
         break;

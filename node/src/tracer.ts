@@ -668,8 +668,10 @@ export class Tracer {
         }
       }
       const info = this.byPath.get(path);
-      if (!info?.colMap) return all;
-      return `${pre}${p}:${l}:${sourceColumn(this.colMapOf(info), Number(l), Number(c) - 1) + 1}${post}`;
+      if (!info?.colMap && !info?.runtimeLineOffset) return all;
+      const line = Number(l) - (info.runtimeLineOffset ?? 0);
+      const col = info.colMap ? sourceColumn(this.colMapOf(info), line, Number(c) - 1) + 1 : Number(c);
+      return `${pre}${p}:${line}:${col}${post}`;
     });
   }
 
@@ -691,7 +693,7 @@ export class Tracer {
       }
       if (path.startsWith('node:') || path.includes('/tracelight/src/') || path.includes('/node/src/')) continue;
       const info = this.byPath.get(path);
-      const line = Number(m[3]);
+      const line = Number(m[3]) - (info?.runtimeLineOffset ?? 0);
       const col = info?.colMap ? sourceColumn(this.colMapOf(info), line, Number(m[4]) - 1) : Number(m[4]) - 1;
       let name = (m[1] ?? '').replace(/^async /, '');
       if (!name || name === '<anonymous>' || name === 'Object.<anonymous>') {

@@ -9,6 +9,28 @@ afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 fs.writeFileSync(file, 'const ignored = (() => { throw Error("module initialized"); })();\nfunction twice(n: number) { return n * 2; }\nfunction target(x: number) { return twice(x); }');
 describe('isolated scratchpad', () => {
   it('extracts the containing function', () => { expect(scratchFunction(fs.readFileSync(file, 'utf8'), 3)).toMatchObject({ name: 'target', parameters: ['x'] }); });
+  it('copies a static async factory as a valid standalone function and executes Class.create()', async () => {
+    const source = `interface ModelRuntimeInterface { value: number }
+export class ModelRuntime implements ModelRuntimeInterface {
+  value = 42;
+  public static async create(options = {}): Promise<ModelRuntime> {
+    return new ModelRuntime();
+  }
+}
+const instance = await ModelRuntime.create();`;
+    const target = path.join(dir, 'static-factory.ts');
+    fs.writeFileSync(target, source);
+    const copy = scratchFunction(source, 5);
+    expect(copy.code).toContain('async function create(');
+    expect(copy.code).not.toMatch(/function (?:static|public)/);
+    const code = formatScratchCode(`${copy.code}\nconst result = await create();`);
+    const scratch = await runScratch({ file: target, code, inputs: {}, mocks: {} });
+    expect(scratch.error).toBeUndefined();
+    expect(scratch.result).toEqual({ value: 42 });
+    const whole = await runScratch({ file: target, code: 'const result = await ModelRuntime.create();', inputs: {}, mocks: {} });
+    expect(whole.error).toBeUndefined();
+    expect(whole.result).toEqual({ value: 42 });
+  });
   it('starts from the enclosing function when paused on an array callback', () => {
     expect(scratchFunction('async function target(input) {\n const calls = input.filter(c => c.type === "toolCall");\n}', 2).name).toBe('target');
   });
