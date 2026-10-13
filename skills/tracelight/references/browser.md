@@ -350,6 +350,10 @@ web` has no flags for these; a person sets them in the page.
   for its breakpoints to pause. An unknown source cannot yet be a browser breakpoint target.
   For imported sources outside the caller's directory, include their directory with `--only`
   alongside the caller's directory. Once imports load, their source paths become breakpoint targets.
+  Known imported sources refresh automatically after disk edits, including atomic saves.
+  Changes refresh the source while paused or in on-demand mode without restarting execution.
+  An edited imported source blocks the visible-position gate for the old run; restart explicitly
+  before teaching from new execution values.
 
 ## Stop it
 

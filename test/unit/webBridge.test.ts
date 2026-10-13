@@ -305,6 +305,39 @@ describe('BridgeServer', () => {
     }
   });
 
+  for (const mode of ['onDemand', 'paused'] as const) {
+    it(`refreshes an external imported source on writes and atomic saves without executing while ${mode}`, async () => {
+      const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tl-import-watch-')));
+      const external = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tl-manager-watch-')));
+      const file = path.join(dir, 'main.ts');
+      const helper = path.join(external, 'manager.ts');
+      const content = `import { helper } from '${helper}';\nhelper();`;
+      fs.writeFileSync(file, content);
+      fs.writeFileSync(helper, 'export function helper() { return 1; }');
+      server = new BridgeServer({file, port:0, host:'127.0.0.1', runtime:`"${process.execPath}" "${fake}"`, watch:true, initialRun:false, open:false, distDir:dir, stateDir:dir});
+      await server.start();
+      const page = await connect(Number(new URL(server.url).port));
+      await page.next(m => m.type === 'hello');
+      if (mode === 'onDemand') page.ws.send(JSON.stringify({type:'runMode',mode:'onDemand'}));
+      else {
+        await server.startDebug([], 'off');
+        await page.next(m => m.type === 'debug.event' && m.event.type === 'debug.paused');
+      }
+      const response = await fetch(new URL('/api/definitions', server.url), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({file,content,offset:content.lastIndexOf('helper')})});
+      expect(response.status).toBe(200);
+      page.ws.send(JSON.stringify({type:'file.read',path:helper}));
+      await page.next(m => m.type === 'file' && m.file.path === helper);
+      fs.writeFileSync(helper, 'export function helper() { return 2; }');
+      await page.next(m => m.type === 'file' && m.file.path === helper && m.file.content.includes('return 2'));
+      fs.writeFileSync(helper + '.tmp', 'export function helper() { return 3; }');
+      fs.renameSync(helper + '.tmp', helper);
+      await page.next(m => m.type === 'file' && m.file.path === helper && m.file.content.includes('return 3'));
+      expect(page.messages.some(m => m.type === 'run.begin')).toBe(false);
+      expect(page.messages.filter(m => m.type === 'debug.begin')).toHaveLength(mode === 'paused' ? 1 : 0);
+      page.ws.close();
+    });
+  }
+
   it('refreshes source on disk writes and atomic replacements without executing under --no-watch', async () => {
     const { port, file } = await start(false);
     const page = await connect(port);

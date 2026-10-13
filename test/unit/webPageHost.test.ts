@@ -270,6 +270,17 @@ describe('PageHost', () => {
     expect(link.sent.filter(m => m.type === 'file.read' && m.path === dependency.path)).toHaveLength(1);
   });
 
+  it('refreshes the displayed imported source without navigating or executing', () => {
+    const {feed, code, link} = setup();
+    const file = {path:'/external/manager.ts', displayName:'manager.ts', language:'typescript', content:'export const value = 1;'};
+    code.showFile(file);
+    const count = link.sent.length;
+    feed({type:'file',file:{...file,content:'export const value = 2;'}});
+    expect(code.shown).toBe(file.path);
+    expect(code.files.get(file.path)?.content).toBe('export const value = 2;');
+    expect(link.sent.slice(count).some(m => m.type === 'run' || m.type === 'debug.start')).toBe(false);
+  });
+
   it('ignores locals and expansions arriving after a frame change or resume', async () => {
     const { host, link, feed } = setup();
     feed({ type: 'debug.begin', runId: 'd-race', content: SOURCE });
@@ -304,6 +315,13 @@ describe('PageHost', () => {
     expect(code.shown).toBe('/w/worker.ts');
     expect(code.last?.paused).toBe(4);
     expect(code.last?.liveValues).toMatchObject({ start: 1, end: 8, excluded: [[4, 4]], locals: [{ name: 'queue', text: '[1, 2, 3]' }] });
+    expect((await host.confirmPosition('live')).ready).toBe(true);
+    feed({ type: 'file', file: { path: '/w/worker.ts', displayName: 'worker.ts', language: 'typescript', content: 'function processNext(queue) {\n\n\n queue.pop();\n}' } });
+    expect(code.files.get('/w/worker.ts')?.content).toContain('queue.pop()');
+    const changed = await host.confirmPosition('live');
+    expect(changed.ready).toBe(false);
+    expect(changed.sourceMatches).toBe(false);
+    expect(host.debug.paused?.step).toBe(4);
   });
 
   it('feeds the panel what the extension would: init, entries, timeline, walkthrough, exceptions', () => {

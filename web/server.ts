@@ -111,7 +111,9 @@ export class BridgeServer {
   private readonly runtimeInfo: RuntimeInfo;
   private readonly pages = new Set<WebSocketConnection>();
   private server: http.Server | undefined;
-  private watcher: fs.FSWatcher | undefined;
+  private readonly sourceWatchers = new Map<string, fs.FSWatcher>();
+  private readonly watchedSources = new Map<string, string>();
+  private readonly sourceWatchTimers = new Map<string, NodeJS.Timeout>();
   private file: BridgeFile;
   /** the events of the current run, replayed to a page that connects late */
   private events: RunEvent[] = [];
@@ -129,7 +131,6 @@ export class BridgeServer {
   private runCounter = 0;
   private nextAgentId = 1;
   private readonly agentWaiters = new Map<number, { page: WebSocketConnection; listening: boolean; finish: (r: { result: unknown; error?: string }) => void }>();
-  private watchTimer: NodeJS.Timeout | undefined;
   /** the content the bridge last wrote, so its own save does not count as an edit from outside */
   private lastWritten: string | undefined;
   private configPatch: ConfigPatch = {};
@@ -191,8 +192,7 @@ export class BridgeServer {
   }
 
   async close(): Promise<void> {
-    this.watcher?.close();
-    if (this.watchTimer) clearTimeout(this.watchTimer);
+    this.clearSourceWatchers();
     for (const p of this.pages) p.close(1001);
     this.views.dispose();
     await Promise.all([this.runner, this.debugRunner].map((r) => r?.shutdown().catch(() => undefined)));
@@ -248,6 +248,7 @@ export class BridgeServer {
   private onEvent(ev: RunEvent): void {
     if (!this.current || ev.runId !== this.current.runId) return;
     this.events.push(ev);
+    if (ev.type === 'file.instrumented') this.watchSource(ev.path);
     if (this.runData) applyEvent(this.runData, ev);
     this.broadcast({ type: 'event', event: ev });
   }
@@ -262,6 +263,7 @@ export class BridgeServer {
       const d = this.debugRun;
       if (!d || ev.runId !== d.runId) return;
       d.events.push(ev);
+      if (ev.type === 'file.instrumented') this.watchSource(ev.path);
       this.broadcast({ type: 'debug.event', event: ev });
       if (ev.type === 'run.finished') {
         this.debugRun = null;
@@ -418,36 +420,59 @@ export class BridgeServer {
     this.buffer = undefined;
     this.lastWritten = undefined;
     this.remember(this.file);
-    this.watcher?.close();
-    if (this.watchTimer) clearTimeout(this.watchTimer);
+    this.clearSourceWatchers();
     this.watchFile();
     this.broadcast({ type: 'hello', file: this.file, runtime: this.runtimeInfo, watch: this.opts.watch, canNarrate: this.views.canNarrate() });
     await this.run('open');
     return null;
   }
 
-  private watchFile(): void {
-    const dir = path.dirname(this.file.path);
-    const base = path.basename(this.file.path);
-    // watch the directory: editors that save by rename replace the file's inode
-    this.watcher = fs.watch(dir, (_kind, name) => {
-      if (name !== base) return;
-      if (this.watchTimer) clearTimeout(this.watchTimer);
-      this.watchTimer = setTimeout(() => this.onDiskChange(), 80);
-    });
+  private clearSourceWatchers(): void {
+    for (const watcher of this.sourceWatchers.values()) watcher.close();
+    for (const timer of this.sourceWatchTimers.values()) clearTimeout(timer);
+    this.sourceWatchers.clear();
+    this.sourceWatchTimers.clear();
+    this.watchedSources.clear();
   }
 
-  private onDiskChange(): void {
-    let next: BridgeFile;
+  private watchFile(): void {
+    this.watchSource(this.file.path);
+  }
+
+  /** Known imports and opened definition targets refresh without executing them. */
+  private watchSource(file: string): void {
+    if (this.watchedSources.has(file)) return;
+    try { this.watchedSources.set(file, readBridgeFile(file).content); }
+    catch { return; }
+    const dir = path.dirname(file);
+    if (this.sourceWatchers.has(dir)) return;
+    // Directory watches also survive editors saving by atomic rename.
     try {
-      next = readBridgeFile(this.file.path);
-    } catch {
-      return; // mid-save or deleted: the next event brings it back
+      this.sourceWatchers.set(dir, fs.watch(dir, (_kind, name) => {
+        for (const source of this.watchedSources.keys()) {
+          if (path.dirname(source) !== dir || (name !== null && String(name) !== path.basename(source))) continue;
+          const pending = this.sourceWatchTimers.get(source);
+          if (pending) clearTimeout(pending);
+          this.sourceWatchTimers.set(source, setTimeout(() => {
+            this.sourceWatchTimers.delete(source);
+            this.onDiskChange(source);
+          }, 80));
+        }
+      }));
+    } catch { /* unavailable directory: reads still work */ }
+  }
+
+  private onDiskChange(file: string): void {
+    let next: BridgeFile;
+    try { next = readBridgeFile(file); }
+    catch { return; } // Mid-save or deleted: the next event brings it back.
+    if (next.content === this.watchedSources.get(file)) return;
+    this.watchedSources.set(file, next.content);
+    if (file === this.file.path) {
+      this.file = next;
+      if (next.content === this.lastWritten) return;
+      this.buffer = undefined;
     }
-    if (next.content === this.file.content) return;
-    this.file = next;
-    if (next.content === this.lastWritten) return; // our own save; the page already ran it
-    this.buffer = undefined;
     this.broadcast({ type: 'file', file: next });
     if (this.opts.watch && this.runMode !== 'onDemand') void this.run('disk');
   }
@@ -563,6 +588,7 @@ export class BridgeServer {
         const known = [...this.events, ...(this.debugRun?.events ?? [])].some((e) => (e.type === 'file.instrumented' && e.path === msg.path) || (e.type === 'run.finished' && e.http?.file === msg.path));
         if (!known && !this.definitionFiles.has(msg.path)) return;
         try {
+          this.watchSource(msg.path);
           this.sendTo(ws, { type: 'file', file: readBridgeFile(msg.path) });
         } catch {
           /* gone since the run */

@@ -354,19 +354,36 @@ export class RunChild {
     const markers = req.markers ?? [];
     if (process.versions.bun) {
       const bun = (globalThis as any).Bun;
+      const hooked = new Set<string>();
+      let resolving = false;
       bun.plugin({ name: 'tracelight-record', setup: (builder: any) => {
-        builder.onLoad({ filter: /\.(?:[cm]?js|[cm]?ts|jsx|tsx)$/ }, ({ path: loaded }: { path: string }) => {
-          const filename = realpathSync(loaded);
+        // Bun onLoad cannot decline a file. Select in onResolve, where undefined falls
+        // through to Bun, so excluded ESM and CommonJS keep their native loaders.
+        builder.onResolve({ filter: /.*/, namespace: 'file' }, (args: {path: string; importer: string}) => {
+          if (resolving || /^(?:node|bun):/.test(args.path)) return undefined;
+          let filename: string;
+          try {
+            resolving = true;
+            filename = realpathSync(bun.resolveSync(args.path, args.importer ? dirname(args.importer) : this.root));
+          } catch { return undefined; }
+          finally { resolving = false; }
           const kind = this.kindOf(filename);
           if (!kind) return undefined;
-          const source = this.overrides.get(filename) ?? readFileSync(filename, 'utf8');
-          if (bunCommonJS(filename, source)) {
-            throw new Error('Bun onLoad source modules do not preserve CommonJS exports; CommonJS recording requires Node');
+          if (!hooked.has(filename)) {
+            hooked.add(filename);
+            const filter = new RegExp('^' + filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$');
+            builder.onLoad({ filter, namespace: 'file' }, () => {
+              const source = this.overrides.get(filename) ?? readFileSync(filename, 'utf8');
+              if (bunCommonJS(filename, source)) {
+                throw new Error('Bun onLoad source modules do not preserve CommonJS exports; CommonJS recording requires Node');
+              }
+              const info = this.instrumentFile(filename, source, 'module', kind === 'library' ? [] : markers, kind === 'library');
+              if (info.code === null) throw new InstrumentFailure(info.error ?? 'instrumentation failed');
+              // Skip Bun's reformatter so inspector lines match the instrumented source (+ pragma).
+              return { contents: `// @bun\n${info.code}`, loader: 'js' };
+            });
           }
-          const info = this.instrumentFile(filename, source, 'module', kind === 'library' ? [] : markers, kind === 'library');
-          if (info.code === null) throw new InstrumentFailure(info.error ?? 'instrumentation failed');
-          // Skip Bun's reformatter so inspector lines match the instrumented source (+ pragma).
-          return { contents: `// @bun\n${info.code}`, loader: 'js' };
+          return {path: filename};
         });
       }});
       return;

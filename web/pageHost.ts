@@ -135,6 +135,7 @@ export class PageHost {
   narration: { text: string; line: number; path: string } | null = null;
   /** sources of files other than the main one, fetched on demand */
   private readonly sources = new Map<string, string>();
+  private readonly editedRunSources = new Set<string>();
   private readonly sourceIdentities = new Map<string, import('../src/shared/protocol').SourceBindings>();
   private readonly identityRequests = new Map<string, Promise<void>>();
 
@@ -285,8 +286,15 @@ export class PageHost {
           this.main = msg.file;
           if (this.code.shownPath() === msg.file.path) this.code.showFile(msg.file);
         } else {
+          const previous = this.sources.get(msg.file.path);
+          if (previous !== undefined && previous !== msg.file.content
+            && (this.debug.run?.files.all().some(f => f.path === msg.file.path) || this.run?.files.all().some(f => f.path === msg.file.path))) this.editedRunSources.add(msg.file.path);
           this.sources.set(msg.file.path, msg.file.content);
           for (const w of this.sourceWaiters.get(msg.file.path)?.splice(0) ?? []) w(msg.file.content);
+          if (this.code.shownPath() === msg.file.path) {
+            this.code.showFile(msg.file);
+            this.scheduleRender(true);
+          }
           if (this.wantPath === msg.file.path) {
             this.wantPath = undefined;
             this.code.showFile(msg.file);
@@ -297,6 +305,7 @@ export class PageHost {
         }
         break;
       case 'run.begin':
+        this.editedRunSources.clear();
         this.incoming = emptyRun(msg.runId, msg.content);
         this.pushSession(true);
         break;
@@ -314,6 +323,7 @@ export class PageHost {
         this.panes.onTour(msg.tour);
         break;
       case 'debug.begin':
+        this.editedRunSources.clear();
         this.sourceMode = 'live';
         this.liveRecording = emptyRun(msg.runId, msg.content);
         this.historyFollowing = true;
@@ -1610,6 +1620,7 @@ export class PageHost {
       ? targetMode === 'live' ? this.debug.run?.content : this.run?.content
       : target ? this.sources.get(target.file) : undefined;
     const sourceMatches = !!rendered && !!target && expectedContent !== undefined
+      && !this.editedRunSources.has(target.file)
       && rendered.file === target.file && rendered.content === expectedContent;
     const blockers: string[] = [];
     if (!target) blockers.push(`No ${targetMode} paused/selected position is available`);
