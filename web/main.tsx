@@ -113,6 +113,7 @@ host.notice = (text, level) => {
 };
 
 // the live debugger: breakpoints in the gutter (or F9), its controls under the code
+code.onNavigate = (path, line) => host.revealPath(path, line);
 code.onGutterClick = (path, line) => host.debug.setBreakpoint(path, line);
 code.onExpandValue = (node) => host.debug.expandNode(node);
 // the Code Story and the profile: a row picked goes to its step, Ctrl/Cmd+click opens its source

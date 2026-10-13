@@ -7,7 +7,7 @@
 <title>Tracelight</title>
 <script>
   // what the panel's host normally injects: the Monaco worker and the codicons stylesheet
-  window.__tracelight = { workerUri: new URL('/webview/editor.worker.js', location.href).href, codiconsUri: new URL('/webview/codicons/codicon.css', location.href).href };
+  window.__tracelight = { workerUri: new URL('/webview/editor.worker.js', location.href).href, tsWorkerUri: new URL('/webview/ts.worker.js', location.href).href, codiconsUri: new URL('/webview/codicons/codicon.css', location.href).href };
 </script>
 <link rel="icon" href="/web/logo.png" />
 <link rel="stylesheet" href="/web/app.css" />

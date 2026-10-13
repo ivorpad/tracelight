@@ -14,13 +14,14 @@ export function bootMonaco(): void {
   booted = true;
   const workerUri = window.__tracelight?.workerUri;
   (self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
-    getWorker: () => {
+    getWorker: (_id, label) => {
+      const languageUri = (label === 'typescript' || label === 'javascript') ? window.__tracelight?.tsWorkerUri : undefined;
       if (!workerUri) {
         // no worker available: fall back to a same-thread stub so the editor still renders
         return new Worker(URL.createObjectURL(new Blob([''], { type: 'text/javascript' })));
       }
       // the bundled worker is an ES module, so wrap it in a same-origin module blob rather than importScripts
-      const src = `import ${JSON.stringify(workerUri)};`;
+      const src = `import ${JSON.stringify(languageUri ?? workerUri)};`;
       return new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })), { type: 'module' });
     },
   };

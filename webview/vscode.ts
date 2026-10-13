@@ -10,7 +10,7 @@ interface VsCodeApi {
 declare global {
   function acquireVsCodeApi(): VsCodeApi;
   interface Window {
-    __tracelight?: { workerUri?: string; codiconsUri?: string };
+    __tracelight?: { workerUri?: string; tsWorkerUri?: string; codiconsUri?: string };
   }
 }
 

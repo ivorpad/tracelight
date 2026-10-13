@@ -8,6 +8,12 @@ import { monaco, READONLY_OPTIONS } from '../webview/monaco';
 import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution';
 import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution';
 import 'monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution';
+import 'monaco-editor/esm/vs/language/typescript/monaco.contribution';
+import 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/goToCommands';
+import 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/peek/referencesController';
+import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController';
+import 'monaco-editor/esm/vs/editor/contrib/parameterHints/browser/parameterHints';
+import { configureLanguageService, staticHover } from './languageService';
 import type { BridgeFile, TeachingNote } from './bridgeProtocol';
 import { PROFILE_PATH, type CodeDecorations, type CodeView } from './pageHost';
 import { STORY_PATH } from './story';
@@ -31,6 +37,7 @@ export class CodePane implements CodeView {
   private valueOccurrences: ValueOccurrence[] = [];
   private valuesModel: monaco.editor.ITextModel | null = null;
   private valuesContent: string | undefined;
+  private pendingNavigation: { path: string; line: number; column: number } | undefined;
   private hoverSnapshot: string | undefined;
 
   async presentationReady(): Promise<void> {
@@ -46,6 +53,7 @@ export class CodePane implements CodeView {
   private applying = false;
   private lastRender: CodeDecorations | undefined;
   /** a click in the glyph margin or on a line number: toggle the live debugger's breakpoint there */
+  onNavigate: (path: string, line: number) => void = () => {};
   onGutterClick: (path: string, line: number) => void = () => {};
   /** a made-up document's row (the Code Story, the profile): text selected on it, or Ctrl/Cmd+click */
   onLinePick: (path: string, line: number, how: 'select' | 'open') => void = () => {};
@@ -55,6 +63,7 @@ export class CodePane implements CodeView {
     private readonly onEdit: (content: string) => void,
     private readonly onSave: (content: string) => void,
   ) {
+    configureLanguageService();
     this.editor = monaco.editor.create(host, {
       ...READONLY_OPTIONS,
       readOnly: false,
@@ -68,7 +77,8 @@ export class CodePane implements CodeView {
       lineHeight: 20,
       minimap: { enabled: false },
       scrollBeyondLastLine: true,
-      quickSuggestions: false,
+      quickSuggestions: { other: true, comments: false, strings: false },
+      parameterHints: { enabled: true },
       matchBrackets: 'always',
       occurrencesHighlight: 'singleFile',
       hover: { enabled: true, delay: 250, above: true, sticky: true },
@@ -77,15 +87,35 @@ export class CodePane implements CodeView {
     this.decorations = this.editor.createDecorationsCollection();
     // A provider also answers over a property token, without evaluating the expression.
     const providers = ['javascript', 'typescript'].map(language => monaco.languages.registerHoverProvider(language, {
-      provideHover: (model, position) => {
+      provideHover: async (model, position, token) => {
+        if (model !== this.editor.getModel()) return null;
+        const version = model.getVersionId();
+        const snapshot = this.hoverSnapshot;
         const hit = this.valueAt(model, position);
-        if (!hit) return null;
-        const { occurrence: o, property } = hit;
-        const value = property ? pausedProperty(o.local, hit.path) : o.local;
-        return { range: new monaco.Range(o.line, o.start + 1, o.line, hit.end + 1), contents: [{ value: value ? pausedHover(value) : `Paused frame · ${[o.local.name, ...hit.path].join('.')}\n\nProperty unavailable in this snapshot. No expression was evaluated.`, isTrusted: false }] };
+        const contents: monaco.IMarkdownString[] = [];
+        let range: monaco.IRange | undefined;
+        if (hit) {
+          const { occurrence: o, property } = hit;
+          const value = property ? pausedProperty(o.local, hit.path) : o.local;
+          range = new monaco.Range(o.line, o.start + 1, o.line, hit.end + 1);
+          contents.push({ value: value ? pausedHover(value) : `Paused frame · ${[o.local.name, ...hit.path].join('.')}\n\nProperty unavailable in this snapshot. No expression was evaluated.`, isTrusted: false });
+        }
+        const info = await staticHover(model, position);
+        if (token.isCancellationRequested || model.isDisposed() || model !== this.editor.getModel() || version !== model.getVersionId() || snapshot !== this.hoverSnapshot) return null;
+        if (info) { contents.push(...info.contents); range ??= info.range; }
+        return contents.length ? { range, contents } : null;
       },
     }));
-    this.editor.onDidDispose(() => { providers.forEach(p => p.dispose()); this.clearZone(); });
+    const opener = monaco.editor.registerEditorOpener({ openCodeEditor: (_source, resource, selection) => {
+      if (resource.scheme !== 'file') return false;
+      const line = selection ? 'startLineNumber' in selection ? selection.startLineNumber : selection.lineNumber : 1;
+      const column = selection ? 'startColumn' in selection ? selection.startColumn : selection.column : 1;
+      this.pendingNavigation = { path: resource.fsPath, line, column };
+      this.onNavigate(resource.fsPath, line);
+      this.applyNavigation();
+      return true;
+    } });
+    this.editor.onDidDispose(() => { providers.forEach(p => p.dispose()); opener.dispose(); this.clearZone(); });
     this.editor.onDidLayoutChange(() => { if (this.lastRender) this.render(this.lastRender); });
     this.editor.onDidChangeModelContent(() => {
       this.decorations.clear();
@@ -166,8 +196,18 @@ export class CodePane implements CodeView {
     }
     this.shown = file.path;
     this.shownDisplay = file.displayName;
+    this.applyNavigation();
     // the story and the profile carry their own line numbers
     this.editor.updateOptions({ readOnly: file.path !== this.mainPath, domReadOnly: file.path !== this.mainPath, lineNumbers: file.path === STORY_PATH || file.path === PROFILE_PATH ? 'off' : 'on' });
+  }
+
+  private applyNavigation(): void {
+    const target = this.pendingNavigation;
+    if (!target || this.editor.getModel()?.uri.fsPath !== target.path) return;
+    this.pendingNavigation = undefined;
+    this.editor.setPosition({ lineNumber: target.line, column: target.column });
+    this.editor.revealLineInCenterIfOutsideViewport(target.line);
+    this.editor.focus();
   }
 
   shownPath(): string | undefined {

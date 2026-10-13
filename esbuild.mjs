@@ -24,6 +24,7 @@ const webview = {
   entryPoints: {
     panel: 'webview/main.tsx',
     'editor.worker': 'monaco-editor/esm/vs/editor/editor.worker.js',
+    'ts.worker': 'monaco-editor/esm/vs/language/typescript/ts.worker.js',
   },
   outdir: 'dist/webview',
   platform: 'browser',
