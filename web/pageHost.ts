@@ -54,6 +54,8 @@ export interface CodeDecorations {
 }
 
 /** What the page needs from the code pane (web/codePane.ts). */
+export type PresentedNote = TeachingNote & { current?: boolean };
+
 export interface CodeView {
   showStory?(file: BridgeFile): void;
   storyShown?(): boolean;
@@ -67,7 +69,8 @@ export interface CodeView {
   presentationReady?(): Promise<void>;
   renderedSource?(): RenderedSource;
   renderedStory?(): RenderedSource | null;
-  setNotes?(notes: TeachingNote[]): void;
+  setNotes?(notes: PresentedNote[]): void;
+  noteUiState?(): { noteId: string; file: string; line: number; rendered: boolean; visible: boolean }[];
   cacheFile?(file: BridgeFile): void;
   showFile(file: BridgeFile, opts?: { keepDirty?: boolean }): void;
   shownPath(): string | undefined;
@@ -1415,15 +1418,24 @@ export class PageHost {
     this.onChange();
   }
 
+  async presentationReady(): Promise<void> {
+    await this.code.presentationReady?.();
+  }
+
   render(): void {
     this.code.render(this.decorations());
     if (this.storyShown() && this.code.renderStory) this.code.renderStory(this.storyDecorations({ inline: new Map(), coverage: new Map(), current: null, callers: [], errors: new Map(), breakpoints: new Map(), paused: null }));
-    if (this.code.setNotes) this.code.setNotes([...this.notes.values()].filter((n) => n.file === this.code.shownPath()));
+    if (this.code.setNotes) this.code.setNotes([...this.notes.values()].filter((n) => n.file === this.code.shownPath()).map(n => ({ ...n, current: this.noteMoments.get(n.noteId) === this.noteMoment() })));
     else if (this.narration && this.narration.path === this.code.shownPath()) this.code.setNarration({ text: this.narration.text, line: this.narration.line });
     else this.code.setNarration(null);
   }
 
   readonly notes = new Map<string, TeachingNote>();
+  private readonly noteMoments = new Map<string, string>();
+  private noteMoment(): string {
+    const c = this.state().context;
+    return JSON.stringify([c.source, c.runId, c.step, c.frame]);
+  }
   async peekValue(name: string): Promise<unknown> {
     this.sourceMode = 'live';
     if (!this.code.peekValue) throw new Error('the code view does not support value peeks');
@@ -1511,6 +1523,7 @@ export class PageHost {
     this.render();
     this.onChange();
     await this.code.presentationReady?.();
+    if (this.debug.paused !== p || this.debug.selectedFrame !== state.selectedFrame || this.debug.run?.runId !== state.id) throw new Error('pause changed while presenting values; read state again');
     return { observed: { runId: state.id, step: p.step, frame: this.debug.selectedFrame, file, line: f?.line ?? p.line },
       shown: state.locals.filter((v) => command.mode === 'all' || (command.mode === 'selected' && names.includes(v.name))).map((v) => ({ name: v.name, text: v.text })), rendered: this.code.valueUiState?.() ?? null };
   }
@@ -1524,8 +1537,8 @@ export class PageHost {
   /** Show an explanation bubble under `line` of the shown file (null clears it). */
   say(text: string | null, line?: number, opts: { file?: string; noteId?: string; kind?: 'explanation' | 'prediction' } = {}): void {
     if (text === null) {
-      if (opts.noteId) this.notes.delete(opts.noteId);
-      else this.notes.clear();
+      if (opts.noteId) { this.notes.delete(opts.noteId); this.noteMoments.delete(opts.noteId); }
+      else { this.notes.clear(); this.noteMoments.clear(); }
       const last = [...this.notes.values()].at(-1);
       this.narration = last ? { text: last.text, line: last.line, path: last.file } : null;
     }
@@ -1537,7 +1550,9 @@ export class PageHost {
       if (!Number.isInteger(at) || at < 1) throw new Error('line must be a positive integer');
       this.validatePresentationLine(path, at);
       if (opts.kind && !['explanation', 'prediction'].includes(opts.kind)) throw new Error('note kind must be explanation or prediction');
-      this.notes.set(opts.noteId ?? 'main', { noteId: opts.noteId ?? 'main', file: path, line: at, text, kind: opts.kind ?? 'explanation' });
+      const context = this.state().context;
+      this.notes.set(opts.noteId ?? 'main', { observed: { source: context.source, runId: context.runId ?? undefined, step: context.step, frame: context.frame, file: context.file }, noteId: opts.noteId ?? 'main', file: path, line: at, text, kind: opts.kind ?? 'explanation' });
+      this.noteMoments.set(opts.noteId ?? 'main', this.noteMoment());
       this.narration = { text, line: at, path };
     }
     this.render();
@@ -1641,7 +1656,20 @@ export class PageHost {
       }
       stack = frames.map((f) => ({ function: f.function, line: f.line, step: f.step }));
     }
+    const live = this.debug.active && !this.viewingRecordedSource;
+    const pause = this.debug.paused;
+    const frame = pause?.stack[this.debug.selectedFrame];
+    const debug = this.debug.state();
     return {
+      shownFile: this.code.shownPath() ?? null,
+      context: live ? { source: 'live', runId: this.debug.run!.runId, running: true, paused: !!pause,
+        step: pause?.step ?? null, frame: this.debug.selectedFrame,
+        file: this.debug.pathOf(frame?.fileId ?? pause?.fileId) ?? null, line: frame?.line ?? pause?.line ?? null,
+        localsReady: !!pause && this.debug.locals?.step === pause.step && this.debug.locals.frameId === this.debug.selectedFrame,
+        locals: debug?.locals.map(v => ({ name: v.name, text: v.text })) ?? [] }
+        : { source: 'recording', runId: run?.runId ?? null, running: !!this.incoming || !!run?.running, paused: this.nav.active,
+          step, frame: 0, file: location && trace && step !== null ? run?.files.get(trace.location(step)!.fileId)?.path ?? null : this.main?.path ?? null,
+          line: location?.line ?? null, localsReady: step !== null, locals: step === null ? [] : this.localsAt(step) },
       runId: run?.runId ?? null,
       running: !!this.incoming || !!run?.running,
       file: this.main?.path ?? '',
@@ -1657,6 +1685,7 @@ export class PageHost {
       errors: (run?.errors ?? []).filter((e) => !e.handled).map((e) => ({ type: e.errorType, message: e.message, line: run?.files.locate(e.rid)?.range[0] ?? 0 })),
       narration: this.narration ? { text: this.narration.text, line: this.narration.line } : null,
       notes: [...this.notes.values()],
+      noteRendering: this.code.noteUiState ? [...this.notes.values()].map(n => this.code.noteUiState!().find(ui => ui.noteId === n.noteId && ui.file === n.file) ?? { noteId: n.noteId, file: n.file, line: n.line, rendered: false, visible: false }) : null,
       valuePresentation: this.valuePresentation ? { mode: this.valuePresentation.mode, names: this.valuePresentation.names, file: this.valuePresentation.file, ...(this.valuePresentation.line !== undefined ? { line: this.valuePresentation.line } : {}) } : null,
       live: this.debug.active ? { runId: this.debug.run!.runId, step: this.debug.paused?.step ?? null, frame: this.debug.selectedFrame,
         file: this.debug.pathOf(this.debug.paused?.stack[this.debug.selectedFrame]?.fileId ?? this.debug.paused?.fileId) ?? null,

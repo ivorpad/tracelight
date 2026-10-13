@@ -111,6 +111,9 @@ describe('web bridge helpers', () => {
   });
 
   it('parses ctl commands', () => {
+    expect(parseCtl(['say', 'now', '--expect-source', 'live', '--expect-run', 'd-2', '--expect-step', '4', '--expect-frame', '0', '--expect-file', '/w/a.ts'])).toMatchObject({ action: 'say', expect: { source: 'live', runId: 'd-2', step: 4, frame: 0, file: '/w/a.ts' } });
+    expect(parseCtl(['say', 'before navigation', '--expect-step', 'null'])).toMatchObject({ expect: { step: null } });
+    expect(() => parseCtl(['say', 'x', '--expect-step', '-1'])).toThrow('nonnegative');
     expect(parseCtl(['goto', '12', '--say', 'here'])).toEqual({ action: 'goto', step: 12, say: 'here' });
     expect(parseCtl(['step', 'backOver'])).toEqual({ action: 'step', kind: 'backOver' });
     expect(parseCtl(['say', 'two', 'words', '--line', '4'])).toEqual({ action: 'say', text: 'two words', line: 4 });
@@ -344,7 +347,26 @@ describe('BridgeServer', () => {
     page.ws.close();
   });
 
-  it('hands an agent command to the open page and returns its answer', async () => {
+  it('refuses ambiguous pages, overlapping requests, and disconnected stale state', async () => {
+    const { port } = await start();
+    const one = await connect(port);
+    const two = await connect(port);
+    expect(await server!.agent({ action: 'say', text: 'must not broadcast' })).toMatchObject({ error: expect.stringContaining('pages are connected') });
+    expect(one.messages.some(m => m.type === 'agent')).toBe(false);
+    expect(two.messages.some(m => m.type === 'agent')).toBe(false);
+    const closed = new Promise<void>(resolve => { two.ws.onclose = () => resolve(); });
+    two.ws.close(); await closed;
+    const pending = server!.agent({ action: 'debug', op: 'step' });
+    await one.next(m => m.type === 'agent');
+    expect(await server!.agent({ action: 'clear' })).toMatchObject({ error: expect.stringContaining('pending') });
+    one.ws.close();
+    expect(await pending).toMatchObject({ error: expect.stringContaining('disconnected') });
+    const state = await fetch(`http://127.0.0.1:${port}/api/state`);
+    expect(state.status).toBe(409);
+    expect(await state.json()).toMatchObject({ state: null, error: expect.stringContaining('connected page') });
+  });
+
+  it('hands an agent command to the open page and returns its answer' , async () => {
     const { port } = await start();
     const none = await fetch(`http://127.0.0.1:${port}/api/command`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'goto', step: 3 }) });
     expect(none.status).toBe(409);

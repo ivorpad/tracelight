@@ -67,10 +67,15 @@ export function ValueTree({ node, debug, name, initialOpen = false, onOpenSource
 }
 
 function ObservedBinding({ v, inspector, open, onToggle }: { open: boolean; onToggle: (name: string) => void; v: { name: string; text: string; valueBag?: { data: ValueNode; runtimeKey: string } }; inspector: Inspector }) {
+  const node = v.valueBag?.data;
+  const tree = !!node && (!!node.props?.length || !!node.expandable || !!node.functionSource || !!node.functionLocation);
+  const summary = pausedSummary(v);
+  const expandable = tree || (!node && summary !== v.text.replace(/\s*\n\s*/g, ' ')) || v.text.includes('\n');
+  const contents = <><span class="pkw-debug-name">{v.name}</span> <span class="pkw-observed-preview">{open ? '' : summary}</span></>;
   return <div class={`pkw-observed-binding${open ? ' pkw-observed-open' : ''}`}>
-    <button class="pkw-observed-summary" aria-expanded={open} title={v.text} onClick={() => onToggle(v.name)}><span class="pkw-debug-name">{v.name}</span> <span class="pkw-observed-preview">{pausedSummary(v)}</span></button>
-    {open ? <div class="pkw-variable-detail"><div class="pkw-value-note">Valor observado en esta pausa</div>
-      {v.valueBag ? <ValueTree node={v.valueBag.data} name={v.name} debug={inspector} /> : <pre><ValueSyntax text={v.text} /></pre>}
+    {expandable ? <button class="pkw-observed-summary" aria-expanded={open} title={v.text} onClick={() => onToggle(v.name)}>{contents}</button> : <span class="pkw-observed-scalar" title={v.text}>{contents}</span>}
+    {open && expandable ? <div class="pkw-variable-detail">
+      {tree ? <ValueTree node={node!} name={v.name} debug={inspector} initialOpen /> : <pre>{v.text}</pre>}
     </div> : null}
   </div>;
 }

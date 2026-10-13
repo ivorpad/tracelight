@@ -145,6 +145,59 @@ offers `navigator.modelContext` (a draft spec): `tracelight_state`, `tracelight_
 `tracelight_watch`, `tracelight_breakpoint`, `tracelight_story`, `tracelight_profile`, `tracelight_debug`. The header shows a WebMCP chip when
 they registered. A browser-automation agent can also call `window.tracelight` (the page host) directly.
 
+## Agent control and execution context
+
+Read `state.context` before teaching or moving. It identifies the active source (`live` or
+`recording`), `runId`, `step`, selected `frame`, absolute `file`, `line`, `paused` and
+`localsReady`. `context.locals` belongs to that context. The existing top-level execution fields
+still describe the recording for compatibility. A completed recording and a live pause can coexist.
+`shownFile` identifies the editor document, which can differ from the selected frame.
+
+Commands accept `expect: {source, runId, step, frame, file}`. Supply the fields from the context
+you read to reject a request after another actor changes the run, pause or selected frame.
+CLI equivalents are `--expect-source`, `--expect-run`, `--expect-step`, `--expect-frame` and
+`--expect-file` (`null` is accepted for step/file). WebMCP has the same `expect` object on each tool. An obsolete request fails before
+changing the page. Presentation commands also reject a pause change while waiting for rendering.
+
+HTTP control requires exactly one connected page. Zero pages, multiple pages, overlapping commands
+and a disconnected target return 409 with an error. State never falls back to cached page data.
+After reconnection read state again; a timed-out command might already have changed the runtime.
+Recorded navigation reviews history while the live debugger stays paused. Confirm the visible
+position before explaining it; `debug step` advances live execution.
+A debugger move waits for a new pause or the run's end, then for that frame's locals and rendering;
+a runtime rejection or an unconfirmed move fails instead of reporting the old pause as success.
+
+`say` replaces a note with the same `noteId`; `clear` removes that ID (all notes when omitted).
+`file` and `line` anchor the note, `kind` labels explanation or prediction, and `observed` stores
+the execution context when the note was created. It does not turn prose into a runtime observation.
+`say` and `clear` wait for the code view's presentation barrier. `noteRendering` reports actual
+connected DOM nodes and viewport visibility, or null when that view cannot confirm rendering.
+A note for another file remains stored with `rendered: false`. Notes persist in that page until cleared or reloaded;
+check their `observed` context before using one at a later pause.
+
+`values` selects names supplied by the paused runtime; `inspect` opens/closes those serialized
+bindings. Both return run/step/frame/file provenance and rendered inspector state. They do not
+call `eval`. Explicit live `eval` can execute code in the paused frame and must not be used as a
+substitute for reading an observed binding.
+
+Verified failure modes and limits:
+
+| Failure | Handling and evidence |
+|---|---|
+| Finished recording mistaken for live state | Additive `context`; handler test keeps w-1 beside d-context. |
+| Command moves several browser pages | Refuse multiple pages before sending; socket test sees zero commands on either page. |
+| Old run, pause, frame or file used for a note | `expect` rejects mismatches; shared handler and WebMCP execute tests. |
+| Disconnection returns cached state | Pending target fails; GET state returns 409/null until a page reconnects. |
+| Runtime step error appears successful | Strict agent control propagates the runtime error; handler regression test. |
+| Note reply precedes rendering | Presentation barrier and DOM confirmation; test holds the barrier pending. |
+| Note with same ID stays on its old line | Not reproduced on c9c2808: isolated queue/worker pause moved note 5 to 6, confirmed by screenshot. |
+| Missing values mistaken for an empty scope | `localsReady` distinguishes pending locals from an observed empty list. |
+| Native WebMCP unavailable | Codex browser discovery returned no tools; real UI verification used the public HTTP API. |
+
+Browser checks used two isolated multifile programs: queue/worker at worker:6 and a second program
+at helper:3 containing `0`, `false`, `''`, `null`, an array and an object. The second inspector
+opened with native mouse input. These checks do not establish hover behavior or every viewport.
+
 ## How it fits together
 
 ```

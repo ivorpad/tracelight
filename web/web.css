@@ -139,7 +139,10 @@ body.light .pkw-current-line { background: rgba(255, 204, 0, 0.3); }
 .monaco-editor .view-zones:has(.pkw-observed-zone) { z-index: 5; }
 .pkw-observed-bindings { display: flex; align-items: start; flex-wrap: wrap; gap: 4px 12px; font: 12px var(--vscode-editor-font-family); }
 .pkw-observed-binding { min-width: 0; max-width: 100%; }
-.pkw-observed-summary { background: transparent; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; white-space: normal; overflow-wrap: anywhere; padding: 3px 0; }
+.pkw-observed-summary, .pkw-observed-scalar { display: inline-block; background: transparent; border: 0; color: inherit; font: inherit; text-align: left; white-space: normal; overflow-wrap: anywhere; padding: 2px 4px; }
+.pkw-observed-summary { cursor: pointer; border-radius: 3px; background: var(--vscode-editorWidget-background); }
+.pkw-observed-summary:hover { background: var(--vscode-list-hoverBackground); }
+.pkw-observed-summary:focus-visible, .pkw-value-toggle:focus-visible, .pkw-text-btn:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .pkw-observed-preview { color: var(--vscode-descriptionForeground); }
 .pkw-observed-open { flex: 1 1 100%; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border); }
 .pkw-narration .codicon { color: var(--vscode-focusBorder); margin-top: 2px; flex: none; }
@@ -265,3 +268,11 @@ body.pkw-scratch-open[data-presentation][data-layout] #pkw-panel, body.pkw-scrat
 .pkw-scratch-library select, .pkw-scratch-library input { max-width: 100%; min-width: 0; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-panel-border); padding: 4px; }
 .pkw-scratch-library select { flex: 1 1 180px; }
 .pkw-scratch-library input { flex: 1 1 150px; }
+
+@media (max-width: 520px) {
+  .pkw-bar { gap: 4px; }
+  .pkw-brand { display: none; }
+  .pkw-debug-bar { flex-wrap: wrap; height: auto; min-height: 30px; padding: 3px 6px; }
+  .pkw-debug-reason { flex-basis: 100%; }
+  #pkw-debugpane.compact { height: auto !important; min-height: 36px; }
+}

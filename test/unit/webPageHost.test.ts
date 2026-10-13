@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOG_PATH, PageHost, PROFILE_PATH, type CodeDecorations, type CodeView, type Link } from '../../web/pageHost';
+import { LOG_PATH, PageHost, PROFILE_PATH, type CodeDecorations, type CodeView, type Link, type PresentedNote } from '../../web/pageHost';
 import { STORY_PATH } from '../../web/story';
 import { applyEvent, emptyRun } from '../../web/runState';
 import { runAgentCommand, webMcpTools } from '../../web/agent';
@@ -38,6 +38,7 @@ class FakeCode implements CodeView {
     if (!this.last?.liveValues?.locals.some(v => v.name === name)) throw new Error('hidden binding');
     return { name, open, visible: true };
   }
+  setNotes?: (notes: PresentedNote[]) => void;
   shown: string | undefined;
   last: CodeDecorations | undefined;
   narration: { text: string; line: number } | null = null;
@@ -124,6 +125,72 @@ function setup() {
 }
 
 describe('PageHost', () => {
+  it('separates live context from the completed recording and refuses obsolete commands', async () => {
+    const { host, link, feed } = setup();
+    host.start({ step: 4 });
+    feed({ type: 'debug.begin', runId: 'd-context', content: SOURCE });
+    feed({ type: 'debug.event', event: runEvents('d-context')[1]! });
+    link.replies.push({ type: 'debug.result', id: 1, locals: [{ name: 's', text: '0' }, { name: 'flag', text: 'false' }, { name: 'empty', text: "''" }] });
+    feed({ type: 'debug.event', event: { runId: 'd-context', seq: 3, type: 'debug.paused', step: 3, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'add', fileId: 1, line: 2 }] } });
+    await tick();
+    expect(host.state()).toMatchObject({ runId: 'd-context', context: { source: 'live', runId: 'd-context', step: 3, file: MAIN.path, line: 2, localsReady: true, locals: [{ name: 's', text: '0' }, { name: 'flag', text: 'false' }, { name: 'empty', text: "''" }] } });
+    await expect(runAgentCommand(host, link, { action: 'say', text: 'wrong run', expect: { runId: 'w-1' } })).rejects.toThrow('stale context');
+    await expect(runAgentCommand(host, link, { action: 'say', text: 'wrong frame', expect: { frame: 1 } })).rejects.toThrow('stale context');
+    const say = webMcpTools(host, link).find(t => t.name === 'tracelight_say')!;
+    expect((await say.execute({ text: 'old pause', expect: { step: 2 } })).isError).toBe(true);
+    expect(host.notes.size).toBe(0);
+  });
+
+  it('waits for presentation when replacing a note by ID and rejects overlapping commands', async () => {
+    const { host, link, code } = setup();
+    let rendered!: () => void;
+    code.presentationReady = () => new Promise<void>(resolve => { rendered = resolve; });
+    host.say('old line', 2, { noteId: 'current', file: MAIN.path });
+    const result = runAgentCommand(host, link, { action: 'say', text: 'new line', line: 3, file: MAIN.path, noteId: 'current' });
+    let settled = false;
+    void result.then(() => { settled = true; });
+    await tick();
+    expect(settled).toBe(false);
+    await expect(runAgentCommand(host, link, { action: 'clear' })).rejects.toThrow('pending');
+    expect(code.narration).toEqual({ text: 'new line', line: 3 });
+    rendered();
+    expect(await result).toMatchObject({ notes: [{ noteId: 'current', line: 3, text: 'new line' }] });
+  });
+
+  it('reports runtime rejection of a debugger step instead of returning success', async () => {
+    const { host, link, feed } = setup();
+    feed({ type: 'debug.begin', runId: 'd-error', content: SOURCE });
+    feed({ type: 'debug.event', event: runEvents('d-error')[1]! });
+    link.replies.push({ type: 'debug.result', id: 1, locals: [] });
+    feed({ type: 'debug.event', event: { runId: 'd-error', seq: 3, type: 'debug.paused', step: 3, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'add', fileId: 1, line: 2 }] } });
+    await tick();
+    link.replies.push({ type: 'error', id: 2, message: 'runtime refused step' });
+    await expect(runAgentCommand(host, link, { action: 'debug', op: 'step', kind: 'over' })).rejects.toThrow('runtime refused step');
+  });
+
+  it('marks a note as belonging to its pause and replaces the same ID at the new pause', async () => {
+    const { host, code, feed } = setup();
+    let notes: PresentedNote[] = [];
+    code.setNotes = (next) => { notes = next; };
+    feed({ type: 'debug.begin', runId: 'd-notes', content: SOURCE });
+    feed({ type: 'debug.event', event: runEvents('d-notes')[1]! });
+    const pause = (step: number) => feed({ type: 'debug.event', event: { runId: 'd-notes', seq: step + 10, type: 'debug.paused', step, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'add', fileId: 1, line: 2 }, { name: '<module>', fileId: 1, line: 5 }] } });
+    pause(3);
+    host.say('First pass', 2, { noteId: 'current' });
+    expect(notes).toEqual([expect.objectContaining({ text: 'First pass', current: true })]);
+    pause(4); // Same source line, different moment. It must not look current.
+    host.render();
+    expect(notes).toEqual([expect.objectContaining({ text: 'First pass', current: false })]);
+    host.say('Second pass', 3, { noteId: 'current' });
+    expect(notes).toEqual([expect.objectContaining({ line: 3, text: 'Second pass', current: true })]);
+    await host.debug.selectFrame(1);
+    host.render();
+    expect(notes).toEqual([expect.objectContaining({ text: 'Second pass', current: false })]);
+    host.say(null, undefined, { noteId: 'current' });
+    expect(notes).toEqual([]);
+  });
+
+
   it('distinguishes rendered live source from a different recorded selection, then focuses the recording without resuming', async () => {
     const { host, code, feed, link } = setup();
     feed({ type: 'debug.begin', runId: 'd-visible', content: SOURCE });
@@ -307,7 +374,18 @@ describe('PageHost', () => {
     expect(await runAgentCommand(host, link, { action: 'eval', expression: 'x' })).toEqual({ text: '3' });
   });
 
-  it('declares WebMCP tools that run the same commands', async () => {
+  it('clears the same note with empty say text through HTTP commands and WebMCP', async () => {
+    const { host, link } = setup();
+    host.say('first', 2, { noteId: 'one' });
+    host.say('keep', 3, { noteId: 'two' });
+    await runAgentCommand(host, link, { action: 'say', text: '', noteId: 'one' });
+    expect([...host.notes.keys()]).toEqual(['two']);
+    const say = webMcpTools(host, link).find(t => t.name === 'tracelight_say')!;
+    await say.execute({ text: '', noteId: 'two' });
+    expect(host.notes.size).toBe(0);
+  });
+
+  it('declares WebMCP tools that run the same commands' , async () => {
     const { host, link } = setup();
     const tools = webMcpTools(host, link);
     expect(tools.map((t) => t.name)).toEqual(['tracelight_scratchpad', 'tracelight_wait_pause', 'tracelight_state', 'tracelight_position', 'tracelight_goto', 'tracelight_step', 'tracelight_line', 'tracelight_say', 'tracelight_values', 'tracelight_peek', 'tracelight_inspect', 'tracelight_start', 'tracelight_stop', 'tracelight_run', 'tracelight_eval', 'tracelight_var', 'tracelight_why', 'tracelight_watch', 'tracelight_breakpoint', 'tracelight_story', 'tracelight_profile', 'tracelight_debug']);
@@ -431,6 +509,8 @@ describe('PageHost views', () => {
     link.replies.push({ type: 'debug.result', id: 1, locals: [{ name: 'a', text: '1' }, { name: 'b', text: '2' }] });
     const baseline = await host.waitForPause();
     const nextPause = runAgentCommand(host, link, { action: 'waitPause', after: baseline.cursor, timeoutMs: 500 });
+    // The listener must not lock the controls needed to cause the next pause.
+    await expect(runAgentCommand(host, link, { action: 'debug', op: 'state' })).resolves.toMatchObject({ running: true });
     feed({ type: 'debug.event', event: { runId: 'd-1', seq: 3, type: 'debug.paused', step: 3, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'breakpoint', breakpoint: { path: MAIN.path, line: 2 }, stack: [{ frameId: 0, name: 'add', fileId: 1, line: 2 }, { frameId: 1, name: '<module>', fileId: 1, line: 5 }] } });
     for (let i = 0; i < 5; i++) await tick();
     expect(await nextPause).toMatchObject({ changed: true, cursor: baseline.cursor + 1, state: { paused: true, locals: [{ name: 'a', text: '1' }, { name: 'b', text: '2' }] } });

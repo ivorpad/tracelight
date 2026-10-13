@@ -16,7 +16,7 @@ import 'monaco-editor/esm/vs/editor/contrib/parameterHints/browser/parameterHint
 import 'monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu';
 import { configureLanguageService, registerLanguageSource, staticHover } from './languageService';
 import type { BridgeFile, TeachingNote, RenderedSource } from './bridgeProtocol';
-import { PROFILE_PATH, type CodeDecorations, type CodeView } from './pageHost';
+import { PROFILE_PATH, type CodeDecorations, type CodeView, type PresentedNote } from './pageHost';
 import { STORY_PATH } from './story';
 import { pausedOccurrences, pausedInline, pausedHover, pausedProperty, type ValueOccurrence } from './pausedValues';
 import type { ValueNode } from '../src/shared/protocol';
@@ -46,7 +46,7 @@ export class CodePane implements CodeView {
   private extraZones: string[] = [];
   private noteLayouts = new Map<string, { bubble: HTMLElement; observer: ResizeObserver }>();
   private notesKey = '';
-  private lastNotes: TeachingNote[] = [];
+  private lastNotes: PresentedNote[] = [];
   private valueOccurrences: ValueOccurrence[] = [];
   private valuesModel: monaco.editor.ITextModel | null = null;
   private valuesContent: string | undefined;
@@ -77,6 +77,15 @@ export class CodePane implements CodeView {
   private inspectorZone: string | undefined;
   private inspectorNode: HTMLElement | undefined;
   private inspectorResize: ResizeObserver | undefined;
+
+  noteUiState(): { noteId: string; file: string; line: number; rendered: boolean; visible: boolean }[] {
+    return this.lastNotes.map(note => {
+      const bubble = [...this.noteLayouts.values()].find(item => item.bubble.dataset.noteId === note.noteId)?.bubble;
+      const box = bubble?.getBoundingClientRect();
+      return { noteId: note.noteId, file: note.file, line: note.line, rendered: !!bubble?.isConnected,
+        visible: !!bubble?.isConnected && !!box?.width && !!box.height && box.bottom > 0 && box.top < window.innerHeight };
+    });
+  }
 
   valueUiState(): { name: string; open: boolean; visible: boolean }[] {
     return [...this.inspected].map(name => ({ name, open: true, visible: !!this.inspectorZone }));
@@ -455,7 +464,7 @@ export class CodePane implements CodeView {
     this.setNotes(n ? [{ noteId: 'main', file: this.shown ?? '', text: n.text, line: n.line, kind: 'explanation' }] : []);
   }
 
-  setNotes(notes: TeachingNote[]): void {
+  setNotes(notes: PresentedNote[]): void {
     this.lastNotes = notes;
     const key = JSON.stringify([notes, this.editor.getLayoutInfo().contentWidth]);
     if (this.notesKey === key) return;
@@ -479,7 +488,8 @@ export class CodePane implements CodeView {
     text.className = 'pkw-narration-text';
     const label = document.createElement('span');
     label.className = 'pkw-note-label';
-    label.textContent = n.kind === 'prediction' ? 'Predicción' : 'Nota';
+    label.textContent = `${n.kind === 'prediction' ? 'Predicción' : 'Nota'} · línea ${n.line}${n.current === false ? ' · contexto anterior' : ''}`;
+    bubble.dataset.noteId = n.noteId;
     text.append(label, document.createTextNode(n.text));
     text.setAttribute('role', 'note');
     bubble.append(icon, text);
