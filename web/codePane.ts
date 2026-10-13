@@ -46,6 +46,27 @@ export class CodePane implements CodeView {
 
   valueUiState(): { name: string; open: boolean; visible: boolean }[] { return []; }
 
+  async peekValue(name: string): Promise<{ name: string; visible: boolean }> {
+    this.hideValueHover();
+    if (!name) return { name, visible: false };
+    const [binding, ...path] = name.split('.');
+    const o = this.valueOccurrences.find(o => o.local.name === binding && !o.unavailable &&
+      path.every((part, i) => o.path?.[i] === part));
+    const model = this.editor.getModel();
+    if (!o || !model || model !== this.valuesModel || model.getValue() !== this.valuesContent) throw new Error(`No observed source binding at this pause: ${name}`);
+    if (path.length && !pausedProperty(o.local, path)) throw new Error(`Property unavailable in this snapshot: ${name}`);
+    const suffix = model.getLineContent(o.line).slice(o.end);
+    const parts = [...suffix.matchAll(/(?:\?\.|\.)\s*([\p{ID_Start}_$][\p{ID_Continue}$]*)/gu)].slice(0, path.length);
+    const column = path.length ? o.end + parts[path.length - 1]!.index + parts[path.length - 1]![0].length : o.start + 1;
+    this.editor.revealLineInCenterIfOutsideViewport(o.line);
+    this.editor.setPosition({ lineNumber: o.line, column });
+    const action = this.editor.getAction('editor.action.showHover');
+    if (!action) throw new Error('The editor hover action is unavailable');
+    await action.run();
+    await this.presentationReady();
+    return { name, visible: true };
+  }
+
   inspectValue(_name: string, _open: boolean): { name: string; open: boolean; visible: boolean } {
     throw new Error('Clickable source values are disabled. Hover a binding or open Variables and call stack.');
   }

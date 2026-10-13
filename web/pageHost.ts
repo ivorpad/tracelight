@@ -54,6 +54,7 @@ export interface CodeDecorations {
 
 /** What the page needs from the code pane (web/codePane.ts). */
 export interface CodeView {
+  peekValue?(name: string): Promise<{ name: string; visible: boolean }>;
   inspectValue?(name: string, open: boolean): { name: string; open: boolean; visible: boolean };
   valueUiState?(): { name: string; open: boolean; visible: boolean }[];
   presentationReady?(): Promise<void>;
@@ -118,18 +119,18 @@ export class PageHost {
   /** sources of files other than the main one, fetched on demand */
   private readonly sources = new Map<string, string>();
   private readonly sourceIdentities = new Map<string, import('../src/shared/protocol').SourceBindings>();
-  private readonly identityRequests = new Set<string>();
+  private readonly identityRequests = new Map<string, Promise<void>>();
 
   private identities(path: string, content: string): import('../src/shared/protocol').SourceBindings {
     const key = JSON.stringify([path, content]);
     const known = this.sourceIdentities.get(key);
     if (known) return known;
     if (!this.identityRequests.has(key)) {
-      this.identityRequests.add(key);
-      void this.link.request({ type: 'bindings', source: content, path, identifiers: true }).then(reply => {
+      const request = this.link.request({ type: 'bindings', source: content, path, identifiers: true }).then(reply => {
         if (reply.type === 'bindings' && reply.identifiers) this.sourceIdentities.set(key, reply.identifiers);
         this.scheduleRender();
       }).catch(() => { /* No syntax identity means no value attached to source. */ });
+      this.identityRequests.set(key, request);
     }
     return { scopes: [], references: [] };
   }
@@ -1284,6 +1285,30 @@ export class PageHost {
   }
 
   readonly notes = new Map<string, TeachingNote>();
+  async peekValue(name: string): Promise<unknown> {
+    if (!this.code.peekValue) throw new Error('the code view does not support value peeks');
+    if (name && !this.debug.paused) throw new Error('peek needs a live pause');
+    const pause = this.debug.paused;
+    const frameIndex = this.debug.selectedFrame;
+    const frame = pause?.stack[frameIndex];
+    if (name && pause) {
+      const fileId = frame?.fileId ?? pause.fileId;
+      const path = fileId === null ? undefined : this.debug.pathOf(fileId);
+      const line = frame?.line ?? pause.line;
+      if (!path || line === null) throw new Error('The selected frame has no source location');
+      this.revealPath(path, line);
+      await this.code.presentationReady?.();
+      const content = path === this.main?.path ? this.debug.run?.content : path ? this.sources.get(path) : undefined;
+      if (path && content !== undefined) {
+        this.identities(path, content);
+        await this.identityRequests.get(JSON.stringify([path, content]));
+      }
+      if (this.debug.paused !== pause || this.debug.selectedFrame !== frameIndex) throw new Error('The paused frame changed while opening the value');
+      this.render();
+    }
+    const ui = await this.code.peekValue(name);
+    return { ...ui, observed: pause ? { runId: this.debug.run?.runId, step: pause.step, frame: this.debug.selectedFrame, file: this.debug.pathOf(frame?.fileId ?? pause.fileId), line: frame?.line ?? pause.line } : undefined };
+  }
   private valuePresentation: { mode: 'selected' | 'all' | 'none'; names: string[]; file: string; line?: number; runId: string; frame: number } | null = null;
 
   async inspectValue(name: string, open: boolean): Promise<unknown> {

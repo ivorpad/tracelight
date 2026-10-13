@@ -147,10 +147,46 @@ export function pausedShadows(lines: string[], occurrences: ValueOccurrence[], p
   return rows;
 }
 
+/** Format the captured preview as data, preserving quoted text without parsing or executing it. */
+export function prettyPausedText(text: string): string {
+  if (!/^[\[{]/.test(text.trim())) return text;
+  const source = text.trim();
+  let out = '', depth = 0, quote = '', escaped = false;
+  const newline = () => { out = out.trimEnd() + '\n' + '  '.repeat(depth); };
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i]!;
+    if (quote) {
+      out += c;
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === quote) quote = '';
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; out += c; continue; }
+    if (c === '[' || c === '{') {
+      // Markers such as [Circular] and [Getter] are atomic preview text.
+      const marker = c === '[' ? /^\[(?:Circular[^\]]*|Getter[^\]]*|Setter[^\]]*|Object[^\]]*)\]/.exec(source.slice(i)) : null;
+      if (marker) { out += marker[0]; i += marker[0].length - 1; continue; }
+      out += c;
+      const close = c === '[' ? ']' : '}';
+      if (source.slice(i + 1).trimStart().startsWith(close)) {
+        i += source.slice(i + 1).indexOf(close) + 1;
+        out += close;
+      } else { depth++; newline(); }
+    } else if (c === ']' || c === '}') {
+      if (!depth) return text;
+      depth--; newline(); out += c;
+    } else if (c === ',') { out += c; newline(); }
+    else if (/\s/.test(c)) { if (out && !/\s$/.test(out)) out += ' '; }
+    else out += c;
+  }
+  return quote ? text : out.trimEnd();
+}
+
 export function pausedHover(local: LocalVar): string {
   // A runtime value can contain Markdown. Keep all of it inside an inert code block.
   const runs = local.text.match(/`+/g) ?? [];
   const fence = '`'.repeat(Math.max(3, ...runs.map((r) => r.length + 1)));
-  return `Paused frame · ${local.name}\n\n${fence}javascript\n${local.text}\n${fence}` +
+  return `Paused frame · ${local.name}\n\n${fence}javascript\n${prettyPausedText(local.text)}\n${fence}` +
     (runtimeCapped(local.valueBag?.data, local.text) ? '\n\nRuntime preview is truncated. Expand this variable in the Debugger for available detail.' : '');
 }

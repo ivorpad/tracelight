@@ -117,7 +117,7 @@ node dist/web/server.js ctl var total      # every recorded change of a variable
 node dist/web/server.js ctl why total --step 13
 node dist/web/server.js ctl watch "total * 2"   # --remove drops it
 node dist/web/server.js ctl break 11       # toggles; `on` / `off`, --if "i > 2"
-node dist/web/server.js ctl debug start    # the live debugger: continue | step [into|over|out] | pause | stop | state
+node dist/web/server.js ctl debug start    # the live debugger: restart | continue | step [into|over|out] | pause | stop | state
 node dist/web/server.js ctl story          # open the Code Story and read it back
 node dist/web/server.js ctl profile        # profile one run: the hottest functions
 ```
@@ -170,3 +170,5 @@ and `POST /api/command` must be `application/json`, which a cross-site page cann
 preflight the bridge never approves. The page can read only files a run instrumented and the HTTP
 recording the run wrote.
 Anyone with a shell on the machine can drive it, as with the runtime itself.
+
+`ctl peek NAME` opens the paused value hover through the same command used by WebMCP. `ctl peek --hide` dismisses it. Nested arrays and objects keep indentation in the syntax-highlighted hover. WebMCP registers on `document.modelContext`, with compatibility for older navigator APIs.

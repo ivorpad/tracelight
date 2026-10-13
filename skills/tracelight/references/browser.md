@@ -87,14 +87,14 @@ tracelight web ctl say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kin
 tracelight web ctl clear [--id ID]
 tracelight web ctl values NAME... [--file FILE] [--line N]
 tracelight web ctl values --all|--hide
-tracelight web ctl inspect open|close NAME
+tracelight web ctl peek NAME | peek --hide
 tracelight web ctl run
 tracelight web ctl eval EXPR
 tracelight web ctl var NAME
 tracelight web ctl why NAME [--step N]
 tracelight web ctl watch EXPR [--remove]
 tracelight web ctl break LINE [on|off] [--if COND]
-tracelight web ctl debug start|continue|pause|stop|state [--say TEXT]
+tracelight web ctl debug start|restart|continue|pause|stop|state [--say TEXT]
 tracelight web ctl debug step [into|over|out] [--say TEXT]
 tracelight web ctl story
 tracelight web ctl profile
@@ -239,8 +239,8 @@ not `application/json` gets 415. The page can read only files a run instrumented
 recording the run wrote.
 
 An agent that works inside the browser gets the same commands as WebMCP tools when the browser
-offers `navigator.modelContext` (the header then shows a WebMCP chip): `tracelight_state`,
-`tracelight_goto`, `tracelight_step`, `tracelight_line`, `tracelight_say`, `tracelight_values`, `tracelight_inspect`, `tracelight_run`,
+offers `document.modelContext` (with a fallback for older navigator APIs) (the header then shows a WebMCP chip): `tracelight_state`,
+`tracelight_goto`, `tracelight_step`, `tracelight_line`, `tracelight_say`, `tracelight_values`, `tracelight_peek`, `tracelight_run`,
 `tracelight_eval`, `tracelight_var`, `tracelight_why`, `tracelight_watch`, `tracelight_breakpoint`,
 `tracelight_story`, `tracelight_profile`, `tracelight_debug`. A browser-automation agent can also
 call `window.tracelight`, the page's host object, directly.
@@ -275,4 +275,4 @@ running only when the person is still using it, and tell them the URL and port.
 
 Notes accept a known source `--file`, positive `--line`, and stable `--id` for replacement. `--kind prediction` labels a prediction separately from an explanation. `tracelight_values` accepts `mode`, `names`, `file`, and `line`; it selects existing locals without evaluation or source edits. Replies include the observed run, step, frame and source location. Values refresh on stepping and vanish on resume. Notes remain separate from runtime observations.
 
-`inspect open NAME` and `inspect close NAME` operate the shown Aprender binding. WebMCP `tracelight_inspect` takes `name` and boolean `open`. The reply reads the rendered button state (`open`, `visible`) plus pause provenance, and fails for a hidden row or unknown binding. Selection with `values` alone does not open a value.
+`peek NAME` opens the syntax-highlighted hover on a binding in the selected paused frame. Arrays and objects are indented. `peek --hide` dismisses it. WebMCP `tracelight_peek` takes `name` (empty to dismiss). Peeks show only captured bindings and serialized properties, never evaluate an expression, and return pause provenance. They navigate to the selected frame’s source before showing the hover.

@@ -84,6 +84,10 @@ describe('web bridge helpers', () => {
     expect(parseCtl(['break', '12', '--if', 'i > 2'])).toEqual({ action: 'breakpoint', line: 12, condition: 'i > 2' });
     expect(parseCtl(['debug', 'step', 'into', '--say', 'in we go'])).toEqual({ action: 'debug', op: 'step', kind: 'into', say: 'in we go' });
     expect(parseCtl(['debug', 'step'])).toEqual({ action: 'debug', op: 'step', kind: 'over' });
+    expect(parseCtl(['step', 'next'])).toEqual({ action: 'step', kind: 'next' });
+    expect(parseCtl(['peek', 'jobs'])).toEqual({ action: 'peek', name: 'jobs' });
+    expect(parseCtl(['peek', '--hide'])).toEqual({ action: 'peek', name: '' });
+    expect(parseCtl(['debug', 'restart'])).toEqual({ action: 'debug', op: 'restart' });
     expect(parseCtl(['debug', 'start'])).toEqual({ action: 'debug', op: 'start' });
     expect(() => parseCtl(['debug', 'fly'])).toThrow(/unknown debug op/);
     expect(parseCtl(['story'])).toEqual({ action: 'story' });

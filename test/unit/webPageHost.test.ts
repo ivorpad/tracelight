@@ -12,6 +12,10 @@ const SOURCE = ['def add(a, b):', '    s = a + b', '    return s', '', 'x = add(
 const MAIN: BridgeFile = { path: '/w/demo.py', displayName: 'demo.py', language: 'python', content: SOURCE };
 
 class FakeCode implements CodeView {
+  async peekValue(name: string) {
+    if (name && !this.last?.liveValues?.locals.some(v => v.name === name)) throw new Error('unknown binding');
+    return { name, visible: !!name };
+  }
   inspectValue(name: string, open: boolean) {
     if (!this.last?.liveValues?.locals.some(v => v.name === name)) throw new Error('hidden binding');
     return { name, open, visible: true };
@@ -225,7 +229,7 @@ describe('PageHost', () => {
   it('declares WebMCP tools that run the same commands', async () => {
     const { host, link } = setup();
     const tools = webMcpTools(host, link);
-    expect(tools.map((t) => t.name)).toEqual(['tracelight_state', 'tracelight_goto', 'tracelight_step', 'tracelight_line', 'tracelight_say', 'tracelight_values', 'tracelight_inspect', 'tracelight_run', 'tracelight_eval', 'tracelight_var', 'tracelight_why', 'tracelight_watch', 'tracelight_breakpoint', 'tracelight_story', 'tracelight_profile', 'tracelight_debug']);
+    expect(tools.map((t) => t.name)).toEqual(['tracelight_state', 'tracelight_goto', 'tracelight_step', 'tracelight_line', 'tracelight_say', 'tracelight_values', 'tracelight_peek', 'tracelight_start', 'tracelight_stop', 'tracelight_run', 'tracelight_eval', 'tracelight_var', 'tracelight_why', 'tracelight_watch', 'tracelight_breakpoint', 'tracelight_story', 'tracelight_profile', 'tracelight_debug']);
     const step = tools.find((t) => t.name === 'tracelight_step')!;
     const out = await step.execute({ kind: 'into' });
     expect(JSON.parse(out.content[0]!.text)).toMatchObject({ moved: true });
@@ -359,11 +363,11 @@ describe('PageHost views', () => {
     expect(code.last?.liveValues?.ghostNames).toEqual(['a']);
     expect(code.last?.liveValues?.locals).toEqual(st.locals); // unselected names still have accurate hovers
     expect(link.debugRequests.length).toBe(requestCount); // display never evaluates or mutates
-    const inspect = webMcpTools(host, link).find(t => t.name === 'tracelight_inspect')!;
-    const opened = await inspect.execute({ name: 'a', open: true });
-    expect(JSON.parse(opened.content[0]!.text)).toMatchObject({ name: 'a', open: true, visible: true, observed: { runId: 'd-1', step: 3, frame: 0 } });
-    expect(await runAgentCommand(host, link, { action: 'inspect', name: 'a', open: false })).toMatchObject({ name: 'a', open: false, visible: true });
-    const badInspect = await inspect.execute({ name: 'a + b', open: true });
+    const inspect = webMcpTools(host, link).find(t => t.name === 'tracelight_peek')!;
+    const opened = await inspect.execute({ name: 'a' });
+    expect(JSON.parse(opened.content[0]!.text)).toMatchObject({ name: 'a', visible: true, observed: { runId: 'd-1', step: 3, frame: 0 } });
+    expect(await runAgentCommand(host, link, { action: 'peek', name: '' })).toMatchObject({ name: '', visible: false });
+    const badInspect = await inspect.execute({ name: 'a + b' });
     expect(badInspect.isError).toBe(true);
     expect(link.debugRequests.length).toBe(requestCount);
     await expect(runAgentCommand(host, link, { action: 'values', mode: 'selected', names: ['a + b'] })).rejects.toThrow('not in the current paused frame');

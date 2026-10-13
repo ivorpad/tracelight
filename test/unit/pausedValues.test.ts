@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pausedFrameLocals, pausedHover, pausedInline, pausedOccurrences, pausedProperty, pausedSummary, pausedShadows, runtimeCapped } from '../../web/pausedValues';
+import { prettyPausedText, pausedFrameLocals, pausedHover, pausedInline, pausedOccurrences, pausedProperty, pausedSummary, pausedShadows, runtimeCapped } from '../../web/pausedValues';
 
 describe('paused source values', () => {
   it('does not attach another lexical binding of the same name to source', () => {
@@ -54,7 +54,7 @@ describe('paused source values', () => {
     expect(pausedSummary({ name: 'queue', text: '[unknown preview]' })).toBe('[unknown preview]');
     expect(pausedSummary({ name: 'big', text: '{ ' + 'x'.repeat(200) + ' }' })).toContain('xxx');
     expect(pausedSummary({ name: 'elapsed', text: '0' })).toBe('0');
-    expect(pausedHover(queue)).toContain(queue.text);
+    expect(pausedHover(queue)).toContain(prettyPausedText(queue.text));
   });
   it('uses frame bindings and excludes properties, strings, comments and object keys', () => {
     const lines = ['const updated = elapsed + job.seconds;', 'obj.elapsed; "elapsed"; // elapsed', 'const x = { elapsed: 5 };', 'return elapsed;'];
@@ -74,5 +74,20 @@ describe('paused source values', () => {
     expect(runtimeCapped(undefined, text)).toBe(false);
     expect(runtimeCapped(undefined, 'abc…(+200 chars)')).toBe(true);
     expect(pausedHover({ name: 'x', text: 'abc…(+200 chars)' })).toContain('Runtime preview is truncated');
+  });
+});
+
+
+describe('structured paused previews', () => {
+  it('indents nested arrays and objects without changing quoted punctuation', () => {
+    expect(prettyPausedText("[ { name: 'A, [x]', seconds: 2 }, { nested: [0, false, {}] } ]")).toBe("[\n  {\n    name: 'A, [x]',\n    seconds: 2\n  },\n  {\n    nested: [\n      0,\n      false,\n      {}\n    ]\n  }\n]");
+    expect(prettyPausedText('{ value: [Circular], accessor: [Getter], empty: [] }')).toBe('{\n  value: [Circular],\n  accessor: [Getter],\n  empty: []\n}');
+    expect(prettyPausedText('"{x:1}"')).toBe('"{x:1}"');
+  });
+  it('preserves truncation and keeps markdown fences inert', () => {
+    const hover = pausedHover({ name: 'x', text: "{ x: '```', more: …(+20 chars) }" });
+    expect(hover).toContain("x: '```'");
+    expect(hover).toContain('````javascript');
+    expect(hover).toContain('Runtime preview is truncated');
   });
 });

@@ -35,13 +35,14 @@ export interface RuntimeInfo {
 export type AgentCommand =
   | { action: 'state' }
   | { action: 'goto'; step: number; say?: string }
-  | { action: 'step'; kind: 'into' | 'over' | 'out' | 'back' | 'backOver' | 'backOut'; say?: string }
+  | { action: 'step'; kind: 'next' | 'into' | 'over' | 'out' | 'back' | 'backOver' | 'backOut'; say?: string }
   | { action: 'line'; line: number; file?: string; say?: string }
   | { action: 'say'; text: string; line?: number; step?: number; file?: string; noteId?: string; kind?: 'explanation' | 'prediction' }
   | { action: 'clear'; noteId?: string }
   /** Select existing bindings for display only; no expressions are evaluated. */
   | { action: 'values'; mode: 'selected' | 'all' | 'none'; names?: string[]; file?: string; line?: number }
   | { action: 'inspect'; name: string; open: boolean }
+  | { action: 'peek'; name: string }
   | { action: 'start' }
   | { action: 'stop' }
   | { action: 'run' }
@@ -53,7 +54,7 @@ export type AgentCommand =
   /** add a Time Machine watch (`remove` drops the one with this text) */
   | { action: 'watch'; exp: string; remove?: boolean }
   /** the live debugger: start a `record: false` run, move it, or stop it */
-  | { action: 'debug'; op: 'start' | 'continue' | 'step' | 'pause' | 'stop' | 'state'; kind?: 'into' | 'over' | 'out'; say?: string }
+  | { action: 'debug'; op: 'start' | 'restart' | 'continue' | 'step' | 'pause' | 'stop' | 'state'; kind?: 'into' | 'over' | 'out'; say?: string }
   /** set or clear a breakpoint of the main file (toggles without `on`) */
   | { action: 'breakpoint'; line: number; on?: boolean; condition?: string }
   /** open the Code Story of the last run (starting the Time Machine), and read it back */

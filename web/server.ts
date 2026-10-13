@@ -715,10 +715,10 @@ const USAGE = `usage:
   tracelight-web FILE [--port N] [--runtime js|"CMD ARGS"] [--open] [--no-watch] [--verbose]
   tracelight-web ctl [--port N] state | goto STEP | step into|over|out|back|backOver|backOut | line N
                  | say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kind explanation|prediction]
-                 | clear [--id ID] | values NAME... [--file FILE] [--line N] | values --all|--hide | inspect open|close NAME
+                 | clear [--id ID] | values NAME... [--file FILE] [--line N] | values --all|--hide | peek NAME | peek --hide | inspect open|close NAME
                  | start | stop | run | eval EXPR
                  | var NAME | why NAME [--step N] | watch EXPR [--remove]
-                 | break LINE [on|off] [--if COND] | debug start|continue|step [into|over|out]|pause|stop|state
+                 | break LINE [on|off] [--if COND] | debug start|restart|continue|step [into|over|out]|pause|stop|state
                  | story | profile
   Step and debug commands take --say TEXT to show a narration bubble at the new position.`;
 
@@ -749,6 +749,9 @@ export function parseCtl(args: string[]): AgentCommand {
       return { action };
     case 'clear':
       return { action, ...(flags.has('id') ? { noteId: flags.get('id') } : {}) };
+    case 'peek':
+      if (!words.length && !flags.has('hide')) throw new Error('peek needs NAME or --hide');
+      return { action, name: flags.has('hide') ? '' : words.join(' ') };
     case 'inspect':
       if (!['open', 'close'].includes(words[0] ?? '') || !words[1]) throw new Error('inspect needs open|close NAME');
       return { action, name: words.slice(1).join(' '), open: words[0] === 'open' };
@@ -759,7 +762,7 @@ export function parseCtl(args: string[]): AgentCommand {
       return { action, step: int(words[0], 'STEP'), ...(say ? { say } : {}) };
     case 'step': {
       const kind = (words[0] ?? 'into') as Extract<AgentCommand, { action: 'step' }>['kind'];
-      if (!['into', 'over', 'out', 'back', 'backOver', 'backOut'].includes(kind)) throw new Error(`unknown step kind ${kind}`);
+      if (!['next', 'into', 'over', 'out', 'back', 'backOver', 'backOut'].includes(kind)) throw new Error(`unknown step kind ${kind}`);
       return { action, kind, ...(say ? { say } : {}) };
     }
     case 'line':
@@ -787,7 +790,7 @@ export function parseCtl(args: string[]): AgentCommand {
       return { action: 'breakpoint', line: int(words[0], 'LINE'), ...(words[1] === 'on' ? { on: true } : words[1] === 'off' ? { on: false } : {}), ...(flags.has('if') ? { condition: flags.get('if') } : {}) };
     case 'debug': {
       const op = (words[0] ?? 'state') as Extract<AgentCommand, { action: 'debug' }>['op'];
-      if (!['start', 'continue', 'step', 'pause', 'stop', 'state'].includes(op)) throw new Error(`unknown debug op ${op}`);
+      if (!['start', 'restart', 'continue', 'step', 'pause', 'stop', 'state'].includes(op)) throw new Error(`unknown debug op ${op}`);
       const kind = words[1] as 'into' | 'over' | 'out' | undefined;
       if (op === 'step' && kind && !['into', 'over', 'out'].includes(kind)) throw new Error(`unknown step kind ${kind}`);
       return { action, op, ...(op === 'step' ? { kind: kind ?? 'over' } : {}), ...(say ? { say } : {}) };
