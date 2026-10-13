@@ -114,6 +114,7 @@ export function DebugPane({ debug, onShowView, onLayout = () => {}, learning = f
           {learning ? paused ? `Pausa · ${state.location}` : live ? 'En ejecución' : 'Finalizado' : paused ? `${state.reasonText} · ${state.location}` : state.reasonText}
         </span>
         <span class="pkw-spacer" />
+        <button type="button" class="pkw-text-btn" title="Next executed statement, including calls" aria-label="Step" disabled={!paused} onClick={() => act('stepInto')}><i class="codicon codicon-chevron-right" /> Step</button>
         {learning ? <>
           {live && !paused ? <Btn icon="debug-pause" title="Pause" onClick={() => act('pause')} /> : <Btn icon="debug-continue" title="Continue (F5)" disabled={!paused} onClick={() => act('continue')} />}
           <Btn icon="debug-step-over" title="Step over (F10)" disabled={!paused} onClick={() => act('stepOver')} />

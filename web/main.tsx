@@ -182,6 +182,7 @@ function renderDebug(): void {
     const at = host.state().location;
     debugPane.classList.add('compact');
     render(<RecordingControls step={host.nav.step} location={at ? `${at.file}:${at.line}` : ''}
+      canAdvance={host.run.trace.valid(host.nav.step + 1)} advance={() => host.goto(host.nav.step + 1)}
       canStep={host.run.trace.canStep(host.nav.step)} move={kind => host.move(kind)} restart={() => host.goto(0)} stop={() => host.stop()} />, debugPane);
     return;
   }
