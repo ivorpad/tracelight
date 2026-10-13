@@ -10,8 +10,10 @@
 - Recorded investigations use captured source and distinguish the statement that changed a value
   from the step where its new value was observed. Runtime pipe errors reject pending requests.
 
-- Browser source refreshes after disk changes even when automatic execution is disabled.
-  The skill always starts browser sessions with watching enabled, including debug and learning.
+- Browser source refreshes after disk changes even when automatic execution is disabled
+  (`--no-watch`, On Demand). While the page's debugger has a run, a save or a settings change
+  refreshes the page without starting a second execution beside the paused one, as VS Code
+  already did; Run, Restart and saves after the debug run still execute.
 
 - VS Code On Save sessions rerun when the entry file or an open imported file reloads after
   another editor or agent changes it on disk, including files outside the workspace. Unsaved
