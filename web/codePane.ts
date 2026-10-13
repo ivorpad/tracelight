@@ -11,10 +11,7 @@ import 'monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution';
 import type { BridgeFile, TeachingNote } from './bridgeProtocol';
 import { PROFILE_PATH, type CodeDecorations, type CodeView } from './pageHost';
 import { STORY_PATH } from './story';
-import { pausedOccurrences, pausedInline, pausedHover } from './pausedValues';
-import { ObservedBindings } from './debugPane';
-import { render as renderUi } from 'preact';
-import { h } from 'preact';
+import { pausedOccurrences, pausedInline, pausedHover, pausedProperty, type ValueOccurrence } from './pausedValues';
 import type { ValueNode } from '../src/shared/protocol';
 
 const INLINE_MAX = 160;
@@ -31,30 +28,19 @@ export class CodePane implements CodeView {
   private extraZones: string[] = [];
   private notesKey = '';
   private lastNotes: TeachingNote[] = [];
-  private inspectionNode: HTMLElement | null = null;
-  private expandedValues = new Set<string>();
-  private inspectionSnapshot: string | undefined;
-  private drawInspection: (() => void) | null = null;
+  private valueOccurrences: ValueOccurrence[] = [];
+  private valuesModel: monaco.editor.ITextModel | null = null;
+  private valuesContent: string | undefined;
+  private hoverSnapshot: string | undefined;
 
   async presentationReady(): Promise<void> {
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   }
 
-  valueUiState(): { name: string; open: boolean; visible: boolean }[] {
-    return [...this.inspectionNode?.querySelectorAll<HTMLButtonElement>('.pkw-observed-summary') ?? []].map(button => {
-      const rect = button.getBoundingClientRect();
-      return { name: button.querySelector('.pkw-debug-name')?.textContent ?? '', open: button.getAttribute('aria-expanded') === 'true', visible: rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight };
-    });
-  }
+  valueUiState(): { name: string; open: boolean; visible: boolean }[] { return []; }
 
-  inspectValue(name: string, open: boolean): { name: string; open: boolean; visible: boolean } {
-    const node = this.inspectionNode;
-    if (!node || !this.drawInspection) throw new Error('value row is not visible; choose Aprender and show this binding first');
-    const names = this.lastRender?.liveValues?.locals.filter(v => this.lastRender?.liveValues?.ghostNames === undefined || this.lastRender.liveValues.ghostNames.includes(v.name)).map(v => v.name) ?? [];
-    if (!names.includes(name)) throw new Error(`binding is not shown: ${name}`);
-    if (open) this.expandedValues.add(name); else this.expandedValues.delete(name);
-    this.drawInspection();
-    return this.valueUiState().find(v => v.name === name)!;
+  inspectValue(_name: string, _open: boolean): { name: string; open: boolean; visible: boolean } {
+    throw new Error('Clickable source values are disabled. Hover a binding or open Variables and call stack.');
   }
   onExpandValue: (node: ValueNode) => Promise<ValueNode | null> = async () => null;
   private applying = false;
@@ -85,12 +71,25 @@ export class CodePane implements CodeView {
       quickSuggestions: false,
       matchBrackets: 'always',
       occurrencesHighlight: 'singleFile',
+      hover: { enabled: true, delay: 250, above: true, sticky: true },
       scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
     });
     this.decorations = this.editor.createDecorationsCollection();
+    // A provider also answers over a property token, without evaluating the expression.
+    const providers = ['javascript', 'typescript'].map(language => monaco.languages.registerHoverProvider(language, {
+      provideHover: (model, position) => {
+        const hit = this.valueAt(model, position);
+        if (!hit) return null;
+        const { occurrence: o, property } = hit;
+        const value = property ? pausedProperty(o.local, hit.path) : o.local;
+        return { range: new monaco.Range(o.line, o.start + 1, o.line, hit.end + 1), contents: [{ value: value ? pausedHover(value) : `Paused frame · ${[o.local.name, ...hit.path].join('.')}\n\nProperty unavailable in this snapshot. No expression was evaluated.`, isTrusted: false }] };
+      },
+    }));
+    this.editor.onDidDispose(() => { providers.forEach(p => p.dispose()); this.clearZone(); });
     this.editor.onDidLayoutChange(() => { if (this.lastRender) this.render(this.lastRender); });
     this.editor.onDidChangeModelContent(() => {
       this.decorations.clear();
+      this.hideValueHover();
       if (this.applying || this.shown !== this.mainPath) return;
       this.onEdit(this.editor.getValue());
     });
@@ -194,7 +193,11 @@ export class CodePane implements CodeView {
   }
 
   render(d: CodeDecorations): void {
+    if (this.hoverSnapshot !== d.liveValues?.snapshot) { this.hideValueHover(); }
+    this.hoverSnapshot = d.liveValues?.snapshot;
     this.lastRender = d;
+    this.valueOccurrences = [];
+    this.valuesModel = null;
     const model = this.editor.getModel();
     if (!model) return;
     const lines = model.getLineCount();
@@ -234,11 +237,9 @@ export class CodePane implements CodeView {
     }
     if (d.liveValues && model.getValue() === (d.liveValues.content ?? this.loaded.get(this.shown!))) {
       const occurrences = pausedOccurrences(model.getLinesContent(), monaco.editor.tokenize(model.getValue(), model.getLanguageId()), d.liveValues);
-      for (const o of occurrences) {
-        out.push({ range: new monaco.Range(o.line, o.start + 1, o.line, o.end + 1), options: {
-          hoverMessage: { value: pausedHover(o.local), isTrusted: false },
-        } });
-      }
+      this.valueOccurrences = occurrences;
+      this.valuesModel = model;
+      this.valuesContent = model.getValue();
       const ghosts = d.liveValues.ghostNames === undefined ? occurrences : d.liveValues.locals.filter((v) => d.liveValues!.ghostNames!.includes(v.name)).map((local) => ({ line: d.liveValues!.line, start: 0, end: 0, local }));
       for (const [line, text] of document.body.dataset.presentation === 'learn' ? [] : pausedInline(ghosts, d.liveValues.line, d.liveValues.anchor)) {
         if (line < 1 || line > lines) continue;
@@ -267,53 +268,12 @@ export class CodePane implements CodeView {
 
   setNotes(notes: TeachingNote[]): void {
     this.lastNotes = notes;
-    const pause = this.lastRender?.liveValues;
-    const observed = document.body.dataset.presentation === 'learn' && pause && this.editor.getValue() === (pause.content ?? this.loaded.get(this.shown!)) ? pause : undefined;
-    const locals = observed?.locals.filter((v) => observed.ghostNames === undefined || observed.ghostNames.includes(v.name)) ?? [];
-    const key = JSON.stringify([notes, observed?.snapshot, observed?.anchor, locals, this.editor.getLayoutInfo().contentWidth]);
+    const key = JSON.stringify([notes, this.editor.getLayoutInfo().contentWidth]);
     if (this.notesKey === key) return;
     this.clearZone();
     this.notesKey = key;
     const model = this.editor.getModel();
     if (!model) return;
-    if (observed && locals.length) {
-      const line = observed.anchor ?? observed.line;
-      if (line >= 1 && line <= model.getLineCount()) {
-        const node = document.createElement('div');
-        node.className = 'pkw-observed-zone';
-        node.style.width = `${this.editor.getLayoutInfo().contentWidth}px`;
-        this.inspectionNode = node;
-        if (this.inspectionSnapshot !== observed.snapshot) this.expandedValues.clear();
-        this.inspectionSnapshot = observed.snapshot;
-        this.drawInspection = () => renderUi(h(ObservedBindings, {
-          locals, expanded: this.expandedValues,
-          onToggle: (name) => { this.inspectValue(name, !this.expandedValues.has(name)); },
-          inspector: { expandNode: (value) => this.onExpandValue(value) },
-        }), node);
-        this.drawInspection();
-        this.editor.changeViewZones((acc) => {
-          const height = Math.max(28, (node.firstElementChild as HTMLElement)?.scrollHeight + 8 || 28);
-          const zone = { afterLineNumber: line, heightInPx: height, domNode: node, suppressMouseDown: true };
-          const id = acc.addZone(zone);
-          // The native embedded browser also hit-tests Monaco's transparent view-lines.
-          // Give the interactive zone its own explicit layer rather than relying on :has().
-          if (node.parentElement) node.parentElement.style.zIndex = '30';
-          node.style.zIndex = '30';
-          node.addEventListener('mousedown', event => event.stopPropagation());
-          node.addEventListener('pointerdown', event => event.stopPropagation());
-          this.extraZones.push(id);
-          // Expansion changes only the view zone, not the program or its source.
-          const resize = new ResizeObserver(() => {
-            if (this.inspectionNode !== node) { resize.disconnect(); return; }
-            this.editor.changeViewZones((zones) => {
-            zone.heightInPx = Math.min(this.editor.getLayoutInfo().height * .45, Math.max(28, (node.firstElementChild as HTMLElement)?.scrollHeight + 8 || 28));
-            zones.layoutZone(id);
-          });
-          });
-          resize.observe(node.firstElementChild!);
-        });
-      }
-    }
     for (const n of notes) {
     if (n.line < 1 || n.line > model.getLineCount()) continue;
     const line = n.line;
@@ -349,9 +309,6 @@ export class CodePane implements CodeView {
   private clearZone(): void {
     const zone = this.zone;
     this.notesKey = '';
-    if (this.inspectionNode) renderUi(null, this.inspectionNode);
-    this.inspectionNode = null;
-    this.drawInspection = null;
     const ids = [...(zone ? [zone.id] : []), ...this.extraZones];
     this.zone = null;
     this.extraZones = [];
@@ -360,6 +317,34 @@ export class CodePane implements CodeView {
 
   layout(): void {
     this.editor.layout();
+  }
+
+  private hideValueHover(): void {
+    // Monaco 0.52 has no public hide-hover command. Cancel its scheduled hover as well
+    // as the visible widget so a previous pause cannot survive a step or source edit.
+    const hover = this.editor.getContribution<monaco.editor.IEditorContribution & { _cancelScheduler(): void; _hideWidgets(): void }>('editor.contrib.contentHover');
+    hover?._cancelScheduler();
+    hover?._hideWidgets();
+  }
+
+  private valueAt(model: monaco.editor.ITextModel, position: monaco.Position): { occurrence: ValueOccurrence; property: boolean; end: number; path: string[] } | undefined {
+    if (model !== this.valuesModel || model !== this.editor.getModel() || model.getValue() !== this.valuesContent) return undefined;
+    const col = position.column - 1;
+    for (const o of this.valueOccurrences) {
+      if (o.line !== position.lineNumber) continue;
+      let end = o.end;
+      const path: string[] = [];
+      if (o.start <= col && col < end) return { occurrence: o, property: false, end, path };
+      for (const name of o.path ?? []) {
+        const part = /^\s*(?:\?\.|\.)\s*([\p{ID_Start}_$][\p{ID_Continue}$]*)/u.exec(model.getLineContent(o.line).slice(end));
+        if (!part || part[1] !== name) break;
+        const start = end;
+        end += part[0].length;
+        path.push(name);
+        if (start <= col && col < end) return { occurrence: o, property: true, end, path };
+      }
+    }
+    return undefined;
   }
 }
 

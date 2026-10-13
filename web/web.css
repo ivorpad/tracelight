@@ -50,7 +50,7 @@ body[data-presentation='learn'] #pkw-debug { width: auto; gap: 5px; padding: 0 8
 body[data-presentation='learn'] #pkw-codecol { display: flex; }
 body[data-presentation='learn'] #pkw-panel, body[data-presentation='learn'] #pkw-split,
 body[data-presentation='learn'] #pkw-runtime, body[data-presentation='learn'] #pkw-run,
-body[data-presentation='learn'] #pkw-tm, body[data-presentation='learn'] #pkw-layout,
+body[data-presentation='learn'].pkw-live-active #pkw-tm, body[data-presentation='learn'] #pkw-layout,
 body[data-presentation='learn'] #pkw-webmcp, body[data-presentation='learn'].pkw-live-active #pkw-debug { display: none; }
 
 #pkw-main {

@@ -185,7 +185,7 @@ export type HostRequest =
   | { type: 'complete'; id: number; runId: string; expression: string; limit?: number }
   | { type: 'shadow'; id: number; runId: string; source: string }
   | { type: 'source'; id: number; runId: string; fileId: number }
-  | { type: 'bindings'; id: number; source: string }
+  | { type: 'bindings'; id: number; source: string; path?: string; identifiers?: boolean }
   | DebugRequest
   | { type: 'stop'; id: number; runId: string }
   | { type: 'shutdown'; id: number };
@@ -231,6 +231,12 @@ export interface VariableHistory {
   truncated: boolean;
   /** the run recorded locals (`recordLocals`); without them only logged values and assignment sites are known */
   recordedLocals: boolean;
+}
+
+/** Lexical source identities supplied by the static parser, with UTF-16 offsets. */
+export interface SourceBindings {
+  scopes: { start: number; end: number; parent: number; names: string[]; function?: boolean; pending?: { name: string; until: number }[] }[];
+  references: { start: number; end: number; name: string; scope: number; path: string[] }[];
 }
 
 /** What one statement assigns and reads, from the AST of its file (`bindings` reply); positions as in the range table. */
@@ -743,7 +749,7 @@ export type RunnerMessage =
   | { type: 'executed'; id: number; text: string; modified: boolean; valueBag?: ValueBag; exception?: { type: string; message: string; traceback?: string } }
   | ({ type: 'completed'; id: number } & Completions)
   | { type: 'source'; id: number; fileId: number; instrumentedSource?: string | null }
-  | { type: 'bindings'; id: number; statements: StatementBinding[] }
+  | { type: 'bindings'; id: number; statements: StatementBinding[]; identifiers?: SourceBindings }
   | ({ type: 'debug.result'; id: number } & Record<string, unknown>)
   | { type: 'error'; id: number; message: string }
   | { type: 'runner.error'; message: string; detail?: string };

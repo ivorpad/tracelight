@@ -20,6 +20,7 @@ import { PageHost, runtimeLabelText } from './pageHost';
 import { CodePane } from './codePane';
 import { registerWebMcp, runAgentCommand } from './agent';
 import { DebugPane } from './debugPane';
+import { RecordingControls } from './recordingControls';
 
 const params = new URLSearchParams(location.search);
 const layout = params.get('layout') === 'panel' ? 'panel' : params.get('layout') === 'code' ? 'code' : 'split';
@@ -177,6 +178,13 @@ function renderDebug(): void {
   document.body.classList.toggle('pkw-live-debug', host.debug.active);
   document.body.classList.toggle('pkw-live-active', host.debug.active);
   updateRecordingNotice();
+  if (presentation === 'learn' && !host.debug.active && host.nav.active && host.run?.trace?.valid(host.nav.step)) {
+    const at = host.state().location;
+    debugPane.classList.add('compact');
+    render(<RecordingControls step={host.nav.step} location={at ? `${at.file}:${at.line}` : ''}
+      canStep={host.run.trace.canStep(host.nav.step)} move={kind => host.move(kind)} restart={() => host.goto(0)} stop={() => host.stop()} />, debugPane);
+    return;
+  }
   debugPane.classList.toggle('compact', !host.debug.paused || !toolsOpen);
   render(<DebugPane debug={host.debug} learning={presentation === 'learn'} expanded={toolsOpen}
     onToggleTools={() => { toolsOpen = !toolsOpen; renderDebug(); code.layout(); host.scheduleRender(true); }}
@@ -184,9 +192,13 @@ function renderDebug(): void {
   $('pkw-debug').classList.toggle('active', host.debug.active);
 }
 document.addEventListener('keydown', (e) => {
-  if (!host.debug.run?.running) return;
   const key = e.key === 'F5' ? (e.shiftKey ? 'stop' : 'continue') : e.key === 'F10' ? 'stepOver' : e.key === 'F11' ? (e.shiftKey ? 'stepOut' : 'stepInto') : null;
   if (!key) return;
+  if (!host.debug.active && presentation === 'learn' && host.nav.active) {
+    if (key === 'stepOver' || key === 'stepInto' || key === 'stepOut') { e.preventDefault(); host.move(key === 'stepOver' ? 'over' : key === 'stepInto' ? 'into' : 'out'); }
+    return;
+  }
+  if (!host.debug.run?.running) return;
   e.preventDefault();
   void host.debug.control(key);
 });

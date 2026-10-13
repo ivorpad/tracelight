@@ -116,6 +116,22 @@ export class PageHost {
   narration: { text: string; line: number; path: string } | null = null;
   /** sources of files other than the main one, fetched on demand */
   private readonly sources = new Map<string, string>();
+  private readonly sourceIdentities = new Map<string, import('../src/shared/protocol').SourceBindings>();
+  private readonly identityRequests = new Set<string>();
+
+  private identities(path: string, content: string): import('../src/shared/protocol').SourceBindings {
+    const key = JSON.stringify([path, content]);
+    const known = this.sourceIdentities.get(key);
+    if (known) return known;
+    if (!this.identityRequests.has(key)) {
+      this.identityRequests.add(key);
+      void this.link.request({ type: 'bindings', source: content, path, identifiers: true }).then(reply => {
+        if (reply.type === 'bindings' && reply.identifiers) this.sourceIdentities.set(key, reply.identifiers);
+        this.scheduleRender();
+      }).catch(() => { /* No syntax identity means no value attached to source. */ });
+    }
+    return { scopes: [], references: [] };
+  }
   private panelReady = false;
   private pendingEntries: LogEvent[] = [];
   private entriesTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1030,6 +1046,9 @@ export class PageHost {
             excluded: file?.functions.filter((f) => f.name !== '<module>' && f !== fn && (!fn || startOf(f) >= startOf(fn))).map((f) => [startOf(f), f.bodyRange[2]]),
             content: shown === this.main?.path ? this.debug.run?.content : this.sources.get(shown),
           };
+          out.liveValues.identifiers = out.liveValues.content !== undefined ? this.identities(shown, out.liveValues.content) : { scopes: [], references: [] };
+          out.liveValues.column = this.debug.selectedFrame === 0 ? file?.ranges[p.rid]?.[1] : undefined;
+          out.liveValues.entry = this.debug.selectedFrame === 0 && fn?.rid === p.rid && p.stack[0]?.name !== '<module>';
         }
       }
     }

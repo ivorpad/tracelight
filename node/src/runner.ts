@@ -12,6 +12,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { CAPABILITIES, ENV, NAME, PROTOCOL_VERSION, RUNTIME_VERSION } from './protocol.ts';
 import { statementBindings } from './bindings.ts';
+import { sourceBindings } from './sourceBindings.ts';
 import { dirname, join, resolve } from 'node:path';
 import { loadPlugins, runStage } from './plugins.ts';
 
@@ -289,7 +290,7 @@ export class Runner {
         }
         case 'bindings':
           try {
-            this.send({ type: 'bindings', id, statements: statementBindings(String(req.source ?? ''), req.path ?? 'x.js') });
+            this.send({ type: 'bindings', id, statements: statementBindings(String(req.source ?? ''), req.path ?? 'x.js'), ...(req.identifiers ? { identifiers: sourceBindings(String(req.source ?? ''), req.path ?? 'x.ts') } : {}) });
           } catch (e) {
             this.send({ type: 'error', id, message: `SyntaxError: ${(e as Error).message}` });
           }

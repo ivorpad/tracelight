@@ -115,10 +115,13 @@ export function DebugPane({ debug, onShowView, onLayout = () => {}, learning = f
         </span>
         <span class="pkw-spacer" />
         {learning ? <>
-          <button class="pkw-text-btn" title="Step over (F10)" disabled={!paused} onClick={() => act('stepOver')}>Siguiente</button>
-          <button class="pkw-text-btn" title="Step into (F11)" disabled={!paused} onClick={() => act('stepInto')}>Entrar</button>
-          <button class="pkw-text-btn" aria-expanded={expanded} onClick={onToggleTools}>Variables y pila</button>
-          {!live ? <button class="pkw-text-btn" onClick={() => act('restart')}>Reiniciar</button> : null}
+          {live && !paused ? <Btn icon="debug-pause" title="Pause" onClick={() => act('pause')} /> : <Btn icon="debug-continue" title="Continue (F5)" disabled={!paused} onClick={() => act('continue')} />}
+          <Btn icon="debug-step-over" title="Step over (F10)" disabled={!paused} onClick={() => act('stepOver')} />
+          <Btn icon="debug-step-into" title="Step into (F11)" disabled={!paused} onClick={() => act('stepInto')} />
+          <Btn icon="debug-step-out" title="Step out (Shift+F11)" disabled={!paused} onClick={() => act('stepOut')} />
+          <Btn icon="debug-restart" title="Restart" onClick={() => act('restart')} />
+          {live ? <Btn icon="debug-stop" title="Stop" onClick={() => act('stop')} /> : null}
+          <button type="button" class="pkw-btn" title="Variables and call stack" aria-label="Variables and call stack" aria-expanded={expanded} onClick={onToggleTools}><i class="codicon codicon-symbol-variable" /></button>
           {expanded ? <button class="pkw-text-btn" onClick={onShowView}>Puntos de pausa</button> : null}
         </> : <>
           {live && !paused ? <Btn icon="debug-pause" title="Pause" onClick={() => act('pause')} /> : <Btn icon="debug-continue" title="Continue (F5)" disabled={!paused} onClick={() => act('continue')} />}
