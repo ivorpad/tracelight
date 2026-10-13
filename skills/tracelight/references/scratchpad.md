@@ -4,6 +4,11 @@ Use the browser scratchpad to experiment with a function and copied inputs while
 program stays paused. It opens beside the source in a right side panel. Edits run in a separate
 worker; they do not step, evaluate in, or mutate the live debugger's frame.
 
+Give the experiment one question. Establish a baseline with the copied inputs, change one input
+or rule, then compare the visible result with the baseline. Label mock fixtures and keep the
+other inputs fixed. Check application error fields before drawing a conclusion. Close or restore
+the copy and verify that the live pause is unchanged before resuming the lesson or investigation.
+
 ## Open the current function
 
 Start from an existing live pause. Reuse its returned source, frame and captured values;
@@ -15,10 +20,49 @@ tracelight web ctl --port 4817 scratchpad open --line 368
 tracelight web ctl --port 4817 scratchpad close
 ```
 
-WebMCP `tracelight_scratchpad` takes `{"open":true}` and an optional `line`.
-`{"open":false}` closes it. Discover the page's actual tool name before calling it.
-Neither command advances the live run. These controls open or close the pane; editing code,
-inputs and mocks uses the editor UI, not additional scratchpad tool arguments.
+WebMCP `tracelight_scratchpad` controls the complete visible experiment. For agent preparation,
+use ONE `op: "experiment"` call containing the complete code, inputs, receiver/dependencies
+in code or bindings, explicit mocks/labels and `autoRun` policy. It copies pause provenance,
+formats the code, publishes only the complete package and awaits one execution. It does not
+auto-run the initial copied function. CLI: `ctl scratchpad experiment --data FILE`.
+Do not prepare a lesson through separate open → update → run calls.
+
+Discover the page's
+actual tool name, then use `op: "open"`, `"state"`, `"update"`, `"run"`, `"restore"` or `"close"`.
+The old `open: true|false` remains supported. `update` atomically replaces any supplied `code`,
+`inputs`, `mocks` and `autoRun`. Supply `mockLabels` with a descriptive label for every mock key.
+Inputs and mocks are whole JSON objects, not patches. Omitted fields keep their current values.
+
+```json
+{
+  "op": "experiment",
+  "code": "const result = message.content.filter(item => item.type === 'toolCall');",
+  "autoRun": false
+}
+```
+
+The experiment reply awaits the worker; read its `status`, `result.values`, `result.output`,
+`result.error`, `result.applicationErrors`, `result.missingMocks` and `result.caps`. `state` also
+returns the editor code, inputs/mocks and their raw text (including invalid manual JSON), fixture
+labels, revision and captured provenance. `provenance.capturedInputs` preserves the original
+unavailable/cap markers when the editable inputs are replaced. `liveExecutionChanged` is false.
+A newer edit cancels the old request and clears its results. `state` does not await an automatic
+run; inspect it again after the scheduled/running state, or use `run` for a completed answer.
+
+The bridge accepts the same typed command at `/api/command`. CLI equivalents are
+`ctl scratchpad state|run|restore` and `ctl scratchpad update --data /absolute/experiment.json`.
+The data file holds the same update fields. `open` accepts `--line`. All controls use the real
+Monaco models and the same worker as manual Run. No scratch operation advances live execution.
+
+Prepare the experiment yourself. Local helpers and imports resolve automatically. Try the
+smallest expression that answers the question before rerunning a full loop. An unrelated
+unavailable callback does not need a fixture when the experiment never accesses it. For a
+missing dependency, recover its real pure implementation when available. For an external
+boundary, use the returned exact `missingMocks` path and an explicit labelled fixture, then
+rerun the complete experiment. Do not ask the learner to fill the mock editor. Never guess uncaptured
+inputs or describe a provider/model fixture as a real response. Check runtime errors and
+application error fields, confirm visible values, then explain one concrete input-to-result
+transition. Do not quiz the learner unless they ask.
 
 The **Scratchpad** header button opens the pane. **Add function** copies the function at the
 main code cursor, and the main editor context menu also offers **Add function to scratchpad**.
@@ -41,6 +85,38 @@ export {};
 
 `export {}` makes the editor treat the copy as a module, allowing top-level `await`.
 The runtime handles it separately from the executable function body.
+
+## HARD gate: prepare before teaching
+
+Every agent owns preparation and repair without waiting for the learner. Inspect source and
+captured-input provenance before sending the complete experiment in one call. Resolve a class
+method's receiver `this`, required methods/helpers/callbacks, syntax and input/mock JSON,
+incomplete fixtures, unavailable or capped bindings, runtime exceptions and application errors.
+A copied method is not a captured instance. Use real pure implementations for recoverable helpers
+and receiver methods. Reconstruct state only from captured data, never guessed closures or fields.
+Use explicit labelled mocks only at external boundaries. If dependencies cannot be recovered or
+obscure the concept, narrow to a faithful pure experiment and state what was omitted. Do not
+silently change its meaning. Keep the live program paused.
+
+Never invent missing captured values or silently mock real provider behavior. If an external
+call needs a fixture, label the substitution and its output; do not present fixture results
+as live evidence. Retain unavailable and capped markers. When necessary inputs are unavailable,
+state that limit and narrow the experiment instead of guessing them.
+
+After preparation or an edit, verify the actual code, the function and pause the copied inputs
+came from, readable indentation in both actual text and Monaco, completed visible output and
+runtime/application error fields before teaching. Repair and rerun until the result supports
+the lesson, or state the concrete remaining limit. Never narrate an unexecuted result or leave
+a known error for the learner to discover. A worker success alone does not establish application success.
+Confirm that the live pause has not moved. Do not ask the learner questions or give quizzes
+unless they explicitly request them.
+
+Receiver-dependent bare copies report `status: "needsPreparation"` and
+`preparation.requiresReceiver: true`; automatic execution waits for replacement. Explicit Run
+still runs the current copy. A copied `Agent.prompt` using `this.normalizePromptInput` needs
+the real pure normalizer and a prepared receiver. A labelled dispatch fixture may capture the
+normalized messages without a model request; it proves the transformation, not provider behavior.
+Supply that whole prepared experiment in one call and verify its executed result.
 
 ## Edit and inspect
 
@@ -93,9 +169,8 @@ For example, a copied tool implementation and event callback can use:
 }
 ```
 
-The initial copy supplies `emit: null` when an `emit` binding exists. That is a mock, not the
-original callback. Choose fixtures that answer the learner's question and label their results
-as mocked. Do not present a fixture as an observed response from a real service.
+The initial copy supplies no synthetic fixtures. Choose fixtures that answer the learner's
+question and label their results as mocked. Do not present a fixture as an observed response from a real service.
 
 For `fetch("https://example.test/job")`, provide:
 

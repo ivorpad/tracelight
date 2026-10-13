@@ -13,6 +13,17 @@ const SOURCE = ['def add(a, b):', '    s = a + b', '    return s', '', 'x = add(
 const MAIN: BridgeFile = { path: '/w/demo.py', displayName: 'demo.py', language: 'python', content: SOURCE };
 
 class FakeCode implements CodeView {
+  showStory?: CodeView['showStory'];
+  storyShown?: CodeView['storyShown'];
+  closeStory?: CodeView['closeStory'];
+  async presentationReady(): Promise<void> {}
+  renderedSource() {
+    const line = this.last?.paused ?? this.last?.current?.line ?? null;
+    const content = this.shown ? this.files.get(this.shown)?.content : undefined;
+    return { pane: 'source' as const, file: this.shown ?? null, line, code: line ? content?.split('\n')[line - 1] ?? null : null,
+      highlight: this.last?.paused ? 'live' as const : this.last?.current ? 'recorded' as const : null,
+      visible: true, lineVisible: !!line, content };
+  }
   valueUiState?: CodeView['valueUiState'];
   cardUpdates: string[][] = [];
   inspectValues(names: string[], open: boolean) {
@@ -113,6 +124,54 @@ function setup() {
 }
 
 describe('PageHost', () => {
+  it('distinguishes rendered live source from a different recorded selection, then focuses the recording without resuming', async () => {
+    const { host, code, feed, link } = setup();
+    feed({ type: 'debug.begin', runId: 'd-visible', content: SOURCE });
+    for (const event of runEvents('d-visible').filter(e => e.type === 'file.instrumented' || e.type === 'trace')) feed({ type: 'debug.event', event });
+    link.replies.push({ type: 'debug.result', id: 1, locals: [{ name: 'a', text: '1' }] });
+    feed({ type: 'debug.event', event: { runId: 'd-visible', seq: 20, type: 'debug.paused', step: 3, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'step', stack: [{ frameId: 0, name: 'add', fileId: 1, line: 2 }] } });
+    await tick();
+    host.start({ step: 4 });
+    const divergent = await host.confirmPosition('recorded');
+    expect(divergent).toMatchObject({ ready: false, recorded: { step: 4, line: 3 }, live: { step: 3, line: 2 }, source: { line: 2, highlight: 'live' }, recordedDiffersFromLive: true });
+    const before = link.debugRequests.length;
+    const moved = await runAgentCommand(host, link, { action: 'goto', step: 4, say: 'Recorded return' });
+    expect(moved).toMatchObject({ position: { ready: true, source: { file: MAIN.path, line: 3, highlight: 'recorded', code: '    return s' }, live: { step: 3, line: 2 }, recorded: { step: 4, line: 3 } }, narration: { text: 'Recorded return', line: 3 } });
+    expect(code.last?.liveValues).toBeUndefined();
+    expect(link.debugRequests).toHaveLength(before);
+    expect((await host.confirmPosition('live', true))).toMatchObject({ ready: true, source: { line: 2, highlight: 'live' }, live: { step: 3 } });
+  });
+
+  it('closes Story before confirming goto source, preserving the recorded selection', async () => {
+    const { host, code, link } = setup();
+    let story = false;
+    code.showStory = () => { story = true; };
+    code.storyShown = () => story;
+    code.closeStory = () => { story = false; };
+    expect(await host.openStory()).toBe(true);
+    expect(story).toBe(true);
+    const moved = await runAgentCommand(host, link, { action: 'goto', step: 4 });
+    expect(moved).toMatchObject({ step: 4, timeMachine: true, position: { activePane: 'source', ready: true, source: { file: MAIN.path, line: 3 } } });
+    expect(story).toBe(false);
+  });
+
+  it('blocks navigation narration when the visible model differs from the recorded source', async () => {
+    const { host, code, link } = setup();
+    code.files.set(MAIN.path, { ...MAIN, content: SOURCE.replace('return s', 'return 99') });
+    const result = await runAgentCommand(host, link, { action: 'goto', step: 4, say: 'This returns three' });
+    expect(result).toMatchObject({ narration: null, position: { ready: false, sourceMatches: false, source: { code: '    return 99' }, recorded: { code: '    return s' } } });
+    expect((result as { position: { blockers: string[] } }).position.blockers).toContain('Visible source is stale, edited, unavailable or differs from the run source');
+  });
+
+  it('rejects a position changed while the editor is rendering', async () => {
+    const { host, code } = setup();
+    host.start({ step: 4 });
+    code.presentationReady = async () => { host.goto(5); };
+    const position = await host.confirmPosition('recorded', true);
+    expect(position.ready).toBe(false);
+    expect(position.blockers).toContain('Position changed while awaiting presentation');
+  });
+
   it('assembles live trace deltas and replaces them with the authoritative final trace', () => {
     const run = emptyRun('d-delta', SOURCE);
     const events = runEvents(run.runId);
@@ -251,7 +310,7 @@ describe('PageHost', () => {
   it('declares WebMCP tools that run the same commands', async () => {
     const { host, link } = setup();
     const tools = webMcpTools(host, link);
-    expect(tools.map((t) => t.name)).toEqual(['tracelight_scratchpad', 'tracelight_wait_pause', 'tracelight_state', 'tracelight_goto', 'tracelight_step', 'tracelight_line', 'tracelight_say', 'tracelight_values', 'tracelight_peek', 'tracelight_inspect', 'tracelight_start', 'tracelight_stop', 'tracelight_run', 'tracelight_eval', 'tracelight_var', 'tracelight_why', 'tracelight_watch', 'tracelight_breakpoint', 'tracelight_story', 'tracelight_profile', 'tracelight_debug']);
+    expect(tools.map((t) => t.name)).toEqual(['tracelight_scratchpad', 'tracelight_wait_pause', 'tracelight_state', 'tracelight_position', 'tracelight_goto', 'tracelight_step', 'tracelight_line', 'tracelight_say', 'tracelight_values', 'tracelight_peek', 'tracelight_inspect', 'tracelight_start', 'tracelight_stop', 'tracelight_run', 'tracelight_eval', 'tracelight_var', 'tracelight_why', 'tracelight_watch', 'tracelight_breakpoint', 'tracelight_story', 'tracelight_profile', 'tracelight_debug']);
     const step = tools.find((t) => t.name === 'tracelight_step')!;
     const out = await step.execute({ kind: 'into' });
     expect(JSON.parse(out.content[0]!.text)).toMatchObject({ moved: true });
@@ -619,4 +678,23 @@ describe('PageHost: the views VS Code opens as editors', () => {
     host.onPanel({ type: 'settings.update', patch: { runMode: 'onDemand' }, scope: 'session' });
     expect(link.sent).toContainEqual({ type: 'runMode', mode: 'onDemand' });
   });
+});
+
+
+it('routes full scratch lifecycle through WebMCP without sending live requests', async () => {
+  const { host, link } = setup();
+  const commands: unknown[] = [];
+  host.onScratchpad = async command => { commands.push(command); return { open: true, status: 'completed', liveExecutionChanged: false } as any; };
+  const before = [...link.sent];
+  const tool = webMcpTools(host, link).find(t => t.name === 'tracelight_scratchpad')!;
+  for (const op of ['experiment', 'open', 'update', 'run', 'state', 'restore', 'close']) {
+    const response = await tool.execute({ op, code: 'const result = x;', inputs: { x: 2 }, mocks: { callback: null }, mockLabels: { callback: 'synthetic noop' } });
+    expect(response.isError).toBeUndefined();
+    expect(JSON.parse(response.content[0]!.text).liveExecutionChanged).toBe(false);
+  }
+  await tool.execute({ op: 'state', action: 'debug' });
+  expect(commands).toHaveLength(8);
+  expect(commands[0]).toMatchObject({ action: 'scratchpad', op: 'experiment', inputs: { x: 2 }, mockLabels: { callback: 'synthetic noop' } });
+  expect(commands.at(-1)).toMatchObject({ action: 'scratchpad', op: 'state' });
+  expect(link.sent).toEqual(before);
 });

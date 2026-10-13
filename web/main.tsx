@@ -100,6 +100,7 @@ code.storyShown = () => storyVisible;
 code.renderStory = decorations => storyCode.render(decorations);
 code.revealStory = line => storyCode.reveal(line);
 code.closeStory = () => { storyVisible = false; };
+code.renderedStory = () => storyVisible ? storyCode.renderedSource() : null;
 storyCode.onLinePick = (_path, line, how) => host.storyPick(line, how === 'open');
 const link = new BridgeLink(wsUrl, (msg) => onBridge(msg), (connected) => {
   host.connected = connected;
@@ -109,7 +110,7 @@ const link = new BridgeLink(wsUrl, (msg) => onBridge(msg), (connected) => {
 host = new PageHost(link, code, toPanel);
 host.theme = theme === 'light' ? 'light' : 'dark';
 const scratchpad = new Scratchpad($('pkw-scratchpad'), host, code, () => { code.layout(); storyCode.layout(); });
-host.onScratchpad = async (open, line) => { if (open) await scratchpad.open(line); else scratchpad.close(); };
+host.onScratchpad = command => scratchpad.control(command);
 code.onScratchpad = line => { void scratchpad.open(line).catch(e => host.notice(String(e), 'error')); };
 $('pkw-scratch-toggle').addEventListener('click', () => { void scratchpad.open().catch(e => host.notice(String(e), 'error')); });
 // for an agent driving the page with browser tools, and for debugging: the same calls the WebMCP tools make
@@ -209,13 +210,13 @@ function renderDebug(): void {
   $('pkw-story-toggle').setAttribute('aria-pressed', String(historyShown));
   const historyNotice = $('pkw-story-notice');
   historyNotice.hidden = !historyShown;
-  historyNotice.textContent = host.debug.active ? host.historyFollowing ? 'Code history · following live execution' : 'Code history · reviewing an earlier step. Source remains at the live pause.' : 'Code history · recorded execution. Select a line to review that moment.';
+  historyNotice.textContent = host.debug.active ? host.historyFollowing ? 'Code history · following live execution' : host.viewingRecordedSource ? 'Code history · reviewing a recorded step. Live execution remains at its pause.' : 'Code history · reviewing an earlier step. Source remains at the live pause.' : 'Code history · recorded execution. Select a line to review that moment.';
   $('pkw-story-follow').hidden = !historyShown || !host.debug.active || host.historyFollowing;
   document.body.classList.toggle('pkw-live-debug', host.debug.active);
   document.body.classList.toggle('pkw-live-active', host.debug.active);
   updateRecordingNotice();
   if (!host.nav.active || !host.run?.trace?.valid(host.nav.step)) render(null, $('pkw-story-controls'));
-  if (presentation === 'learn' && host.nav.active && host.run?.trace?.valid(host.nav.step) && (historyShown || !host.debug.active)) {
+  if (presentation === 'learn' && host.nav.active && host.run?.trace?.valid(host.nav.step) && (historyShown || !host.debug.active || host.viewingRecordedSource)) {
     const at = host.run.trace.location(host.nav.step);
     const controlsPane = historyShown ? $('pkw-story-controls') : debugPane;
     if (!historyShown) debugPane.classList.add('compact');

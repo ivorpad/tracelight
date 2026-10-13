@@ -8,6 +8,32 @@ worth keeping, and build it with [show.md](show.md).
 The full contract (the three start routes, `exec`, servers, limits, what a stop leaves out) is
 [live-debugger.md](live-debugger.md). This file is the workflow.
 
+## Form a hypothesis, then choose the stop
+
+For a bug investigation, establish the failing input, expected result and observed symptom.
+Inspect the relevant source and caller to form a concrete hypothesis. Choose a breakpoint
+where a value or branch can distinguish that hypothesis from an alternative, and decide what
+evidence would rule it out before running. Keep this working plan in memory. A debugging
+request needs no teaching sequence or preliminary recording.
+
+Resume to that boundary, inspect the returned source and captured values, then revise the
+hypothesis. If the value is already wrong, move the next investigation upstream to its producer;
+if it is correct, investigate the next consumer. Narrow the path instead of stepping through
+every statement. Set several breakpoints across files when the fault may cross a boundary.
+Use conditional breakpoints when repeated calls would otherwise stop on irrelevant inputs.
+Treat an unhit breakpoint as missing evidence, not proof the suspected behavior is correct.
+
+Reuse each stop's locals, stack and output. Read additional state only when evidence is missing,
+the user moved, or a timed-out command left execution uncertain. Do not replay a timed-out move
+or restart without checking the current state. Use a scratchpad copy for a controlled experiment
+when appropriate: change one input, label mocks and verify the live pause stayed unchanged.
+Do not mutate the paused frame unless that experiment is intended and authorized.
+
+A direct request such as “step over” or “pause at parse” needs that action, not a forced diagnosis.
+For a fix, rerun the relevant failing case and check its expected outcome before claiming it is
+resolved. Report the causal evidence and the limits of the check. Use [explain.md](explain.md)
+when the user wants to learn through interactive exploration; guided teaching is optional.
+
 ## Start
 
 ```
@@ -63,6 +89,11 @@ until the program finishes. This is the classic debugger loop: break, look, resu
 one. Add a stage while paused with `break --live --at NAME` or `break --live FILE:LINE`; the run
 picks it up at once. Name stages by function where you can, since a function name survives edits
 that move lines.
+
+“Resume” means `continue --live` in VS Code or `web ctl debug continue` in the browser.
+It runs to the next breakpoint, exception or exit across instrumented files. Prefer it for
+travel between relevant boundaries; step into, over or out when the local operation matters.
+Confirm the destination breakpoint is set before resuming past code you need to inspect.
 
 **Tests: debug the test file itself.** A `node:test` file is a program: `tracelight debug
 test/ranking.test.ts --at fusedOrder` runs its tests and pauses in the code under test. A runner
@@ -156,7 +187,7 @@ with its stack and variables. Code history follows the pause, with explicit revi
 recorded events. [browser.md](browser.md) has the commands and their replies.
 
 ```sh
-tracelight web app.ts --port 4790 --open          # in the background; the person opens the page
+tracelight web app.ts --port 4790 --no-run --no-watch --open
 tracelight web ctl --port 4790 break 32 on
 tracelight web ctl --port 4790 debug start        # runs to the breakpoint: the stop, with the frame's locals
 tracelight web ctl --port 4790 eval "order.tier"  # in the paused frame
@@ -168,8 +199,9 @@ tracelight web ctl --port 4790 debug stop
 It starts like the VS Code debugger (to the first breakpoint, or the first statement when none
 is set), and `ctl eval` at a pause runs in the paused frame. It differs in what it lacks: no
 `exec`, break-when watch or function breakpoint, and a pause request on a program that
-is already paused waits 10 seconds. Breakpoints are lines of the main file. Finish clean there too:
-`break LINE off` for each line you set, `debug stop`, and stop the page if nobody uses it.
+is already paused waits 10 seconds. Breakpoints can target the main file or a known imported
+source with `--file FILE`. Finish clean there too: `break LINE off` with the same file for each
+line you set, `debug stop`, and stop the page if nobody uses it.
 
 ## What the human says, and what you run
 
@@ -193,7 +225,7 @@ is already paused waits 10 seconds. Breakpoints are lines of the main file. Fini
 | "where did this bad value come from" | on a recording, `tracelight origin --live STEP` (or `origin run.json STEP`) with the exception's step from `exceptions`; fix the line marked root, not the line that threw |
 | "let it run, do not wait" | `tracelight continue --live --no-wait` |
 | "start over" / "stop" | `tracelight restart --live` / `tracelight stop --live` |
-| "debug it in the browser" | `tracelight web FILE --open`, then `tracelight web ctl break LINE on` and `debug start`, `debug continue` |
+| "debug it in the browser" | `tracelight web FILE --no-run --no-watch --open`, then `tracelight web ctl break LINE on` and `debug start`, `debug continue` |
 
 ## After an edit
 

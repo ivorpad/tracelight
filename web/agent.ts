@@ -10,12 +10,14 @@ import { renderValueNode } from '../src/views/valueText';
 export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentCommand): Promise<unknown> {
   if (cmd.action === 'waitPause') {
     const event = await host.waitForPause(cmd.after, cmd.timeoutMs);
-    return { ...event, ...(event.changed ? { state: debugSummary(host), source: host.pauseSource() } : {}) };
+    return { ...event, ...(event.changed ? { state: { ...debugSummary(host), position: await host.confirmPosition('live', true) }, source: host.pauseSource() } : {}) };
   }
-  if (cmd.action !== 'state' && cmd.action !== 'say' && cmd.action !== 'clear' && cmd.action !== 'values' && cmd.action !== 'peek' && cmd.action !== 'inspect' && cmd.action !== 'debug' && cmd.action !== 'breakpoint' && cmd.action !== 'profile' && cmd.action !== 'scratchpad') await host.idle();
+  if (cmd.action !== 'state' && cmd.action !== 'position' && cmd.action !== 'say' && cmd.action !== 'clear' && cmd.action !== 'values' && cmd.action !== 'peek' && cmd.action !== 'inspect' && cmd.action !== 'debug' && cmd.action !== 'breakpoint' && cmd.action !== 'profile' && cmd.action !== 'scratchpad') await host.idle();
   switch (cmd.action) {
     case 'state':
-      return host.state();
+      return { ...host.state(), position: await host.confirmPosition() };
+    case 'position':
+      return host.confirmPosition(cmd.mode, cmd.focus);
     case 'goto':
       if (!host.nav.active) host.start({ step: cmd.step });
       else host.goto(cmd.step);
@@ -27,7 +29,7 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
         moved = !!host.trace?.valid(host.nav.step + 1);
         if (moved) host.goto(host.nav.step + 1);
       } else moved = host.move(cmd.kind);
-      if (!moved) return { moved, state: host.state() };
+      if (!moved) return { moved, state: { ...host.state(), position: await host.confirmPosition('recorded') } };
       return { moved, state: await afterMove(host, cmd.say) };
     }
     case 'line': {
@@ -47,6 +49,10 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
       if (cmd.step !== undefined) {
         if (!host.nav.active) host.start({ step: cmd.step });
         else host.goto(cmd.step);
+        const position = await host.confirmPosition('recorded', true);
+        if (!position.ready) return { ...host.state(), position };
+        host.say(cmd.text, cmd.line ?? position.recorded!.line, { file: cmd.file ?? position.recorded!.file, noteId: cmd.noteId, kind: cmd.kind });
+        return { ...host.state(), position };
       }
       host.say(cmd.text, cmd.line, { file: cmd.file, noteId: cmd.noteId, kind: cmd.kind });
       return host.state();
@@ -61,7 +67,7 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
       return host.peekValue(cmd.name);
     case 'start':
       host.start();
-      return host.state();
+      return afterMove(host, undefined);
     case 'stop':
       host.stop();
       return host.state();
@@ -117,8 +123,7 @@ export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentComm
       return debugCommand(host, cmd);
     case 'scratchpad':
       if (!host.onScratchpad) throw new Error('Scratchpad is unavailable');
-      await host.onScratchpad(cmd.open, cmd.line);
-      return { open: cmd.open, liveExecutionChanged: false };
+      return host.onScratchpad(cmd);
     case 'story': {
       if (!(await host.openStory())) throw new Error('no recorded run to tell: run the file first');
       return host.storyText();
@@ -173,11 +178,12 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
   }
   // the locals of a new pause arrive just after it
   for (let i = 0; i < 20 && d.paused && d.locals?.step !== d.paused.step; i++) await new Promise((r) => setTimeout(r, 25));
-  if (cmd.say !== undefined && d.paused?.line) host.say(cmd.say, d.paused.line);
-  return debugSummary(host);
+  const position = await host.confirmPosition('live', cmd.op !== 'state' && cmd.op !== 'stop');
+  if (position.ready && cmd.say !== undefined && d.paused?.line) host.say(cmd.say, d.paused.line);
+  return { ...debugSummary(host), position };
 }
 
-export function debugSummary(host: PageHost): unknown {
+export function debugSummary(host: PageHost) {
   const s = host.debug.state();
   if (!s) return { running: false };
   return { running: s.running, paused: s.paused, reason: s.reasonText, location: s.location,
@@ -188,10 +194,11 @@ export function debugSummary(host: PageHost): unknown {
     output: s.output.map((c) => c.text).join('').slice(-2000) };
 }
 
-function afterMove(host: PageHost, say: string | undefined): PageState {
-  if (say !== undefined) host.say(say);
+async function afterMove(host: PageHost, say: string | undefined): Promise<PageState> {
+  const position = await host.confirmPosition('recorded', true);
+  if (position.ready && say !== undefined) host.say(say, position.recorded!.line, { file: position.recorded!.file });
   else if (host.narration) host.say(null);
-  return host.state();
+  return { ...host.state(), position };
 }
 
 /* ---------- WebMCP ---------- */
@@ -226,9 +233,14 @@ export function webMcpTools(host: PageHost, link: Link): WebMcpTool[] {
     },
   });
   return [
-    tool('tracelight_scratchpad', 'Open an editable TypeScript scratchpad from the current source function and captured paused inputs, or close it. Auto run executes only the scratch copy in an isolated worker. Local helpers and project imports resolve from this file. External effects require explicit mocks. Never steps or evaluates in the live debugger.', { open: { type: 'boolean' }, line: { type: 'integer', minimum: 1 } }, ['open'], i => ({ action: 'scratchpad', open: i['open'] === true, ...(typeof i['line'] === 'number' ? { line: i['line'] } : {}) })),
+    tool('tracelight_scratchpad', 'Prepare teaching experiments in ONE call with op=experiment and complete code, inputs, receiver/helpers, mocks/mockLabels and autoRun policy. Formats readable code, opens with captured provenance, publishes only the complete package, executes once and awaits structured results/errors. Never prepare through open/update/run calls. Other controls: open, state, update, run, restore, close. Receiver-dependent bare copies wait for preparation before automatic execution. Label every mock and resolve errors before teaching. Local dependencies resolve automatically; unavailable/capped data stays explicit. Never advances live execution or makes real provider calls; fixture results are simulations.', {
+      op: { type: 'string', enum: ['experiment', 'open', 'close', 'state', 'update', 'run', 'restore'] },
+      open: { type: 'boolean' }, line: { type: 'integer', minimum: 1 }, code: { type: 'string', maxLength: 100000 },
+      inputs: { type: 'object' }, mocks: { type: 'object' }, mockLabels: { type: 'object', additionalProperties: { type: 'string' } }, autoRun: { type: 'boolean' },
+    }, [], i => ({ ...i, action: 'scratchpad' } as Extract<AgentCommand, { action: 'scratchpad' }>)),
     tool('tracelight_wait_pause', 'Wait for a new live debugger pause caused by manual Step, Step into, Step over, Step out or Continue. Call without after to obtain the current cursor, then wait with after equal to the previous cursor. Returns nearby source, stack, pause provenance and captured structured value bags together after locals and the editor are ready. Use these values directly for explanation without extra inspect, peek or evaluate calls; preserve capped/unavailable markers. Re-arm after explaining each changed pause. Does not step, evaluate, or open an overlay. Event-driven within an active agent session; cannot wake an idle chat. Timeout is at most 25000 ms.', { after: { type: 'integer', minimum: 0 }, timeoutMs: { type: 'integer', minimum: 0, maximum: 25000 } }, [], i => ({ action: 'waitPause', ...(typeof i['after'] === 'number' ? { after: i['after'] } : {}), ...(typeof i['timeoutMs'] === 'number' ? { timeoutMs: i['timeoutMs'] } : {}) })),
-    tool('tracelight_state', 'Where the Time Machine is in the recorded run: file, line, function, the source line, variables, call stack, logged values, output and errors.', {}, [], () => ({ action: 'state' })),
+    tool('tracelight_state', 'Read the recording selection and live pause separately, plus confirmed rendered source/pane/highlight after presentation. position.ready must be true before teaching; blockers report stale, hidden or divergent source. A recording step is not the live pause.', {}, [], () => ({ action: 'state' })),
+    tool('tracelight_position', 'Confirm the actual rendered source, highlight, active pane and selected frame after rendering. mode=live or recorded selects the intended execution; focus=true reveals its source without executing or resuming. Returns both recorded selection and live pause, divergence, sourceMatches, ready and blockers. Narrate only when ready is true.', { mode: { type: 'string', enum: ['live', 'recorded', 'visible'] }, focus: { type: 'boolean' } }, [], i => ({ action: 'position', ...(typeof i['mode'] === 'string' ? { mode: i['mode'] as 'live' | 'recorded' | 'visible' } : {}), ...(typeof i['focus'] === 'boolean' ? { focus: i['focus'] } : {}) })),
     tool('tracelight_goto', 'Move the Time Machine to a recorded step (0-based) and show it in the code pane.', { step: { type: 'integer', minimum: 0 }, say: SAY }, ['step'], (i) => ({ action: 'goto', step: Number(i['step']), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
     tool('tracelight_step', 'Step the Time Machine like a debugger, forwards or backwards: next (one recorded event), into, over, out, back, backOver, backOut.', { kind: { type: 'string', enum: ['next', 'into', 'over', 'out', 'back', 'backOver', 'backOut'] }, say: SAY }, ['kind'], (i) => ({ action: 'step', kind: String(i['kind']) as Extract<AgentCommand, { action: 'step' }>['kind'], ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
     tool('tracelight_line', 'Move the Time Machine to the next time a line of the shown file runs.', { line: { type: 'integer', minimum: 1 }, say: SAY }, ['line'], (i) => ({ action: 'line', line: Number(i['line']), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),

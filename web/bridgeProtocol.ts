@@ -7,6 +7,7 @@
  */
 import type { DebugBreakpointSpec, DebugExceptionMode, HostRequest, RunConfig, RunEvent, RunnerMessage, WatchRequest } from '../src/shared/protocol';
 import type { TourDoc } from '../src/session/tourTypes';
+import type { ScratchCommand } from './scratchpadProtocol';
 import type { ProfileSummary } from './profileSummary';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -33,9 +34,10 @@ export interface RuntimeInfo {
 
 /** An instruction from an agent (the HTTP API, the `ctl` CLI or WebMCP), carried out by the page. */
 export type AgentCommand =
-  | { action: 'scratchpad'; open: boolean; line?: number }
+  | ({ action: 'scratchpad' } & ScratchCommand)
   | { action: 'waitPause'; after?: number; timeoutMs?: number }
   | { action: 'state' }
+  | { action: 'position'; mode?: 'live' | 'recorded' | 'visible'; focus?: boolean }
   | { action: 'goto'; step: number; say?: string }
   | { action: 'step'; kind: 'next' | 'into' | 'over' | 'out' | 'back' | 'backOver' | 'backOut'; say?: string }
   | { action: 'line'; line: number; file?: string; say?: string }
@@ -150,6 +152,8 @@ export type PageToBridge =
 
 /** The page's position as an agent reads it back (`GET /api/state`, `ctl state`, WebMCP `tracelight_state`). */
 export interface PageState {
+  /** Confirmed after rendering; recording selection never implies a visible source position. */
+  position?: ConfirmedPosition;
   runId: string | null;
   running: boolean;
   file: string;
@@ -175,6 +179,41 @@ export interface PageState {
   valuePresentation?: { mode: 'selected' | 'all' | 'none'; names: string[]; file: string; line?: number } | null;
   /** Live execution is separate from the recording fields above. */
   live?: { runId: string; step: number | null; frame: number; file: string | null; line: number | null; locals: { name: string; text: string }[] } | null;
+}
+
+export interface RenderedSource {
+  file: string | null;
+  pane: 'source' | 'story';
+  line: number | null;
+  code: string | null;
+  highlight: 'live' | 'recorded' | null;
+  visible: boolean;
+  lineVisible: boolean;
+  /** Used inside the page to detect edited or mismatched source, omitted from agent replies. */
+  content?: string;
+}
+
+export interface PositionAnchor {
+  runId: string;
+  step: number;
+  frame: number;
+  file: string;
+  line: number;
+  function: string;
+  code: string | null;
+}
+
+export interface ConfirmedPosition {
+  mode: 'live' | 'recorded' | 'visible';
+  ready: boolean;
+  blockers: string[];
+  activePane: 'source' | 'story';
+  source: Omit<RenderedSource, 'content'> | null;
+  story: Omit<RenderedSource, 'content'> | null;
+  recorded: PositionAnchor | null;
+  live: PositionAnchor | null;
+  sourceMatches: boolean;
+  recordedDiffersFromLive: boolean;
 }
 
 export interface TeachingNote {
