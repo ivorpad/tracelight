@@ -132,6 +132,21 @@ export function pausedInline(occurrences: ValueOccurrence[], line: number, ancho
   return new Map([...rows].map(([row, values]) => [row, values.slice(0, 3).join(' · ')]));
 }
 
+/** Keep each shadow beside its declaration instead of following subsequent reads. */
+export function pausedShadows(lines: string[], occurrences: ValueOccurrence[], pause: PausedValues): Map<number, string> {
+  const bindings = new Map<string, ValueOccurrence>();
+  for (const o of occurrences) {
+    if (o.unavailable || o.line > pause.line || bindings.has(o.local.name)) continue;
+    if (pause.ghostNames && !pause.ghostNames.includes(o.local.name)) continue;
+    const before = lines[o.line - 1]!.slice(0, o.start);
+    if (!/\b(?:const|let|var)\s+$/.test(before)) continue;
+    bindings.set(o.local.name, o);
+  }
+  const rows = new Map<number, string>();
+  for (const o of bindings.values()) rows.set(o.line, `${o.local.name} = ${pausedSummary(o.local)}`);
+  return rows;
+}
+
 export function pausedHover(local: LocalVar): string {
   // A runtime value can contain Markdown. Keep all of it inside an inert code block.
   const runs = local.text.match(/`+/g) ?? [];

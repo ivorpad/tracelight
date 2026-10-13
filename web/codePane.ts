@@ -11,7 +11,7 @@ import 'monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution';
 import type { BridgeFile, TeachingNote } from './bridgeProtocol';
 import { PROFILE_PATH, type CodeDecorations, type CodeView } from './pageHost';
 import { STORY_PATH } from './story';
-import { pausedOccurrences, pausedInline, pausedHover, pausedProperty, type ValueOccurrence } from './pausedValues';
+import { pausedOccurrences, pausedInline, pausedShadows, pausedHover, pausedProperty, type ValueOccurrence } from './pausedValues';
 import type { ValueNode } from '../src/shared/protocol';
 
 const INLINE_MAX = 160;
@@ -241,7 +241,8 @@ export class CodePane implements CodeView {
       this.valuesModel = model;
       this.valuesContent = model.getValue();
       const ghosts = d.liveValues.ghostNames === undefined ? occurrences : d.liveValues.locals.filter((v) => d.liveValues!.ghostNames!.includes(v.name)).map((local) => ({ line: d.liveValues!.line, start: 0, end: 0, local }));
-      for (const [line, text] of document.body.dataset.presentation === 'learn' ? [] : pausedInline(ghosts, d.liveValues.line, d.liveValues.anchor)) {
+      const shadows = document.body.dataset.presentation === 'learn' ? pausedShadows(model.getLinesContent(), occurrences, d.liveValues) : pausedInline(ghosts, d.liveValues.line, d.liveValues.anchor);
+      for (const [line, text] of shadows) {
         if (line < 1 || line > lines) continue;
         const font = this.editor.getOption(monaco.editor.EditorOption.fontInfo);
         const available = Math.floor(this.editor.getLayoutInfo().contentWidth / font.typicalHalfwidthCharacterWidth) - model.getLineLength(line) - 4;
@@ -250,7 +251,8 @@ export class CodePane implements CodeView {
         for (const part of text.split(' · ')) {
           if ([...parts, part].join(' · ').length <= available) parts.push(part);
         }
-        if (parts.length) out.push({ range: endOf(line), options: { after: { content: `  ${parts.join(' · ')}`, inlineClassName: 'pkw-live-value' } } });
+        const preview = parts.length ? parts.join(' · ') : available >= 12 ? text.slice(0, available - 1) + '…' : '';
+        if (preview) out.push({ range: endOf(line), options: { after: { content: `  ${preview}`, inlineClassName: 'pkw-live-value', cursorStops: monaco.editor.InjectedTextCursorStops.None } } });
       }
     }
     for (const [line, text] of d.errors) {

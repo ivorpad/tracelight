@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pausedFrameLocals, pausedHover, pausedInline, pausedOccurrences, pausedProperty, pausedSummary, runtimeCapped } from '../../web/pausedValues';
+import { pausedFrameLocals, pausedHover, pausedInline, pausedOccurrences, pausedProperty, pausedSummary, pausedShadows, runtimeCapped } from '../../web/pausedValues';
 
 describe('paused source values', () => {
   it('does not attach another lexical binding of the same name to source', () => {
@@ -18,6 +18,15 @@ describe('paused source values', () => {
     expect(pausedFrameLocals(before)).toEqual([{ name: 'x', text: 'Not available in this pause' }]);
     expect(pausedFrameLocals(pause)).toEqual([{ name: 'x', text: '0' }]);
     expect(pausedFrameLocals({ ...pause, identifiers: { scopes: [], references: [] } })).toEqual([]);
+  });
+
+  it('keeps shadow previews at declarations as execution moves through reads', () => {
+    const lines = ['const job = next();', 'use(job);', 'return job;'];
+    const local = { name: 'job', text: "{ seconds: 2 }" };
+    const occurrences = lines.map((line, i) => ({ line: i + 1, start: line.indexOf('job'), end: line.indexOf('job') + 3, local }));
+    expect([...pausedShadows(lines, occurrences, { line: 2, start: 1, end: 3, locals: [local] })]).toEqual([[1, 'job = { seconds: 2 }']]);
+    expect([...pausedShadows(lines, occurrences, { line: 3, start: 1, end: 3, locals: [local] })]).toEqual([[1, 'job = { seconds: 2 }']]);
+    expect(pausedShadows(lines, occurrences.map(o => ({ ...o, unavailable: true })), { line: 1, start: 1, end: 3, locals: [] }).size).toBe(0);
   });
 
   it('reads only available serialized properties and preserves falsy values', () => {
