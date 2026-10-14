@@ -511,6 +511,8 @@ export interface StackFrame {
   col: number;
   rid?: number;
   function: string;
+  /** the frame's file; the only place a frame outside the recorded files (`fileId: 0`) is named */
+  path?: string;
 }
 
 /** Where a caught exception was finally handled (docs/PROTOCOL.md, `error`): the matching `except` clause, or the `with` whose `__exit__` swallowed it. */

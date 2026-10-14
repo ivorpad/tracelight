@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLOCK_LINES, isElided, readOutput, stopOutput, stopSlice, type OutputCursor, type OutputRead, type StopSliceInputs } from '../../src/debug/debugSessionState';
+import { BLOCK_LINES, finishedSlice, isElided, readOutput, stopOutput, stopSlice, type OutputCursor, type OutputRead, type StopSliceInputs } from '../../src/debug/debugSessionState';
 import { OutputLog } from '../../src/session/outputBuffer';
 import type { PausedInfo } from '../../src/session/debugState';
 
@@ -264,5 +264,19 @@ describe('readOutput', () => {
     const read = readOutput(l, NONE, 100, false).read;
     expect(read.text).toBe('done\nprogress: 40%');
     expect(read.seq).toBe(5); // only `done\n` is committed; the open line is sent again when it ends
+  });
+});
+
+describe('finishedSlice', () => {
+  const fin = { exitCode: 1, durationMs: 5, stepCount: 0 };
+  const message = 'TypeScript parameter property is not supported in strip-only mode';
+  it('names the uncaught error that ended the run, from its innermost frame', () => {
+    const caught = { type: 'error', fileId: 1, rid: 3, step: 0, message: 'later', errorType: 'Error', stack: [], handled: true } as any;
+    const uncaught = { type: 'error', fileId: 0, rid: 0, step: 0, message, errorType: 'SyntaxError', handled: false, stack: [{ fileId: 0, line: 22, col: 0, function: '<module>', path: '/h/models/openai-oauth.ts' }] } as any;
+    expect(finishedSlice(fin, [caught, uncaught])).toEqual({ finished: { ...fin, error: { type: 'SyntaxError', message, file: '/h/models/openai-oauth.ts', line: 22 } } });
+  });
+  it('is the exit alone when nothing was uncaught', () => {
+    expect(finishedSlice(fin, [])).toEqual({ finished: fin });
+    expect(finishedSlice(undefined)).toEqual({ finished: { exitCode: null, durationMs: 0, stepCount: 0 } });
   });
 });

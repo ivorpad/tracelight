@@ -69,13 +69,20 @@ export function renderRecord(result: Msg, source: RunSource, args: Args): string
   return [...head, ...renderStop(result, source, args)];
 }
 
+/** `error: Type: message (file:line)` for the uncaught exception a finished run carries, else nothing */
+export function finishedError(fin: Msg, source: RunSource): string[] {
+  const e = isObj(fin.error) ? fin.error : null;
+  if (!e) return [];
+  return [`error: ${pyText(e.type)}: ${oneLine(e.message)}${e.file ? ` (${loc(source, e.file, e.line)})` : ''}`];
+}
+
 /** a stop of a debug session: `paused at file:line (reason)` and everything the pause carries */
 export function renderDebugStop(result: Msg, source: RunSource, args: Args): string[] {
   const fin = result.finished;
   if (isObj(fin)) {
-    const head = `finished: exit ${pyText(fin.exitCode)}, ${pyText(fin.stepCount)} steps`;
+    const head = [`finished: exit ${pyText(fin.exitCode)}, ${pyText(fin.stepCount)} steps`, ...finishedError(fin, source)];
     const stepped = result.stepped;
-    return stepped === null || stepped === undefined ? [head] : [head, `${pyText(stepped)} step${stepped === 1 ? '' : 's'} were taken before it ended`];
+    return stepped === null || stepped === undefined ? head : [...head, `${pyText(stepped)} step${stepped === 1 ? '' : 's'} were taken before it ended`];
   }
   if (result.resumed) return ['resumed'];
   if (result.requested) return ['pause requested: the program pauses at its next statement'];

@@ -178,7 +178,8 @@ export interface PageState {
   /** values logged so far (up to `step` while the Time Machine is on) */
   values: { line: number; context?: string; text: string; step: number }[];
   output: string;
-  errors: { type: string; message: string; line: number }[];
+  /** the uncaught exception: `file` is absent only when nothing says where it was raised */
+  errors: { type: string; message: string; file?: string; line: number }[];
   /** the narration bubble now showing */
   narration: { text: string; line: number } | null;
   notes?: TeachingNote[];

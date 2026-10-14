@@ -795,6 +795,8 @@ test('the debug stop text: modified values, a count that ended, folded frames, o
   assert.equal(lines[0], 'paused at app.ts:42 (breakpoint) (values modified from the console)');
   assert.equal(lines[1], 'stopped early after 2 steps: breakpoint');
   assert.deepEqual(renderDebugStop({ finished: { exitCode: 0, stepCount: 1403 }, stepped: 2 }, src, {}), ['finished: exit 0, 1403 steps', '2 steps were taken before it ended']);
+  const error = { type: 'SyntaxError', message: 'TypeScript parameter property is not supported in strip-only mode', file: '/h/models/openai-oauth.ts', line: 22 };
+  assert.deepEqual(renderDebugStop({ finished: { exitCode: 1, stepCount: 0, error } }, src, {}), ['finished: exit 1, 0 steps', 'error: SyntaxError: TypeScript parameter property is not supported in strip-only mode (openai-oauth.ts:22)']);
   const deep = { location: { file: '/ws/app.ts', line: 1 }, paused: { reason: 'step' }, stack: Array.from({ length: 20 }, (_, i) => ({ file: '/ws/app.ts', line: i + 1, function: `f${i}` })) };
   const stack = renderDebugStop(deep, src, {}).find((l) => l.startsWith('stack:'))!;
   assert.ok(stack.includes('f0 app.ts:1') && stack.includes('… 13 frames …') && stack.endsWith('f19 app.ts:20'), stack);

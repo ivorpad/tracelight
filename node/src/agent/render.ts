@@ -148,7 +148,7 @@ export function isDebugReply(result: Msg): boolean {
 export function renderStop(result: Msg, source: RunSource, args: Args): string[] {
   const fin = result.finished;
   if (fin && typeof fin === 'object') {
-    if (result.stepped !== null && result.stepped !== undefined && debugRender.stop) return debugRender.stop(result, source, args);
+    if (((result.stepped !== null && result.stepped !== undefined) || fin.error) && debugRender.stop) return debugRender.stop(result, source, args);
     return [`finished: exit ${pyText(fin.exitCode)}, ${pyText(fin.stepCount)} steps`];
   }
   if ((result.resumed || result.requested || isDebugReply(result)) && debugRender.stop) return debugRender.stop(result, source, args);

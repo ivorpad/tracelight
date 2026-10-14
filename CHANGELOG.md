@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A debug run that ends says why: VS Code's debug replies carry `finished.error` (type, message,
+  file, line), `tracelight debug` and `continue --live` print it under `finished: exit N`, and the
+  browser page's `debug start`/`state` answer `exitCode` and `errors` instead of a bare
+  `reason: "ended"`. The page no longer places an error raised outside the recorded files on the
+  main file's line 1.
 - A module that fails to compile before the run's first step (Node or Bun) is named in the `error`
   event's stack and by `tracelight run` (`bad.ts:2`), where it printed `(?:?)`.
 - A program that imports TypeScript the run does not record (a driver in another directory that

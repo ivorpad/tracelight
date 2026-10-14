@@ -130,7 +130,7 @@ export class DebugSocketServer implements vscode.Disposable {
     const ds = this.manager.byKey(launch);
     if (!ds) throw new BridgeError('the debug session did not start', 'see the Tracelight output channel');
     const result = ds.debug.paused ?? (await waitForStop(ds));
-    return result === 'finished' ? finishedSlice(ds.lastFinished) : stopReply(ds, result, sliceOptions(req));
+    return result === 'finished' ? finishedSlice(ds.lastFinished, ds.errors) : stopReply(ds, result, sliceOptions(req));
   }
 
   /* ---------- lifecycle ---------- */
@@ -383,7 +383,7 @@ export class DebugSocketServer implements vscode.Disposable {
         const runId = ds.runId;
         ds.stopDebug();
         await waitForStop(ds, 30_000).catch(() => undefined);
-        return { stopped: true, runId, ...finishedSlice(ds.lastFinished) };
+        return { stopped: true, runId, ...finishedSlice(ds.lastFinished, ds.errors) };
       }
       case 'restart':
         return this.stop(ds, req, () => ds.restart({ stopOnEntry: req.stopOnEntry === true }));
@@ -457,6 +457,6 @@ export class DebugSocketServer implements vscode.Disposable {
       throw err instanceof BridgeError ? err : new BridgeError(err instanceof Error ? err.message : String(err), 'see the Tracelight output channel');
     }
     const result = await next;
-    return result === 'finished' ? finishedSlice(ds.lastFinished) : stopReply(ds, result, sliceOptions(req));
+    return result === 'finished' ? finishedSlice(ds.lastFinished, ds.errors) : stopReply(ds, result, sliceOptions(req));
   }
 }

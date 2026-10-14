@@ -230,13 +230,16 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
 
 export function debugSummary(host: PageHost) {
   const s = host.debug.state();
-  if (!s) return { running: false };
+  // a run that ended says how: its exit code and the uncaught exception, which may precede any step
+  const st = host.state();
+  const ended = host.debug.run && !host.debug.run.running ? { exitCode: host.run?.finished?.exitCode ?? null, errors: st.errors } : {};
+  if (!s) return { running: false, ...ended };
   return { running: s.running, paused: s.paused, reason: s.reasonText, location: s.location,
-    context: host.state().context, runId: host.debug.run?.runId, step: host.debug.paused?.step, frame: host.debug.selectedFrame,
+    context: st.context, runId: host.debug.run?.runId, step: host.debug.paused?.step, frame: host.debug.selectedFrame,
     source: host.pauseSource(),
     stack: s.stack.map((f) => ({ name: f.name, file: f.file, line: f.line })),
     locals: s.locals.map((v) => ({ name: v.name, text: v.text, ...(v.valueBag ? { valueBag: v.valueBag } : {}) })),
-    output: s.output.map((c) => c.text).join('').slice(-2000) };
+    output: s.output.map((c) => c.text).join('').slice(-2000), ...ended };
 }
 
 async function afterMove(host: PageHost, say: string | undefined): Promise<PageState> {

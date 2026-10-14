@@ -870,7 +870,9 @@ FILE:LINE] [--list] [--on-exception off|uncaught|raised]`, `watches --live [--ad
 `--break-when` makes it pause the run), `locals --live`; a stop prints as `paused at file:line (reason)` over the usual
 slice, with the frame under `locals:` and, under `output (last N lines):`, the last 20 lines of
 `output.text` indented by two (200 with `--scope`, nothing when it is empty);
-the end as `finished: exit N, K steps`, and `stop` as `stopped: exit N, K steps` or
+the end as `finished: exit N, K steps`, followed by `error: Type: message (file:line)` when an
+uncaught exception ended it (the `finished.error` of the reply, also for a module that did not
+compile before the first step), and `stop` as `stopped: exit N, K steps` or
 `nothing to stop: <hint>`. Reasons print as `start`, `breakpoint [if
 EXPR][, condition failed: …]`, `step into|over|out`, `watch EXP: TEXT`, `pause`, `uncaught
 ValueError: too big: 3` / `raised ValueError: too big: 3`. `break --live` ends its listing with

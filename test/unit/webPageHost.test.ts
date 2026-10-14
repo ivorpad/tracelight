@@ -648,6 +648,24 @@ describe('PageHost views', () => {
     expect(Date.now() - began).toBeLessThan(2000);
   });
 
+  it('says why an agent debug start ended before the first step: the error, its file and line', async () => {
+    const { host, link, feed } = setup();
+    const answer = runAgentCommand(host, link, { action: 'debug', op: 'start' });
+    feed({ type: 'debug.begin', runId: 'd-1', content: SOURCE });
+    const message = 'TypeScript parameter property is not supported in strip-only mode';
+    const events: RunEvent[] = [
+      { runId: 'd-1', seq: 1, type: 'run.started', pid: 1 },
+      runEvents('d-1')[1]!,
+      { runId: 'd-1', seq: 3, type: 'error', fileId: 0, rid: 0, step: 0, message, errorType: 'SyntaxError', handled: false, stack: [{ fileId: 0, line: 22, col: 0, function: '<module>', path: '/w/models/oauth.ts' }] },
+      { runId: 'd-1', seq: 4, type: 'run.finished', exitCode: 1, durationMs: 5, timedOut: false, stopped: false, stepCount: 0, logCount: 0 },
+    ];
+    for (const event of events) feed({ type: 'debug.event', event });
+    feed({ type: 'debug.end', runId: 'd-1' });
+    const error = { type: 'SyntaxError', message, file: '/w/models/oauth.ts', line: 22 };
+    expect(await answer).toMatchObject({ running: false, paused: false, exitCode: 1, errors: [error] });
+    expect(host.state().errors).toEqual([error]);
+  });
+
   it('answers the agent var, why and breakpoint commands', async () => {
     const { host, link } = setup();
     link.replies.push({ type: 'bindings', id: 1, statements: BINDINGS });

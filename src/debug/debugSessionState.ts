@@ -9,7 +9,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Range4, RecordFromSpec, RunConfig, RunRequest } from '../shared/protocol';
+import type { ErrorEvent, Range4, RecordFromSpec, RunConfig, RunRequest } from '../shared/protocol';
 import type { BlockLine, SliceBlock, SliceError, SliceLocation, SliceOptions, SliceValue } from '../session/contextSlice';
 import type { BreakpointSpec, ExceptionMode, PausedInfo, PausedThread } from '../session/debugState';
 
@@ -736,7 +736,20 @@ export function libraryPath(file: string | undefined): string | undefined {
   return kept.join('/') || undefined;
 }
 
-/** `{finished: {exitCode, durationMs, stepCount}}`: the program ended instead of stopping. */
-export function finishedSlice(fin: { exitCode: number | null; durationMs: number; stepCount: number } | undefined): Record<string, unknown> {
-  return { finished: { exitCode: fin?.exitCode ?? null, durationMs: fin?.durationMs ?? 0, stepCount: fin?.stepCount ?? 0 } };
+/**
+ * `{type, message, file, line}` of the uncaught exception that ended a run, at its innermost frame,
+ * or undefined. A run that stops before its first step (a module that does not compile) has
+ * nothing else to say why it ended.
+ */
+export function uncaughtError(errors: readonly ErrorEvent[] | undefined): { type: string; message: string; file?: string; line?: number } | undefined {
+  const e = errors?.find((x) => !x.handled);
+  if (!e) return undefined;
+  const top = e.stack?.[0];
+  return { type: e.errorType, message: e.message, ...(top?.path ? { file: top.path, line: top.line } : {}) };
+}
+
+/** `{finished: {exitCode, durationMs, stepCount, error?}}`: the program ended instead of stopping. */
+export function finishedSlice(fin: { exitCode: number | null; durationMs: number; stepCount: number } | undefined, errors?: readonly ErrorEvent[]): Record<string, unknown> {
+  const error = uncaughtError(errors);
+  return { finished: { exitCode: fin?.exitCode ?? null, durationMs: fin?.durationMs ?? 0, stepCount: fin?.stepCount ?? 0, ...(error ? { error } : {}) } };
 }

@@ -14,7 +14,7 @@ import type { Session } from '../session/session';
 import type { TimeMachine } from '../timeMachine/navigator';
 import type { SliceOptions } from '../session/contextSlice';
 import { decideMove, entryPause, mergeBreakpoints, type DebugBreakpointEcho, type LocalVar, type NavigatorMoveKind, type PausedInfo } from '../session/debugState';
-import { parseLaunch, type LaunchConfig } from '../debug/debugSessionState';
+import { parseLaunch, uncaughtError, type LaunchConfig } from '../debug/debugSessionState';
 import { clampCount, continueTo, continueUntil, execReply, stepCount, stepCountExtras, type StopRunner } from '../debug/debugExec';
 import { currentFunctionBreakpoints, currentSourceBreakpoints } from '../features/debugBreakpoints';
 import { redact } from '../util/redact';
@@ -35,7 +35,8 @@ export type { BreakItem, PathContext } from './bridgeDebugShapes';
 
 export function finishedReply(session: Session): Record<string, unknown> {
   const fin = session.state.finished;
-  return { finished: { exitCode: fin?.exitCode ?? null, stepCount: fin?.stepCount ?? session.trace?.count ?? 0, durationMs: fin?.durationMs ?? 0 } };
+  const error = uncaughtError(session.state.errors);
+  return { finished: { exitCode: fin?.exitCode ?? null, stepCount: fin?.stepCount ?? session.trace?.count ?? 0, durationMs: fin?.durationMs ?? 0, ...(error ? { error } : {}) } };
 }
 
 /** `state.debug`: the debugger while a debug run exists, else null. */

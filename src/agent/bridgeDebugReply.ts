@@ -57,7 +57,7 @@ export function waitForStop(ds: DebugSession, timeoutMs = STOP_TIMEOUT_MS): Prom
 
 /** A stop as the reply carries it: the slice of 4.3, or `{finished}` when the program ended. */
 export function stopOrFinished(ds: DebugSession, result: PausedInfo | 'finished', opts: { scope?: boolean; valueBag?: boolean }): Promise<Record<string, unknown>> {
-  return result === 'finished' ? Promise.resolve(finishedSlice(ds.lastFinished)) : stopReply(ds, result, opts);
+  return result === 'finished' ? Promise.resolve(finishedSlice(ds.lastFinished, ds.errors)) : stopReply(ds, result, opts);
 }
 
 /**

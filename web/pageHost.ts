@@ -754,8 +754,9 @@ export class PageHost {
     const run = this.run;
     if (!run || !this.panelReady) return;
     const errors = run.errors.map((e) => {
-      const loc = run.files.locate(e.rid);
-      return { ...e, file: this.displayPath(e.fileId), line: loc?.range[0] ?? e.stack[0]?.line ?? 0, col: loc?.range[1] ?? 0 };
+      // fileId 0: raised outside the recorded files (a module that did not compile); its frame says where
+      const loc = e.fileId ? run.files.locate(e.rid) : undefined;
+      return { ...e, file: e.fileId ? this.displayPath(e.fileId) : e.stack[0]?.path ?? '', line: loc?.range[0] ?? e.stack[0]?.line ?? 0, col: loc?.range[1] ?? 0 };
     });
     this.toPanel({ type: 'errors', errors });
   }
@@ -1693,7 +1694,11 @@ export class PageHost {
       stack,
       values: this.visibleLogs().slice(-200).map((e) => ({ line: e.liveLine ?? run?.files.locate(e.rid)?.range[0] ?? 0, ...(e.context ? { context: e.context } : {}), text: e.text, step: e.step })),
       output: (run?.output ?? '').slice(-4000),
-      errors: (run?.errors ?? []).filter((e) => !e.handled).map((e) => ({ type: e.errorType, message: e.message, line: run?.files.locate(e.rid)?.range[0] ?? 0 })),
+      errors: (run?.errors ?? []).filter((e) => !e.handled).map((e) => {
+        const recorded = e.fileId ? run?.files.locate(e.rid) : undefined;
+        const file = recorded ? run?.files.get(e.fileId)?.path : e.stack[0]?.path;
+        return { type: e.errorType, message: e.message, ...(file ? { file } : {}), line: recorded?.range[0] ?? e.stack[0]?.line ?? 0 };
+      }),
       narration: this.narration ? { text: this.narration.text, line: this.narration.line } : null,
       notes: [...this.notes.values()],
       noteRendering: this.code.noteUiState ? [...this.notes.values()].map(n => this.code.noteUiState!().find(ui => ui.noteId === n.noteId && ui.file === n.file) ?? { noteId: n.noteId, file: n.file, line: n.line, rendered: false, visible: false }) : null,
