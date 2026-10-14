@@ -44,6 +44,9 @@ prediction questions unless they ask for them.
 
 The first word after the skill name is the mode: `/tracelight ask why is Ben's total NaN`,
 `$tracelight explain demo.ts`. Load that mode's file and follow it; it says what to deliver.
+Read no other reference up front. The job's first command and its `tracelight VERB --help` carry
+the flags (`tracelight debug FILE --at NAME` pauses a live program, `--node bun` for Bun); open
+the CLI, debugger or browser reference when a command fails or its help does not answer.
 
 | mode | for | what you hand back | read |
 |---|---|---|---|
@@ -163,8 +166,8 @@ The CLI needs Node 22.18 or newer, since it runs its own TypeScript sources (`no
 Node 22.15 or newer, or native Bun selected with `run --node bun` / `web --runtime bun`.
 `run --node PATH` and `$TRACELIGHT_NODE` select a specific program executable. Verify a newly
 resolved CLI once: `tracelight debug -h` prints that verb's usage and exits 0 (bare `tracelight -h` prints
-the verb list and exits 2). If none of the three gives that, stop there and tell the user which
-step failed.
+the verb list and a first command per job, and exits 2). If none of the three gives that, stop
+there and tell the user which step failed.
 
 `tracelight web` is newer than the CLI: a runtime without it answers `usage: tracelight serve |
 ...` with no `web` in the list, or says it has no browser page. From a Tracelight checkout,
