@@ -707,6 +707,13 @@ export class Tracer {
       out.push(frame);
       if (out.length >= 64) break;
     }
+    // a module that did not compile: no frame of it, only V8's `file:line` header (see locateLoadError)
+    const header = out.length ? null : /^((?:file:\/\/)?\/\S*):(\d+)$/.exec(stack.split('\n')[0]!);
+    if (header) {
+      let path = header[1]!;
+      try { if (path.startsWith('file://')) path = fileURLToPath(path); } catch { /* keep */ }
+      out.push({ fileId: this.byPath.get(path)?.fileId ?? 0, line: Number(header[2]), col: 0, function: '<module>', path });
+    }
     return out;
   }
 

@@ -79,6 +79,8 @@ export class RunChild {
   config!: RunConfig;
   readonly registry = new Registry();
   readonly overrides = new Map<string, string>();
+  /** the file Node's load hook saw last: the one a module SyntaxError with no frames is in */
+  lastLoaded: string | null = null;
   readonly sources = new Map<number, string>();
   mainPath = '';
   root = '';
@@ -298,6 +300,7 @@ export class RunChild {
     } catch (e) {
       if (e instanceof ExitSignal) return;
       if (e instanceof InstrumentFailure) return this.finish(undefined, false, 1);
+      locateLoadError(e, this.lastLoaded);
       this.finish(e, true, 1);
     }
   }
@@ -398,6 +401,7 @@ export class RunChild {
         } catch {
           return nextLoad(url, context);
         }
+        this.lastLoaded = path;
         const kind = this.kindOf(path);
         if (!kind) return this.loadUnrecorded(path, url, context, nextLoad);
         const source = this.overrides.get(path) ?? readFileSync(path, 'utf8');
@@ -439,6 +443,7 @@ export class RunChild {
         } catch {
           return nextLoad(url, context);
         }
+        this.lastLoaded = path;
         const text = this.overrides.get(path);
         if (text === undefined) return this.loadUnrecorded(path, url, context, nextLoad);
         return { format: this.formatOf(path, text), source: isTypeScriptPath(path) || isJsxPath(path) ? toJavaScript(text, path).js : text, shortCircuit: true };
@@ -769,6 +774,38 @@ class ExitSignal extends Error {
 }
 
 class InstrumentFailure extends Error {}
+
+/**
+ * A module that fails to compile throws before any frame of it exists, and V8 keeps the
+ * `file:line` of a module SyntaxError out of `err.stack`. Node compiles a module right after its
+ * load hook returns, so the file is the last one the hook saw. The line is the `:LINE` header
+ * `stripTypeScriptTypes` leaves, else where the parser finds the error; with neither, nothing is
+ * claimed. The result is a `file://…:LINE` first line, which `Tracer.stackOf` reads as the frame.
+ */
+export function locateLoadError(e: unknown, path: string | null): void {
+  // Bun's BuildMessage (no stack at all) carries the place itself
+  const at = (e as { position?: { file?: unknown; line?: unknown } } | null)?.position;
+  if (at && typeof at.file === 'string' && at.file.startsWith('/') && typeof at.line === 'number' && at.line > 0) {
+    (e as Error).stack = `${pathToFileURL(at.file).href}:${at.line}\n${(e as Error).name}: ${(e as Error).message}`;
+    return;
+  }
+  if (!(e instanceof SyntaxError) || !path || typeof e.stack !== 'string') return;
+  const lines = e.stack.split('\n');
+  if (/^(?:file:\/\/)?\/\S*:\d+$/.test(lines[0]!)) return; // Node's own TypeScript loader names it
+  if (lines.some((l) => /^\s+at /.test(l) && !/[( ]node:/.test(l) && !l.includes('/node/src/') && !l.includes('/tracelight/src/'))) return;
+  let line = Number(/^:(\d+)$/.exec(lines[0]!)?.[1] ?? 0);
+  if (!line) {
+    try {
+      const text = readFileSync(path, 'utf8');
+      const at = parseSync(path, text, {}).errors?.[0]?.labels?.[0]?.start;
+      if (typeof at === 'number') line = text.slice(0, at).split('\n').length;
+    } catch {
+      return;
+    }
+  }
+  if (!line) return;
+  e.stack = `${pathToFileURL(path).href}:${line}\n${(/^:\d+$/.test(lines[0]!) ? lines.slice(1) : lines).join('\n')}`;
+}
 
 if (process.send && process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   process.setSourceMapsEnabled(true);

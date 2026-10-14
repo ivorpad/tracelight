@@ -251,11 +251,16 @@ async function cmdRun(args: string[]): Promise<number> {
       const r = ranges.get(fileId)?.[rid - (bases.get(fileId) ?? 0)];
       return `${display(byId.get(fileId) ?? '?', request.workspaceRoot)}:${r ? r[0] : '?'}`;
     };
+    // an error raised outside the recorded files (a module that did not compile) has only its stack frame
+    const errorWhere = (e: Msg) => {
+      const top = e.stack?.[0];
+      return ranges.has(e.fileId) || !top?.path ? where(e.fileId, e.rid) : `${display(top.path, request.workspaceRoot)}:${top.line}`;
+    };
     for (const e of events) {
       if (e.type === 'log') process.stdout.write(`${where(e.fileId, e.rid)}  ${e.context && e.kind !== 'log' ? e.context + ' = ' : ''}${e.text}\n`);
       else if (e.type === 'output') process.stdout.write(e.text);
       else if (e.type === 'watch') process.stdout.write(`[watch ${e.watchId} step ${e.step}] ${e.text ?? e.valueBag?.data?.value ?? e.error ?? ''}\n`);
-      else if (e.type === 'error' && !e.handled) process.stdout.write(`error: ${e.errorType}: ${e.message}  (${where(e.fileId, e.rid)})\n`);
+      else if (e.type === 'error' && !e.handled) process.stdout.write(`error: ${e.errorType}: ${e.message}  (${errorWhere(e)})\n`);
       else if (e.type === 'runner.error') process.stderr.write(`runner: ${e.message}\n`);
     }
     const traceEv = [...events].reverse().find((e) => e.type === 'trace' && !e.partial);

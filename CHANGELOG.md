@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A module that fails to compile before the run's first step (Node or Bun) is named in the `error`
+  event's stack and by `tracelight run` (`bad.ts:2`), where it printed `(?:?)`.
 - A program that imports TypeScript the run does not record (a driver in another directory that
   imports a project, without `--only`) no longer stops under Node with "TypeScript parameter
   property is not supported in strip-only mode": unrecorded TypeScript and JSX are lowered the way
