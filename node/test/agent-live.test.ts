@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import { NAME, ENV } from '../src/protocol.ts';
 import { dispatchVerb, type Io } from '../src/agent/commands.ts';
 import '../src/agent/verbs.ts';
@@ -719,6 +719,10 @@ test('the URI, --at, and the launch', () => {
   for (const junk of ['app.ts:0', 'app.ts:x', '9lives', '']) assert.throws(() => parseAt(junk), (e: AgentError) => e.message.includes(AT_UNREADABLE));
   assert.throws(() => buildLaunch({}), (e: AgentError) => /debug needs a file/.test(e.message) && /debug app\.ts/.test(e.hint!));
   assert.equal(buildLaunch({ program: APP, recordFrom: 'rrf' }).record, true);
+  // `--node bun`: a bare command is looked up on PATH, not taken as a file in the current directory
+  const bare = buildLaunch({ program: APP, node: 'node' }).node;
+  assert.ok(isAbsolute(bare) && basename(bare) === 'node' && bare !== resolve('node'), bare);
+  assert.throws(() => buildLaunch({ program: APP, node: 'no-such-runtime-tl' }), (e: AgentError) => /--node no-such-runtime-tl/.test(e.message) && /PATH/.test(e.message));
 });
 
 test('debug FILE: --module is not a flag, --env wants K=V, and --at names a file that exists', async () => {

@@ -176,7 +176,7 @@ live({
     p.addArgument('program', { metavar: 'FILE', nargs: '?', help: 'the JavaScript or TypeScript file to run (implies --live); omit it to debug the open session\'s file' });
     p.addArgument('--cwd', { metavar: 'DIR', help: 'working directory the program runs in (default: the file\'s directory)' });
     p.addArgument('--env', { action: 'append', default: [], metavar: 'K=V', help: 'an environment variable for the program (repeatable)' });
-    p.addArgument('--node', { metavar: 'PATH', help: `the node binary to run with (default: $${NODE_ENV}, else the window's tracelight.nodePath)` });
+    p.addArgument('--node', { metavar: 'PATH', help: `the runtime binary to run with, a path or a command on PATH such as bun (default: $${NODE_ENV}, else the window's tracelight.nodePath)` });
     p.addArgument('--at', { action: 'append', metavar: 'FILE:LINE|NAME', help: 'stop here: a line, or a function name whose entry pauses; repeat it for one stop per stage (`continue` goes from one to the next). Every one is set before the program starts and shows in the Breakpoints view' });
     p.addArgument('--record', { action: 'store_true', help: 'also record the run, so the Time Machine, the Code Story and `why` open over it at every pause (slower)' });
     p.addArgument('--record-from', { dest: 'record_from', metavar: 'NAME|FILE:LINE', help: 'run at the debugger\'s speed up to here, pause, and record from this pause on: the Time Machine, `why`, `var` and `history` cover what runs after it. It is also an --at' });

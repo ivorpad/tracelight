@@ -67,12 +67,20 @@ export function buildLaunch(o: LaunchOpts = {}): Msg {
   const launch: Msg = { args: [...(o.args || [])], env: { ...(o.env || {}) }, stopOnEntry: !!o.stopOnEntry, libraryCode: !!o.libraryCode, record: !!o.record };
   launch.program = resolve(o.program);
   launch.cwd = o.cwd ? resolve(o.cwd) : dirname(launch.program);
-  if (o.node) launch.node = resolve(o.node);
+  if (o.node) launch.node = nodeBinary(o.node);
   if (o.recordFrom) {
     launch.record = true; // recording from a pause is a recording session that starts later
     launch.recordFrom = o.recordFrom;
   }
   return launch;
+}
+
+/** `--node`: a path as given (from the current directory), or a bare command such as `bun` found on PATH as a shell would */
+export function nodeBinary(node: string): string {
+  if (node.includes('/') || node.includes(sep)) return resolve(node);
+  const found = which(node);
+  if (!found) throw new AgentError(`--node ${node}: no such command on PATH`, `give the binary's path, e.g. \`--node "$(command -v ${node})"\``);
+  return found;
 }
 
 /** `FILE:LINE` -> `{file, line}`; a function name -> `{function}` (the runtime resolves it, not the host) */

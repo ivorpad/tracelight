@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `tracelight debug --node bun` looks `bun` up on PATH. It took the bare name as a file in the
+  current directory, so the window was never asked to start and the launch timed out with the
+  URI-handler hint. An unknown command is refused at once.
 - A debug run that ends says why: VS Code's debug replies carry `finished.error` (type, message,
   file, line), `tracelight debug` and `continue --live` print it under `finished: exit N`, and the
   browser page's `debug start`/`state` answer `exitCode` and `errors` instead of a bare

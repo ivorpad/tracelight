@@ -49,7 +49,8 @@ that stop, and the paused function's lines show their values in the editor, read
 
 There is no module launch for Node: `--module` is refused with a hint. Give the entry file, the
 one `package.json`'s `main`, `bin` or `start` script points at. `--node PATH` (or
-`$TRACELIGHT_NODE`, else the window's `tracelight.nodePath`) picks the Node that runs the program.
+`$TRACELIGHT_NODE`, else the window's `tracelight.nodePath`) picks the Node that runs the program;
+`--node bun` runs a Bun project (one that calls `Bun.*`) under Bun.
 
 **Start with `tracelight debug`.** `state --live`, `break --live` and `continue --live` drive a
 session that exists. `debug ... --at` creates the session and the breakpoint in one command. Once

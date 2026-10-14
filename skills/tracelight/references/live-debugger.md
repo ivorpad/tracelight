@@ -40,8 +40,8 @@ call is paid again), so say so when it happens; `--no-start` refuses instead and
 
 A file implies `--live`; there is no `--module` launch for Node. `--args` takes everything after
 it and hands it to the program as `process.argv.slice(2)`, so it comes last. `--env` repeats.
-`--node PATH` picks the Node that runs the program (default `$TRACELIGHT_NODE`, else the window's
-`tracelight.nodePath`). The reply is the first stop: the breakpoint `--at` named, the first enabled
+`--node PATH` picks the Node that runs the program, or Bun (`--node bun`: a bare command is looked
+up on PATH; default `$TRACELIGHT_NODE`, else the window's `tracelight.nodePath`). The reply is the first stop: the breakpoint `--at` named, the first enabled
 gutter breakpoint, or the first statement when nothing is set. When the program never reaches
 that breakpoint it runs to the end without pausing, exits normally, and `stop --live` says
 `0 steps`. The launch worked; the breakpoint did not. Only a stop whose `paused at` names the code
