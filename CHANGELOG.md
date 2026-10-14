@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A program that imports TypeScript the run does not record (a driver in another directory that
+  imports a project, without `--only`) no longer stops under Node with "TypeScript parameter
+  property is not supported in strip-only mode": unrecorded TypeScript and JSX are lowered the way
+  recorded files are, in recording and profile runs alike.
 - `tracelight web` prints its pid at startup and says to stop the bridge, or ask about keeping it,
   when the task that started it is done. The skill makes that part of finishing a task for every
   process an agent started (bridges, headless browsers, servers), naming each port and PID.

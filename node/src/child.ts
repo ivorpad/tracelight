@@ -399,7 +399,7 @@ export class RunChild {
           return nextLoad(url, context);
         }
         const kind = this.kindOf(path);
-        if (!kind) return nextLoad(url, context);
+        if (!kind) return this.loadUnrecorded(path, url, context, nextLoad);
         const source = this.overrides.get(path) ?? readFileSync(path, 'utf8');
         const format = this.formatOf(path, source);
         const info = this.instrumentFile(path, source, format, kind === 'library' ? [] : markers, kind === 'library');
@@ -407,6 +407,18 @@ export class RunChild {
         return { format, source: info.code, shortCircuit: true };
       },
     });
+  }
+
+  /**
+   * A file the run does not record, as Node would load it, except TypeScript and JSX: Node's own
+   * loader only strips types, so a parameter property, enum or namespace outside the selection
+   * (a driver in another directory importing a project) would stop the run before its first step.
+   */
+  loadUnrecorded(path: string, url: string, context: nodeModule.LoadHookContext, nextLoad: Parameters<nodeModule.LoadHookSync>[2]): nodeModule.LoadFnOutput {
+    if (!isTypeScriptPath(path) && !isJsxPath(path)) return nextLoad(url, context);
+    let text: string;
+    try { text = readFileSync(path, 'utf8'); } catch { return nextLoad(url, context); }
+    return { format: this.formatOf(path, text), source: toJavaScript(text, path).js, shortCircuit: true };
   }
 
   /**
@@ -427,10 +439,8 @@ export class RunChild {
         } catch {
           return nextLoad(url, context);
         }
-        let text = this.overrides.get(path);
-        // project files Node cannot run itself: JSX, and TypeScript strip mode refuses (enums...)
-        if (text === undefined && (isJsxPath(path) || isTypeScriptPath(path)) && this.kindOf(path) === 'project') text = readFileSync(path, 'utf8');
-        if (text === undefined) return nextLoad(url, context);
+        const text = this.overrides.get(path);
+        if (text === undefined) return this.loadUnrecorded(path, url, context, nextLoad);
         return { format: this.formatOf(path, text), source: isTypeScriptPath(path) || isJsxPath(path) ? toJavaScript(text, path).js : text, shortCircuit: true };
       },
     });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { project } from './helpers.ts';
+import { project, run } from './helpers.ts';
 import { Driver } from './driver.ts';
 import { kindOf } from '../src/select.ts';
 
@@ -48,5 +48,18 @@ for (const node of [process.execPath, bun]) {
       }
       assert.equal((await d.next(e => e.type === 'run.finished')).exitCode, 0);
     } finally {d.close();}
+  });
+}
+
+// A driver outside the project imports it without `only`: the imported TypeScript is not
+// recorded, and Node's own loader strips types only, so a parameter property must still load.
+for (const node of [process.execPath, bun]) {
+  test(`unselected external TypeScript with parameter properties still loads (${node})`, {skip:node === bun && spawnSync(bun, ['--version']).status !== 0, timeout:20000}, async () => {
+    const dir = project({'manager.ts':manager, 'kind.ts':'export enum Kind { A, B = 5 }'});
+    const r = await run({'entry.ts':`import {Manager} from '${dir}/manager.ts';\nimport {Kind} from '${dir}/kind.ts';\nconsole.log(Manager.create('scratch').append('Hello').file, Kind.B);`}, 'entry.ts', {node});
+    assert.deepEqual(r.of('error').map(e => e.message), []);
+    assert.equal(r.finished.exitCode, 0);
+    assert.equal(r.logs()[0]?.text, 'history.json 5');
+    assert.deepEqual(r.of('file.instrumented').map(e => e.path.split('/').pop()), ['entry.ts']);
   });
 }
