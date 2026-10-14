@@ -88,8 +88,10 @@ shell's environment (`PORT=8765 tracelight run server.ts ...`).
   `Bun.file`. A run under Node that fails the way only a Node run would (`Bun is not defined`, or a
   stop before the first step in a package with `bun.lock`) prints `hint:` naming `--node bun` under
   its `error:` line. The CLI and protocol server still run on Node. Bun supports recording and live
-  breakpoints/stepping/locals; worker recording, V8 profiles and side-effect-free expression
-  evaluation are unavailable. Explicit live `exec` uses Bun's inspector.
+  breakpoints/stepping/locals; worker recording, V8 profiles, side-effect-free expression
+  evaluation and recording CommonJS modules are unavailable, so under Bun give `--only` the
+  source directories (`--only app/src`) rather than a glob that takes in `node_modules`. Explicit
+  live `exec` uses Bun's inspector.
 - `--json` prints the whole run as `{meta, events}` instead of the text form.
 
 A first statement like `({ autoLog: true, env: { A: '1' }, mode: 'snaps' })` in the main file is

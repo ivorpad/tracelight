@@ -22,6 +22,16 @@ for (const node of [process.execPath, bun]) for (const ext of ['ts', 'js']) {
   });
 }
 
+// Node links every import of a module before compiling them: a sibling loaded after the one that
+// fails must not be blamed.
+for (const node of [process.execPath, bun]) for (const ext of ['ts', 'js']) {
+  test(`the failing import is named, not the sibling loaded after it (.${ext}, ${node})`, { skip: node === bun && !hasBun }, async () => {
+    const lib = project({ [`bad.${ext}`]: 'export const x = ;\n', [`good.${ext}`]: 'export const ok = 1;\n', [`also.${ext}`]: 'export const fine = 2;\n' });
+    const r = await run({ 'entry.ts': `import { x } from '${lib}/bad.${ext}';\nimport { ok } from '${lib}/good.${ext}';\nimport { fine } from '${lib}/also.${ext}';\nconsole.log(x, ok, fine);\n` }, 'entry.ts', { node });
+    assert.equal(r.of('error')[0]?.stack[0]?.path, join(lib, `bad.${ext}`));
+  });
+}
+
 test('run prints the location of a load-time error instead of ?:?', () => {
   const lib = project({ 'bad.ts': 'export const x = ;\n' });
   const app = project({ 'entry.ts': `import { x } from '${lib}/bad.ts';\nconsole.log(x);\n` });
