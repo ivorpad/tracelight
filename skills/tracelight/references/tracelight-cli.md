@@ -25,7 +25,8 @@ Contents: [Conventions](#conventions) · [Recording a run](#recording-a-run) ·
   that fails before any verb runs prints `tracelight: <message>`, exit 2; `TRACELIGHT_DEBUG=1`
   adds the stack.
 - **Help.** `tracelight VERB -h` (or `--help`) prints that verb's usage and exits 0. Bare
-  `tracelight`, or `tracelight -h`, prints the usage line with every verb and exits 2.
+  `tracelight`, or `tracelight -h`, prints the usage line with every verb, then a first command
+  for each job (a saved run, a live pause, the browser page), and exits 2.
 - **`--live` and numbers.** With `--live` there is no `RUN`, so a leading number is the step:
   `tracelight step --live 18 --into`, `tracelight why --live 117 fusedRanking`.
 - **Pipes.** `tracelight ... | head` ends quietly when the pipe closes.

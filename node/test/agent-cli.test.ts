@@ -6,7 +6,7 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { project } from './helpers.ts';
 import { NAME } from '../src/protocol.ts';
-import { dispatchVerb, getVerb, registerVerb, verbNames, type Io } from '../src/agent/commands.ts';
+import { dispatchVerb, getVerb, parserFor, registerVerb, verbNames, type Io } from '../src/agent/commands.ts';
 import '../src/agent/verbs.ts';
 
 const BIN = resolve(import.meta.dirname, '../bin/tracelight.mjs');
@@ -93,6 +93,23 @@ test('every verb registers itself', () => {
   assert.deepEqual(verbNames().slice(0, 12), ['story', 'steps', 'step', 'context', 'values', 'find', 'var', 'eval', 'expand', 'release', 'state', 'watch']);
   for (const v of ['walkthrough', 'why', 'exceptions', 'http', 'coverage', 'graph']) assert.ok(verbNames().includes(v), v);
   assert.throws(() => registerVerb({ name: 'story', help: 'again' }), /story/);
+});
+
+test('bare tracelight names a first command per job, in a few lines, with flags that exist', () => {
+  const r = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', BIN], { encoding: 'utf8' });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, new RegExp(`^usage: ${NAME} serve \\|.*\\n {2}verbs: story, `));
+  const start = r.stderr.slice(r.stderr.indexOf('start here'));
+  assert.ok(start.startsWith('start here'), r.stderr);
+  for (const c of [`${NAME} run FILE --save run.json`, `${NAME} story run.json --file FILE`, `${NAME} debug FILE --at NAME`, '--node bun', `${NAME} web FILE --no-run`, `${NAME} VERB --help`]) assert.ok(start.includes(c), c);
+  assert.ok(start.trimEnd().split('\n').length <= 6, start);
+  const flags = (verb: string) => parserFor(getVerb(verb)!).actions.flatMap((a) => a.flags);
+  for (const f of ['--file', '--help']) assert.ok(flags('story').includes(f), `story ${f}`);
+  for (const f of ['--at', '--node']) assert.ok(flags('debug').includes(f), `debug ${f}`);
+  const cliSource = readFileSync(resolve(import.meta.dirname, '../src/cli.ts'), 'utf8');
+  assert.match(cliSource, /a === '--save'/);
+  assert.match(readFileSync(resolve(import.meta.dirname, '../../web/server.ts'), 'utf8'), /'--no-run'/);
+  assert.equal(spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', BIN, '--help'], { encoding: 'utf8' }).stderr, r.stderr);
 });
 
 test('state summarises the run', async () => {

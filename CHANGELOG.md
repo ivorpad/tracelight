@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bare `tracelight` (and `tracelight --help`) ends with a first command for each job: `run FILE
+  --save run.json` then `story run.json --file FILE`, `debug FILE --at NAME` (`--node bun` for Bun),
+  `web FILE --no-run`, then `VERB --help`. A Codex agent spent 7 minutes reading 67 KB of
+  references before a live pause that `debug --at` reaches in under a second.
+
 - Under Node, an uncaught error that says the program was written for Bun (`Bun is not defined`, a
   `bun:` import, or a stop before the first step in a package with `bun.lock`/`bunfig.toml`) carries
   a `hint` naming `--node bun` (`--runtime bun` for `tracelight web`); `run`, `debug` and the page

@@ -305,7 +305,14 @@ function cmdCache(args: string[]): number {
   return 0;
 }
 
-const USAGE = `usage: ${NAME} serve | run FILE [--save run.json] [--keep] | instrument FILE | bindings FILE | mcp | web FILE | web ctl ... | cache [--clear] | version | VERB RUN.json ...\n  verbs: ${verbNames().join(', ')}`;
+/** a first command per job, so an agent starts from `VERB --help` instead of the skill's references */
+const START = `start here:
+  answer from a run   ${NAME} run FILE --save run.json, then ${NAME} story run.json --file FILE
+  pause live          ${NAME} debug FILE --at NAME  (in VS Code; add --node bun for a Bun program)
+  teach in a browser  ${NAME} web FILE --no-run
+then \`${NAME} VERB --help\` for that command's flags`;
+
+const USAGE = `usage: ${NAME} serve | run FILE [--save run.json] [--keep] | instrument FILE | bindings FILE | mcp | web FILE | web ctl ... | cache [--clear] | version | VERB RUN.json ...\n  verbs: ${verbNames().join(', ')}\n\n${START}`;
 
 /** the command line; a usage or input error prints its message (the stack with `${ENV}DEBUG=1`) and exits 2 */
 export async function main(argv: string[]): Promise<number> {
