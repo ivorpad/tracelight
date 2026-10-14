@@ -1697,7 +1697,7 @@ export class PageHost {
       errors: (run?.errors ?? []).filter((e) => !e.handled).map((e) => {
         const recorded = e.fileId ? run?.files.locate(e.rid) : undefined;
         const file = recorded ? run?.files.get(e.fileId)?.path : e.stack[0]?.path;
-        return { type: e.errorType, message: e.message, ...(file ? { file } : {}), line: recorded?.range[0] ?? e.stack[0]?.line ?? 0 };
+        return { type: e.errorType, message: e.message, ...(file ? { file } : {}), line: recorded?.range[0] ?? e.stack[0]?.line ?? 0, ...(e.hint ? { hint: e.hint } : {}) };
       }),
       narration: this.narration ? { text: this.narration.text, line: this.narration.line } : null,
       notes: [...this.notes.values()],

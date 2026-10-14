@@ -11,6 +11,7 @@
  * AsyncLocalStorage store to the call that scheduled it (`attributedStep`).
  */
 import { format } from 'node:util';
+import { bunHint } from './runtimeHint.ts';
 import { fileURLToPath } from 'node:url';
 import { sourceColumn, type InstrumentedFile } from './instrument.ts';
 import {
@@ -751,7 +752,9 @@ export class Tracer {
     }
     const message = secrets.scrub(String((err as Error)?.message ?? err));
     const tb = secrets.scrub(typeof (err as Error)?.stack === 'string' ? this.stackText((err as Error).stack!) : `${errorType(err)}: ${message}`);
-    const event = { type: 'error', fileId: top?.fileId ?? 0, rid, step, message, errorType: errorType(err), stack, handled: false, traceback: tb.slice(-4000) };
+    const event: Record<string, any> = { type: 'error', fileId: top?.fileId ?? 0, rid, step, message, errorType: errorType(err), stack, handled: false, traceback: tb.slice(-4000) };
+    const hint = bunHint(event as { errorType: string; message: string }, [...stack.map((f) => f.path), this.files[0]?.filename].filter((p): p is string => !!p), this.nSteps === 0);
+    if (hint) event.hint = hint;
     this.emit(event);
     return event;
   }

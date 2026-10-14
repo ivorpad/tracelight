@@ -545,6 +545,8 @@ export interface ErrorEvent extends RunEventBase {
   lastStep?: number;
   /** the uncaught exception only: the formatted traceback (last 4000 chars) */
   traceback?: string;
+  /** the uncaught exception only: how to run the program where it would not have been raised (`--node bun`) */
+  hint?: string;
 }
 
 /** coverage state per local range id */

@@ -73,7 +73,7 @@ export function renderRecord(result: Msg, source: RunSource, args: Args): string
 export function finishedError(fin: Msg, source: RunSource): string[] {
   const e = isObj(fin.error) ? fin.error : null;
   if (!e) return [];
-  return [`error: ${pyText(e.type)}: ${oneLine(e.message)}${e.file ? ` (${loc(source, e.file, e.line)})` : ''}`];
+  return [`error: ${pyText(e.type)}: ${oneLine(e.message)}${e.file ? ` (${loc(source, e.file, e.line)})` : ''}`, ...(e.hint ? [`  hint: ${oneLine(e.hint, 300)}`] : [])];
 }
 
 /** a stop of a debug session: `paused at file:line (reason)` and everything the pause carries */

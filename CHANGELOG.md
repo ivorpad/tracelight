@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Under Node, an uncaught error that says the program was written for Bun (`Bun is not defined`, a
+  `bun:` import, or a stop before the first step in a package with `bun.lock`/`bunfig.toml`) carries
+  a `hint` naming `--node bun` (`--runtime bun` for `tracelight web`); `run`, `debug` and the page
+  show it. The runtime is never switched by itself.
 - `tracelight debug --node bun` looks `bun` up on PATH. It took the bare name as a file in the
   current directory, so the window was never asked to start and the launch timed out with the
   URI-handler hint. An unknown command is refused at once.

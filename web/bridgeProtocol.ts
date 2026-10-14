@@ -179,7 +179,7 @@ export interface PageState {
   values: { line: number; context?: string; text: string; step: number }[];
   output: string;
   /** the uncaught exception: `file` is absent only when nothing says where it was raised */
-  errors: { type: string; message: string; file?: string; line: number }[];
+  errors: { type: string; message: string; file?: string; line: number; hint?: string }[];
   /** the narration bubble now showing */
   narration: { text: string; line: number } | null;
   notes?: TeachingNote[];

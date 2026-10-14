@@ -85,7 +85,9 @@ shell's environment (`PORT=8765 tracelight run server.ts ...`).
   `tracelight instrument FILE` does.
 - `--node PATH` runs the program with another Node (22.15 or newer) or native Bun, else
   `$TRACELIGHT_NODE`, else the Node running the CLI. Use `--node bun` for Bun APIs such as
-  `Bun.file`. The CLI and protocol server still run on Node. Bun supports recording and live
+  `Bun.file`. A run under Node that fails the way only a Node run would (`Bun is not defined`, or a
+  stop before the first step in a package with `bun.lock`) prints `hint:` naming `--node bun` under
+  its `error:` line. The CLI and protocol server still run on Node. Bun supports recording and live
   breakpoints/stepping/locals; worker recording, V8 profiles and side-effect-free expression
   evaluation are unavailable. Explicit live `exec` uses Bun's inspector.
 - `--json` prints the whole run as `{meta, events}` instead of the text form.

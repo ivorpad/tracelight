@@ -741,11 +741,11 @@ export function libraryPath(file: string | undefined): string | undefined {
  * or undefined. A run that stops before its first step (a module that does not compile) has
  * nothing else to say why it ended.
  */
-export function uncaughtError(errors: readonly ErrorEvent[] | undefined): { type: string; message: string; file?: string; line?: number } | undefined {
+export function uncaughtError(errors: readonly ErrorEvent[] | undefined): { type: string; message: string; file?: string; line?: number; hint?: string } | undefined {
   const e = errors?.find((x) => !x.handled);
   if (!e) return undefined;
   const top = e.stack?.[0];
-  return { type: e.errorType, message: e.message, ...(top?.path ? { file: top.path, line: top.line } : {}) };
+  return { type: e.errorType, message: e.message, ...(top?.path ? { file: top.path, line: top.line } : {}), ...(e.hint ? { hint: e.hint } : {}) };
 }
 
 /** `{finished: {exitCode, durationMs, stepCount, error?}}`: the program ended instead of stopping. */

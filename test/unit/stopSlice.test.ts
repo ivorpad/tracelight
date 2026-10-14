@@ -272,8 +272,8 @@ describe('finishedSlice', () => {
   const message = 'TypeScript parameter property is not supported in strip-only mode';
   it('names the uncaught error that ended the run, from its innermost frame', () => {
     const caught = { type: 'error', fileId: 1, rid: 3, step: 0, message: 'later', errorType: 'Error', stack: [], handled: true } as any;
-    const uncaught = { type: 'error', fileId: 0, rid: 0, step: 0, message, errorType: 'SyntaxError', handled: false, stack: [{ fileId: 0, line: 22, col: 0, function: '<module>', path: '/h/models/openai-oauth.ts' }] } as any;
-    expect(finishedSlice(fin, [caught, uncaught])).toEqual({ finished: { ...fin, error: { type: 'SyntaxError', message, file: '/h/models/openai-oauth.ts', line: 22 } } });
+    const uncaught = { type: 'error', fileId: 0, rid: 0, step: 0, message, errorType: 'SyntaxError', handled: false, hint: 'use bun', stack: [{ fileId: 0, line: 22, col: 0, function: '<module>', path: '/h/models/openai-oauth.ts' }] } as any;
+    expect(finishedSlice(fin, [caught, uncaught])).toEqual({ finished: { ...fin, error: { type: 'SyntaxError', message, file: '/h/models/openai-oauth.ts', line: 22, hint: 'use bun' } } });
   });
   it('is the exit alone when nothing was uncaught', () => {
     expect(finishedSlice(fin, [])).toEqual({ finished: fin });

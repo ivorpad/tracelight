@@ -260,7 +260,7 @@ async function cmdRun(args: string[]): Promise<number> {
       if (e.type === 'log') process.stdout.write(`${where(e.fileId, e.rid)}  ${e.context && e.kind !== 'log' ? e.context + ' = ' : ''}${e.text}\n`);
       else if (e.type === 'output') process.stdout.write(e.text);
       else if (e.type === 'watch') process.stdout.write(`[watch ${e.watchId} step ${e.step}] ${e.text ?? e.valueBag?.data?.value ?? e.error ?? ''}\n`);
-      else if (e.type === 'error' && !e.handled) process.stdout.write(`error: ${e.errorType}: ${e.message}  (${errorWhere(e)})\n`);
+      else if (e.type === 'error' && !e.handled) process.stdout.write(`error: ${e.errorType}: ${e.message}  (${errorWhere(e)})\n${e.hint ? `  hint: ${e.hint}\n` : ''}`);
       else if (e.type === 'runner.error') process.stderr.write(`runner: ${e.message}\n`);
     }
     const traceEv = [...events].reverse().find((e) => e.type === 'trace' && !e.partial);
