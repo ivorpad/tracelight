@@ -241,5 +241,6 @@ the matching rule: [tracelight-cli.md](tracelight-cli.md#comparing-two-runs-afte
 ## Done
 
 Finish clean (SKILL.md): remove your breakpoints, `stop --live` unless the user wants the pause,
-confirm with `break --live --list` and `state --live`. Then report: where it paused, the values
+confirm with `break --live --list` and `state --live`, and stop any page or server process you
+started, or ask whether to keep it, naming its port and PID. Then report: where it paused, the values
 that answer the question, what you changed with `exec` if anything, and what is still open.

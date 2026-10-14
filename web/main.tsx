@@ -22,6 +22,7 @@ import { registerWebMcp, runAgentCommand } from './agent';
 import { DebugPane } from './debugPane';
 import { RecordingControls } from './recordingControls';
 import { Scratchpad } from './scratchpad';
+import { openDefinitionTab } from './definitionTab';
 
 const params = new URLSearchParams(location.search);
 const layout = params.get('layout') === 'panel' ? 'panel' : params.get('layout') === 'code' ? 'code' : 'split';
@@ -128,6 +129,10 @@ host.notice = (text, level) => {
 
 // the live debugger: breakpoints in the gutter (or F9), its controls under the code
 code.onNavigate = (path, line) => host.navigateSource(path, line);
+code.onDefinitionNavigate = (path, line, column) => {
+  try { openDefinitionTab(path, line, column); }
+  catch (e) { host.notice(e instanceof Error ? e.message : String(e), 'error'); }
+};
 code.onGutterClick = (path, line) => host.debug.setBreakpoint(path, line);
 code.onExpandValue = (node) => host.debug.expandNode(node);
 code.onInspectValue = (name) => {

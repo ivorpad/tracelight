@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `tracelight web` prints its pid at startup and says to stop the bridge, or ask about keeping it,
+  when the task that started it is done. The skill makes that part of finishing a task for every
+  process an agent started (bridges, headless browsers, servers), naming each port and PID.
 - The skill's `explain` mode is a shorter core method plus five worked investigations
   (`references/learning-patterns.md`) on a new multi-file example, `examples/js/checkout`: the
   implementation behind an interface call, a value's provenance, the branch that decides, an

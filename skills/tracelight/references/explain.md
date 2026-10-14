@@ -255,7 +255,9 @@ recording is covered in [ask.md](ask.md), page commands in [browser.md](browser.
 
 Briefly connect the observed stops back to the learner's questions and name what is still
 unresolved. Before stopping a session, remove only the breakpoints you added. Leave the pause,
-page or scratchpad open when the learner wants to keep using it, and say what remains active.
+page or scratchpad open when the learner wants to keep using it, and say what remains active,
+with the port and PID of each process you started. Stop the rest: a bridge or headless browser
+left behind keeps serving long after the lesson is over.
 Follow SKILL.md's cleanup when the exploration ends, not at every handoff in the conversation.
 Keep recordings and copied private data out of commits. When the learner points out a failure of
 this workflow and asks for a skill correction, fix the general rule and apply it to the current

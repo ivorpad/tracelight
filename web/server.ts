@@ -1061,7 +1061,9 @@ export async function main(argv: string[]): Promise<number> {
   }
   const server = new BridgeServer(opts);
   await server.start();
-  process.stdout.write(`Tracelight: ${server.url}  (${path.basename(opts.file)}, ${opts.watch ? 're-runs on save' : 'source updates without re-running'}; Ctrl+C stops)\n`);
+  process.stdout.write(`Tracelight: ${server.url}  (${path.basename(opts.file)}, ${opts.watch ? 're-runs on save' : 'source updates without re-running'}; pid ${process.pid})\n`);
+  // a bridge outlives the task that started it unless someone stops it: say who and how
+  process.stdout.write(`When the task that started it is done, stop it (Ctrl+C, or kill ${process.pid}) or ask whether to keep it running.\n`);
   if (opts.open) openBrowser(server.url);
   const stop = () => void server.close().finally(() => process.exit(0));
   process.on('SIGINT', stop);

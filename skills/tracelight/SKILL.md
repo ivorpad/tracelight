@@ -284,6 +284,12 @@ you added (`break --live --remove F:L` for a line, `--remove NAME` for one `--at
 confirm with `break --live --list`, then `stop --live` unless the user wants the pause kept, and
 check `state --live`. Removing needs a session to reach the window: once the program has exited,
 its breakpoints stay until the next launch. Breakpoints that were there before you belong to the
-user; leave them. Release a kept runner with `tracelight release run.json`. Stop a `tracelight web`
-you started (and the headless browser holding it), unless the person is still using the page; say
-which port it is on. If you were interrupted before this, say which of it is still undone.
+user; leave them. Release a kept runner with `tracelight release run.json`.
+
+Every process you started for the task is yours to end: a `tracelight web` bridge (its startup line
+prints its pid), the headless browser holding a page, a server you launched yourself. Note each PID
+and port when it starts. When the task is done, stop them (`kill PID`; a bridge closes its runners
+on the way out), or ask the person whether to keep them running, naming each port and PID. Never
+end a task with a running process the person has not been told about, and reuse a bridge you
+already started for a file instead of starting another on a new port. If you were interrupted
+before this, say which of it is still undone.

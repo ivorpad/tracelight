@@ -25,12 +25,16 @@ tracelight web -h | --help
 
 ```sh
 tracelight web examples/js/rrf/demo.ts --port 4790 --open
-# Tracelight: http://127.0.0.1:4790/  (demo.ts, re-runs on save; Ctrl+C stops)
+# Tracelight: http://127.0.0.1:4790/  (demo.ts, re-runs on save; pid 41234)
+# When the task that started it is done, stop it (Ctrl+C, or kill 41234) or ask whether to keep it running.
 ```
 
 It serves until it is stopped, so start it in the background (your harness's background mode, or
-`... > "$S/web.log" 2>&1 &` and keep the PID) and wait for the URL to answer before the first
-`ctl`: `until curl -s -o /dev/null http://127.0.0.1:4790/; do sleep 0.2; done`.
+`... > "$S/web.log" 2>&1 &`) and wait for the URL to answer before the first `ctl`:
+`until curl -s -o /dev/null http://127.0.0.1:4790/; do sleep 0.2; done`. Keep the pid it prints
+with the port, because stopping it at the end of the task is yours to do ([Stop it](#stop-it)).
+Before starting another bridge for the same file, check the one you already have
+(`tracelight web ctl --port N state` names its file) and reuse it.
 
 - `--port N`: default 4777, or `$TRACELIGHT_PORT`. Another page may hold 4777 already: the error
   says `port 4777 is taken` and `tracelight web ctl --port 4777 state` names that page's file. Pick
@@ -357,8 +361,12 @@ web` has no flags for these; a person sets them in the page.
 
 ## Stop it
 
-Ctrl+C in its terminal, or `kill` the PID you kept; kill the headless browser too. Leave it
-running only when the person is still using it, and tell them the URL and port.
+A bridge you started is yours to stop when the task is done: Ctrl+C in its terminal, or `kill PID`
+with the pid its startup line printed (SIGTERM closes its runners too), and the headless browser as
+well. When the person may still want the page, ask rather than decide, and name the URL, port and
+PID either way. If you lost a pid, `ps -axo pid,lstart,command | grep -E 'web/server.js|tracelight.mjs web'`
+lists every bridge with its start time and file, and `lsof -a -p PID -iTCP -sTCP:LISTEN` gives its
+port. Stop only the ones you started.
 
 Notes accept a known source `--file`, positive `--line`, and stable `--id` for replacement. `--kind prediction` labels a prediction separately from an explanation. `tracelight_values` accepts `mode`, `names`, `file`, and `line`; it selects existing locals without evaluation or source edits. Replies include the observed run, step, frame and source location. Values refresh on stepping and vanish on resume. Notes remain separate from runtime observations.
 

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Library source · Tracelight</title>
+<script>
+window.__tracelight = { workerUri: new URL('/webview/editor.worker.js', location.href).href, tsWorkerUri: new URL('/webview/ts.worker.js', location.href).href };
+</script>
+<link rel="icon" href="/web/logo.png" />
+<link rel="stylesheet" href="/web/source.css" />
+</head>
+<body>
+<header class="pkw-bar"><span class="pkw-brand">Tracelight</span><span id="source-path" class="pkw-file">Library source</span><span>Read only</span></header>
+<p id="source-error" role="alert" hidden></p>
+<main id="source-editor" aria-label="Library source" style="flex:1;min-height:0"></main>
+<script type="module" src="/web/source.js"></script>
+</body>
+</html>

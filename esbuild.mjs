@@ -49,7 +49,7 @@ const webServer = {
 
 const webPage = {
   ...webview,
-  entryPoints: { app: 'web/main.tsx' },
+  entryPoints: { app: 'web/main.tsx', source: 'web/source.ts' },
   outdir: 'dist/web',
   // the walkthrough and exceptions builders call node:path on the runtime's paths
   plugins: [{ name: 'path-shim', setup: (b) => b.onResolve({ filter: /^node:path$/ }, () => ({ path: new URL('web/pathShim.ts', import.meta.url).pathname })) }],
@@ -87,6 +87,7 @@ copyTourPrompt('dist');
 copyCodicons('dist');
 mkdirSync('dist/web', { recursive: true });
 cpSync('web/index.html', 'dist/web/index.html');
+cpSync('web/source.html', 'dist/web/source.html');
 cpSync('media/logo.png', 'dist/web/logo.png');
 // The web scratchpad compiles copied TypeScript at runtime.
 for (const dependency of ['typescript', 'esbuild', '@esbuild']) {

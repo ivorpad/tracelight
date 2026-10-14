@@ -177,6 +177,7 @@ export class CodePane implements CodeView {
   private lastRender: CodeDecorations | undefined;
   /** a click in the glyph margin or on a line number: toggle the live debugger's breakpoint there */
   onNavigate: (path: string, line: number) => void = () => {};
+  onDefinitionNavigate?: (path: string, line: number, column: number) => void;
   onGutterClick: (path: string, line: number) => void = () => {};
   /** a made-up document's row (the Code Story, the profile): text selected on it, or Ctrl/Cmd+click */
   onLinePick: (path: string, line: number, how: 'select' | 'open') => void = () => {};
@@ -243,6 +244,10 @@ export class CodePane implements CodeView {
       if (_source !== this.editor || resource.scheme !== 'file') return false;
       const line = selection ? 'startLineNumber' in selection ? selection.startLineNumber : selection.lineNumber : 1;
       const column = selection ? 'startColumn' in selection ? selection.startColumn : selection.column : 1;
+      if (this.onDefinitionNavigate) {
+        this.onDefinitionNavigate(resource.fsPath, line, column);
+        return true;
+      }
       this.pendingNavigation = { path: resource.fsPath, line, column };
       this.onNavigate(resource.fsPath, line);
       this.applyNavigation();
@@ -482,9 +487,13 @@ export class CodePane implements CodeView {
     const line = n.line;
     // Monaco positions and shows/hides the zone's own node, so the bubble is a child of it
     const node = document.createElement('div');
+    // The source's view-lines layer otherwise covers the note and catches its input.
+    node.style.zIndex = '5';
     const bubble = document.createElement('div');
     bubble.className = 'pkw-narration';
-    this.sizeNarration(bubble);
+    // Keep native scrolling, scrollbar dragging and keyboard navigation inside the note.
+    // Monaco otherwise handles these events as interactions with the source editor.
+    for (const event of ['pointerdown', 'mousedown', 'mouseup', 'click', 'keydown', 'wheel']) bubble.addEventListener(event, e => e.stopPropagation());
     node.appendChild(bubble);
     const icon = document.createElement('i');
     icon.className = 'codicon codicon-comment-discussion';
@@ -498,6 +507,7 @@ export class CodePane implements CodeView {
     text.append(label, document.createTextNode(n.text));
     text.setAttribute('role', 'note');
     bubble.append(icon, text);
+    this.sizeNarration(bubble);
     let height = 0;
     let id = '';
     const viewZone: monaco.editor.IViewZone = { afterLineNumber: line, heightInPx: 1, domNode: node };

@@ -1,6 +1,7 @@
 /* VS Code's webview theme variables, approximated (Dark Modern, and Light Modern under body.light): the panel styles itself with them. Copied from webview/dev.html. */
 /* Dark Modern approximation of the variables VS Code injects into webviews */
 :root {
+  color-scheme: dark;
   --vscode-font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", system-ui, "Ubuntu", "Droid Sans", sans-serif;
   --vscode-font-size: 13px;
   --vscode-editor-font-family: "SF Mono", Menlo, Monaco, "Courier New", monospace;
@@ -31,6 +32,10 @@
   --vscode-widget-border: #313131;
   --vscode-checkbox-background: #313131;
   --vscode-checkbox-border: #3c3c3c;
+  --vscode-input-background: #313131;
+  --vscode-input-foreground: #cccccc;
+  --vscode-input-border: #3c3c3c;
+  --vscode-input-placeholderForeground: #989898;
   --vscode-dropdown-background: #313131;
   --vscode-dropdown-border: #3c3c3c;
   --vscode-dropdown-foreground: #cccccc;
@@ -50,6 +55,7 @@
   --vscode-debugTokenExpression-error: #f48771;
 }
 body.light {
+  color-scheme: light;
   --vscode-debugTokenExpression-value: #606060;
   --vscode-foreground: #3b3b3b;
   --vscode-descriptionForeground: #717171;
@@ -71,6 +77,10 @@ body.light {
   --vscode-menu-selectionBackground: #005fb8;
   --vscode-checkbox-background: #f8f8f8;
   --vscode-checkbox-border: #cecece;
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #3b3b3b;
+  --vscode-input-border: #cecece;
+  --vscode-input-placeholderForeground: #767676;
   --vscode-dropdown-background: #ffffff;
   --vscode-dropdown-border: #cecece;
   --vscode-dropdown-foreground: #3b3b3b;
