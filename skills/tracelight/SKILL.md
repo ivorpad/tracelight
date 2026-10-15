@@ -38,7 +38,9 @@ waits ([explain.md](references/explain.md#when-the-learner-steps-by-hand)). A sc
 experiment is yours to prepare and repair before you teach from it, in one `experiment` call with
 labelled mocks, and its result shows what copied code computes, not how the application wires it
 ([scratchpad.md](references/scratchpad.md#prepare-before-teaching)). Ask the person no quiz or
-prediction questions unless they ask for them.
+prediction questions unless they ask for them. A scratchpad lesson is the exception: each stage
+states one prediction question, runs on the person's word and is never graded
+([scratchpad-lessons.md](references/scratchpad-lessons.md#predictions-without-a-quiz)).
 
 ## Pick the mode
 
@@ -84,6 +86,7 @@ Jobs that are not modes, and where each lives:
 | where the time goes | `ask` | [ask.md, "Where the time goes"](references/ask.md#where-the-time-goes) |
 | teach with narration bubbles in a browser, or debug without touching VS Code | `explain`, `debug` | [references/browser.md](references/browser.md) |
 | experiment with a function and copied paused inputs in the browser scratchpad | `explain`, `debug` | [references/scratchpad.md](references/scratchpad.md) |
+| teach a mechanism by rebuilding it in staged scratchpad experiments, then mapping it onto the original | `explain` | [references/scratchpad-lessons.md](references/scratchpad-lessons.md) |
 
 ## The three surfaces and the two products
 

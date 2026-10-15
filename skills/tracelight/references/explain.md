@@ -5,13 +5,14 @@ answers a call, why a value is what it is, what happens after a request returns.
 program's own execution, reached through its real entry point or one of its tests, and stop where
 the answer is visible. Reading source chooses the stops. The run establishes what happened. Live
 exploration needs no recording first, guided teaching is optional, and quizzes or prediction
-questions happen only when the learner asks for them. This mode does not replace `ask`, `debug`
-or `show`.
+questions happen only when the learner asks for them, or as the optional per-stage prediction of
+a scratchpad lesson. This mode does not replace `ask`, `debug` or `show`.
 
 The controls live in the surface references: [debug.md](debug.md) and
 [live-debugger.md](live-debugger.md) for VS Code, [browser.md](browser.md) for the page,
 [scratchpad.md](scratchpad.md) for copied-function experiments and [ask.md](ask.md) for reading a
-recording. [learning-patterns.md](learning-patterns.md) works five investigations (actual
+recording. [scratchpad-lessons.md](scratchpad-lessons.md) rebuilds a mechanism in staged
+scratchpad experiments. [learning-patterns.md](learning-patterns.md) works five investigations (actual
 implementation, value provenance, decision and state ownership, async handoff, contrast) on a
 small service. Use the one the current question needs.
 [example-agent-harness.md](example-agent-harness.md) is an optional example for LLM agent
@@ -40,8 +41,20 @@ The first reply leads to a usable pause. A broad request ("explain checkout") st
 path you choose: a representative input through the real entry, not an architecture summary or
 "where would you like to start?". Show the short plan, launch or reuse the session, and check the
 actual paused location and visible source before handing back. If setup fails, name the blocker
-and the next action instead of claiming readiness. A plan alone is the deliverable only when the
+and the next action instead of claiming readiness. A debug run that ends without pausing is a
+setup failure, not a handoff: read its `output` and `exitCode`, find why the stop's line did not
+run (an entry that only exports functions, a guard such as `if (import.meta.main)` on a runtime
+older than this checkout, an earlier exit or exception), fix the stop or the entry and start
+again before replying. Prefer a first stop before the program's first network call or write, so
+starting has no side effects. A plan alone is the deliverable only when the
 learner asked to stop at a plan.
+
+When the question is how a transformation works (what state outlives a call, what a delimiter
+or decoder retains, what completion settles) and the learner wants to build the model rather
+than watch it, teach by reconstruction ([scratchpad-lessons.md](scratchpad-lessons.md)). Its
+first reply leads to the first stage's executed result instead of a pause, and it ends in the
+original code paused or recorded. Which implementation runs, who wires it and when async work
+fires start from the real run, since a reconstruction cannot show them.
 
 Use the real entry point or test. `examples/js/checkout` starts from `main.ts --country de`, and
 its `checkout.test.ts` is a program too: `tracelight debug checkout.test.ts --at placeOrder` pauses
@@ -115,6 +128,7 @@ Every claim rests on one kind of evidence, and each kind supports different clai
 | a value after a step | what that statement did this time | what other inputs would do |
 | a recorded step | what happened at that step of that recording | the live program now, or another run's step numbers |
 | a scratchpad or mocked run | what the copied code computes from those inputs and labelled fixtures | that the application calls it that way, injects those dependencies or uses its result |
+| a scratchpad lesson stage | what the reconstruction computes for that input | that the original does the same: map it onto a pause, step or recording of the original |
 | a prediction | what you expect from the source, said as "I expect" | anything, until a run shows it |
 | an unavailable or capped value | that the runtime did not capture it (`unavailable`, `…(+N chars)`) | the missing part |
 | a branch that did not run | that this run took the other arm | how the other arm behaves |

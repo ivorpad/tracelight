@@ -2,7 +2,7 @@
 
 Use the browser scratchpad to experiment with a function and copied inputs while the live
 program stays paused. It opens beside the source in a right side panel. Edits run in a separate
-worker; they do not step, evaluate in, or mutate the live debugger's frame.
+process; they do not step, evaluate in, or mutate the live debugger's frame.
 
 Give the experiment one question. Establish a baseline with the copied inputs, change one input
 or rule, then compare the visible result with the baseline. Label mock fixtures and keep the
@@ -14,6 +14,9 @@ It does not show that the application calls the function that way, injects those
 handles its result like that. A second real run of the entry point with one changed condition
 does ([learning-patterns.md](learning-patterns.md#contrast)), so use the scratchpad next to it,
 not instead of it, and label its results as scratchpad results.
+
+To teach how code behaves by rebuilding it in small staged experiments, without a live pause,
+follow [scratchpad-lessons.md](scratchpad-lessons.md). This file covers the tool those lessons use.
 
 ## Open the current function
 
@@ -47,7 +50,9 @@ Inputs and mocks are whole JSON objects, not patches. Omitted fields keep their 
 }
 ```
 
-The experiment reply awaits the worker; read its `status`, `result.values`, `result.output`,
+Every control reply has `diagnostics` from the TypeScript worker for the code it returns, and
+`ready: true` only when that code has no errors and nothing failed or waits for preparation.
+The experiment reply awaits the scratch process; read its `status`, `result.values`, `result.output`,
 `result.error`, `result.applicationErrors`, `result.missingMocks` and `result.caps`. `state` also
 returns the editor code, inputs/mocks and their raw text (including invalid manual JSON), fixture
 labels, revision and captured provenance. `provenance.capturedInputs` preserves the original
@@ -58,7 +63,7 @@ run; inspect it again after the scheduled/running state, or use `run` for a comp
 The bridge accepts the same typed command at `/api/command`. CLI equivalents are
 `ctl scratchpad state|run|restore` and `ctl scratchpad update --data /absolute/experiment.json`.
 The data file holds the same update fields. `open` accepts `--line`. All controls use the real
-Monaco models and the same worker as manual Run. No scratch operation advances live execution.
+Monaco models and the same scratch process as manual Run. No scratch operation advances live execution.
 
 Prepare the experiment yourself. Local helpers and imports resolve automatically. Try the
 smallest expression that answers the question before rerunning a full loop. An unrelated
@@ -68,7 +73,9 @@ boundary, use the returned exact `missingMocks` path and an explicit labelled fi
 rerun the complete experiment. Do not ask the learner to fill the mock editor. Never guess uncaptured
 inputs or describe a provider/model fixture as a real response. Check runtime errors and
 application error fields, confirm visible values, then explain one concrete input-to-result
-transition. Do not quiz the learner unless they ask.
+transition. Do not quiz the learner unless they ask. A scratchpad lesson, which rebuilds the
+behaviour stage by stage, states one prediction question per stage instead
+([scratchpad-lessons.md](scratchpad-lessons.md)).
 
 The **Scratchpad** header button opens the pane. **Add function** copies the function at the
 main code cursor, and the main editor context menu also offers **Add function to scratchpad**.
@@ -113,9 +120,10 @@ After preparation or an edit, verify the actual code, the function and pause the
 came from, readable indentation in both actual text and Monaco, completed visible output and
 runtime/application error fields before teaching. Repair and rerun until the result supports
 the lesson, or state the concrete remaining limit. Never narrate an unexecuted result or leave
-a known error for the learner to discover. A worker success alone does not establish application success.
+a known error for the learner to discover. A completed scratch run alone does not establish application success.
 Confirm that the live pause has not moved. Do not ask the learner questions or give quizzes
-unless they explicitly request them.
+unless they explicitly request them or the experiment is a stage of a scratchpad lesson
+([scratchpad-lessons.md](scratchpad-lessons.md#predictions-without-a-quiz)).
 
 Receiver-dependent bare copies report `status: "needsPreparation"` and
 `preparation.requiresReceiver: true`; automatic execution waits for replacement. Explicit Run
@@ -191,8 +199,9 @@ itself reports no error. Inspect relevant error fields before calling the experi
 Referenced declarations and imports resolve relative to the original source file. Edited
 declarations override the originals. The dependency collector includes required local helpers
 without running unrelated statements from the original module. Imported modules can execute
-their initialization inside the scratch worker. Node built-in imports are rejected.
-This is not a complete Node or browser environment.
+their initialization inside the scratch process. Node and Bun built-in modules are the selected
+executable's own, and filesystem and process APIs have real effects
+([Runtime limits and failures](#runtime-limits-and-failures)).
 
 Captured functions are unavailable data until explicitly mocked. A fixture key is the dotted
 path of the copied function. The fixture supplies its return value; it is not executable code.
@@ -225,19 +234,22 @@ headers, status customization and arbitrary network clients are not implemented 
 
 ## Runtime limits and failures
 
-The bootstrap supplies `TextEncoder`, `TextDecoder`, `URL`, `URLSearchParams`, `structuredClone`
-and `performance.now()`/`timeOrigin`, alongside the VM's JavaScript built-ins. These APIs are
-available before imported dependencies initialize. Cloning handles common collections, typed
-buffers and cycles, but does not implement every platform object's cloning or transfer semantics.
-Do not claim that all browser or Node APIs are available.
+Each run is a separate native process of the lesson's selected Node or Bun executable, so
+globals such as `TextDecoder`, Streams, timers and `Buffer` are that executable's own, with its
+version's behaviour. It starts in the source file's directory: relative paths, filesystem writes
+and subprocesses are real. It inherits no credentials. Network access is denied by macOS
+`sandbox-exec` except the `fetch` boundary, which needs an `http:URL` fixture, and other hosts
+refuse to run the scratchpad. `GET /api/scratchpad/environment` lists what the executable
+provides and where the editor's declarations differ.
+Returned values and logs are cloned for display, which does not preserve every platform object.
 
 Copied values have capture limits. Functions, missing fields, capped strings and incomplete
 arrays retain explicit unavailable markers. Never replace those markers with guessed data.
 JSON edits cannot reconstruct closures or class instances. Method copies can still need an
 explicit receiver or other uncaptured context.
 
-The worker has a 64 MB heap limit, synchronous execution timeouts and a three-second overall
-limit. Results cap captured declarations at 200 and console entries at 100. Function bodies
+A run lasts at most three seconds, after which its process group is killed. Results cap captured
+declarations at 200 and console entries at 100, and raw output and the result have size limits. Function bodies
 and input edits auto-run, so keep expensive experiments small. The 150 ms debounce is not a
 promise that compilation and execution finish within 150 ms.
 
