@@ -42,9 +42,12 @@ tracelight mcp service uninstall
 macOS or a systemd user unit (`~/.config/systemd/user/tracelight-mcp.service`) on Linux, starts it,
 waits until `http://127.0.0.1:PORT/` answers and prints the client lines. It runs the `tracelight`
 command the extension keeps in `~/.local/bin` with `--restart-on-change` on that file: an extension
-update rewrites it, the server lets its running calls finish (60 s at most) and exits, and launchd
+update rewrites it, the server lets its running tool calls finish (60 s at most; open `GET`
+streams do not hold it) and exits, and launchd
 or systemd starts the new version within 5 s. Clients then get 404 on their old session and
-initialize again. Its log is `~/.tracelight/mcp-http.log`. `GET /` names the running version. The port is 4787 unless `--port` or `TRACELIGHT_MCP_PORT` says
+initialize again. Its log is `~/.tracelight/mcp-http.log`. `GET /` names the running version.
+Install refuses while `~/.local/bin/tracelight` runs another version than the one installing:
+reload a VS Code window so the extension rewrites it first. The port is 4787 unless `--port` or `TRACELIGHT_MCP_PORT` says
 otherwise (the browser page keeps 4777). A JSON client config is
 `{"mcpServers": {"tracelight": {"type": "http", "url": "http://127.0.0.1:4787/mcp"}}}`.
 

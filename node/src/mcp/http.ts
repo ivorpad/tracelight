@@ -211,12 +211,14 @@ export class McpHttpServer {
     return null;
   }
 
-  /** requests being answered now; a restart waits for none */
+  /** POSTs being answered now (tool calls); a restart waits for none. Open GET streams do not count. */
   active = 0;
 
   private async onRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    this.active++;
-    res.once('close', () => this.active--);
+    if (req.method === 'POST') {
+      this.active++;
+      res.once('close', () => this.active--);
+    }
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
       const refused = this.refuse(req);

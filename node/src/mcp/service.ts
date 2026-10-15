@@ -181,6 +181,14 @@ export async function cmdService(args: string[], out: (s: string) => void = (s) 
     return 0;
   }
 
+  if (existsSync(p.shim)) {
+    // launchd would restart an older command forever, and one without `mcp --http` never listens
+    const v = run(p.shim, ['version']);
+    const shimVersion = /\b(\d+\.\d+\.\d+)\b/.exec(v.out)?.[1];
+    if (!v.ok || shimVersion !== RUNTIME_VERSION) {
+      throw new Error(`${p.shim} runs ${shimVersion ? `${NAME} ${shimVersion}` : 'something that does not answer `version`'}, not this ${RUNTIME_VERSION}: reload a VS Code window (or open a new one) so the extension rewrites it, then install again`);
+    }
+  }
   const command = serviceCommand(opts, p);
   mkdirSync(dirname(file), { recursive: true });
   mkdirSync(dirname(p.log), { recursive: true });
