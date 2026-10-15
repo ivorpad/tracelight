@@ -288,3 +288,49 @@ test('debug status waits for a pause the person causes, and gives up after wait_
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('the service runs the extension\'s command when it exists, and its launchd and systemd files start it at login', async () => {
+  const { plist, serviceCommand, servicePaths, systemdUnit, parseServiceArgs } = await import('../src/mcp/service.ts');
+  const p = servicePaths('/Users/me');
+  assert.equal(p.plist, '/Users/me/Library/LaunchAgents/dev.tracelight.mcp.plist');
+  const viaShim = serviceCommand({ port: 4787, host: '127.0.0.1' }, p, true);
+  assert.deepEqual(viaShim, ['/Users/me/.local/bin/tracelight', 'mcp', '--http', '--port', '4787', '--restart-on-change', '/Users/me/.local/bin/tracelight']);
+  const direct = serviceCommand({ port: 5000, host: '0.0.0.0', token: 't&<' }, p, false);
+  assert.equal(direct[0], process.execPath);
+  assert.match(direct[1]!, /bin\/tracelight\.mjs$/);
+  assert.deepEqual(direct.slice(2, 9), ['mcp', '--http', '--port', '5000', '--host', '0.0.0.0', '--token']);
+  assert.equal(direct.at(-1), direct[1]);
+  const xml = plist(direct, p, '/usr/bin');
+  assert.match(xml, /<string>t&amp;&lt;<\/string>/);
+  assert.match(xml, /<key>KeepAlive<\/key><true\/>/);
+  assert.match(xml, /<key>RunAtLoad<\/key><true\/>/);
+  const unit = systemdUnit(viaShim, p, '/usr/bin');
+  assert.match(unit, /^ExecStart=\/Users\/me\/\.local\/bin\/tracelight mcp --http --port 4787 --restart-on-change/m);
+  assert.match(unit, /^Restart=always$/m);
+  assert.deepEqual(parseServiceArgs(['install', '--port', '4800']).opts.port, 4800);
+  assert.throws(() => parseServiceArgs(['install', '--host', '0.0.0.0']), /needs --token/);
+  assert.throws(() => parseServiceArgs(['reinstall']), /unknown service action/);
+});
+
+test('--restart-on-change ends the server once the file changes and no request is in flight', async () => {
+  const { watchForUpdate } = await import('../src/mcp/http.ts');
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'tl-mcp-watch-'));
+  const file = join(dir, 'tracelight');
+  writeFileSync(file, '#!/bin/sh\n# 0.5.1\n');
+  const server = { active: 1 } as unknown as McpHttpServer;
+  let ended = 0;
+  const timer = watchForUpdate(file, server, () => ended++, 20);
+  try {
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(ended, 0, 'unchanged');
+    writeFileSync(file, '#!/bin/sh\n# 0.6.0\n');
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(ended, 0, 'a request is still being answered');
+    (server as any).active = 0;
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(ended, 1);
+  } finally {
+    clearInterval(timer);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { EventEmitter } from 'node:events';
-import type { Completions, CoverageEvent, ErrorEvent, HttpExchangeEvent, HttpMode, LocalsEvent, LogEvent, OutputEvent, Range4, RunEvent, RunFinishedEvent, RunMode as ProtocolRunMode, StatementBinding, TimeEvent, WatchEvent } from '../shared/protocol';
+import type { Completions, CoverageEvent, ErrorEvent, HttpExchangeEvent, HttpMode, LocalsEvent, LocalsScope, LogEvent, OutputEvent, Range4, RunEvent, RunFinishedEvent, RunMode as ProtocolRunMode, StatementBinding, TimeEvent, WatchEvent } from '../shared/protocol';
 import { decodeSteps } from '../shared/protocol';
 import { RunnerClient } from '../runtime/runnerClient';
 import { runtimeLanguage, jsRuntimeEntry } from '../runtime/language';
@@ -570,7 +570,7 @@ export class Session extends EventEmitter<SessionEvents> {
     return this.debugCtl.setExceptions(mode);
   }
 
-  debugLocals(opts?: { frameId?: number; namesOnly?: boolean; names?: string[] }): Promise<LocalVar[]> {
+  debugLocals(opts?: { frameId?: number; namesOnly?: boolean; names?: string[]; scope?: LocalsScope }): Promise<LocalVar[]> {
     return this.debugCtl.locals(opts);
   }
 

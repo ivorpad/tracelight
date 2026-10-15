@@ -275,7 +275,7 @@ export function wordsDebug(a: Args): string[] {
   opt(words, a, 'json', '--json');
   opt(words, a, 'session', '--session');
   if (action === 'start') {
-    for (const flag of ['cwd', 'node', 'record_from']) opt(words, a, flag, '--' + flag.replace('_', '-'));
+    for (const flag of ['cwd', 'node', 'record_from', 'configuration', 'test']) opt(words, a, flag, '--' + flag.replace('_', '-'));
     for (const flag of ['record', 'library_code', 'stop_on_entry', 'no_focus']) opt(words, a, flag, '--' + flag.replace('_', '-'));
     for (const [k, v] of Object.entries(a.env ?? {})) words.push(`--env=${k}=${v}`);
     for (const at of strings(a.at)) words.push(`--at=${at}`);
@@ -311,6 +311,8 @@ export function wordsDebug(a: Args): string[] {
     if (a.names_only !== undefined && typeof a.names_only !== 'boolean') throw new ToolError('names_only must be a boolean');
     if (a.names !== undefined && (!Array.isArray(a.names) || !a.names.length || a.names.length > 100 || a.names.some((v: unknown) => typeof v !== 'string' || !v.trim()))) throw new ToolError('names must contain 1 to 100 nonempty binding names');
     opt(words, a, 'names_only', '--names-only');
+    if (a.scope !== undefined) oneOf(String(a.scope), ['local', 'global', 'all'], 'scope');
+    opt(words, a, 'scope', '--scope');
     for (const name of strings(a.names)) words.push(`--name=${name}`);
   }
   if (action === 'exec') {
@@ -441,7 +443,7 @@ export async function callRun(a: Args): Promise<[string, boolean]> {
     recordLocals: !a.no_locals, http,
     libraryCode: !!a.library_code, exclude: strings(a.exclude), only: strings(a.only), plugins: strings(a.plugins),
     mode, maxValueChars: empty(a.max_value_chars) ? undefined : int(a.max_value_chars), keep: !!a.keep,
-    ...(cwd ? { cwd } : {}), ...(empty(a.node) ? {} : { node: String(a.node) }),
+    ...(cwd ? { cwd } : {}), ...(empty(a.node) ? {} : { node: String(a.node) }), ...(empty(a.test) ? {} : { test: String(a.test) }),
   });
   const lines = [`${String(meta.executable).includes('bun') ? 'bun' : 'node'} ${meta.node} (${meta.executable}), ${NAME} ${RUNTIME_VERSION}`];
   const errors = events.filter((e) => e.type === 'error' && !e.handled);

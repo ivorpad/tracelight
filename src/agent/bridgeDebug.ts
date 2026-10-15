@@ -19,7 +19,7 @@ import { clampCount, continueTo, continueUntil, execReply, stepCount, stepCountE
 import { currentFunctionBreakpoints, currentSourceBreakpoints } from '../features/debugBreakpoints';
 import { redact } from '../util/redact';
 import { BridgeError, int, sliceOptions, type Request } from './bridgeSupport';
-import { applyWatchRequest, breakpointReply, displayWatchItems, exceptionMode, localsReply, nodeText, outputTail, parseTo, pathContext, pausedReply } from './bridgeDebugShapes';
+import { applyWatchRequest, breakpointReply, displayWatchItems, exceptionMode, localsReply, localsScope, nodeText, outputTail, parseTo, pathContext, pausedReply } from './bridgeDebugShapes';
 import { applyBreakpointRequest } from './bridgeDebugReply';
 import { preRecordingSlice, recordHere } from './bridgeRecordFrom';
 
@@ -30,7 +30,7 @@ export { entryPause };
 export const STOP_TIMEOUT_MS = 600_000;
 
 /** The reply shapes, split out so this file stays about the handlers (bridgeDebugShapes.ts). */
-export { OUTPUT_TAIL, applyWatchRequest, breakpointReply, displayFile, displayWatchItems, exceptionMode, localsReply, nextWatchId, nodeText, outputTail, parseBreakItems, pathContext, pausedReply, resolveFile } from './bridgeDebugShapes';
+export { OUTPUT_TAIL, applyWatchRequest, breakpointReply, displayFile, displayWatchItems, exceptionMode, localsReply, localsScope, nextWatchId, nodeText, outputTail, parseBreakItems, pathContext, pausedReply, resolveFile } from './bridgeDebugShapes';
 export type { BreakItem, PathContext } from './bridgeDebugShapes';
 
 export function finishedReply(session: Session): Record<string, unknown> {
@@ -255,7 +255,7 @@ export class BridgeDebug {
     if (served) return served;
     this.requirePaused(session, 'list the locals');
     return { locals: localsReply(await session.debugLocals({ frameId: typeof req.frameId === 'number' ? req.frameId : undefined,
-      namesOnly: req.namesOnly === true, names: Array.isArray(req.names) ? req.names.map(String) : undefined }), !!req.valueBag, req.namesOnly === true) };
+      namesOnly: req.namesOnly === true, names: Array.isArray(req.names) ? req.names.map(String) : undefined, scope: localsScope(req.scope) }), !!req.valueBag, req.namesOnly === true) };
   }
 
   /**

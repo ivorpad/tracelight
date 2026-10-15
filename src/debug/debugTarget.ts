@@ -6,7 +6,7 @@
  *
  * vscode-free at runtime (`DebugSession` is a type import), so vitest can build a fake target.
  */
-import type { Completions, OutputEvent, RunFinishedEvent, ValueBag, ValueNode } from '../shared/protocol';
+import type { Completions, LocalsScope, OutputEvent, RunFinishedEvent, ValueBag, ValueNode } from '../shared/protocol';
 import type { BreakpointSpec, BreakWatchSpec, DebugBreakpointEcho, DebugState, ExceptionMode, LocalVar, PausedInfo, PausedThread, StepKind } from '../session/debugState';
 import type { LaunchConfig } from './debugSessionState';
 import type { ExecResult } from './debugExec';
@@ -78,7 +78,7 @@ export interface DebugTarget {
   debugContinue(): Promise<void>;
   debugStep(kind: StepKind): Promise<void>;
   debugPause(): Promise<void>;
-  debugLocals(opts?: { frameId?: number; namesOnly?: boolean; names?: string[] }): Promise<LocalVar[]>;
+  debugLocals(opts?: { frameId?: number; namesOnly?: boolean; names?: string[]; scope?: LocalsScope }): Promise<LocalVar[]>;
   /** side-effect-free, in the frame `frameId` names (innermost by default); undefined when it cannot answer */
   evaluate(expression: string, opts?: { frameId?: number }): Promise<{ text: string; valueBag?: ValueBag } | undefined>;
   /**

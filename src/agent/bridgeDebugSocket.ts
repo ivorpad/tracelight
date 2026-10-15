@@ -28,7 +28,7 @@ import { setting } from '../config/settings';
 import { log } from '../util/log';
 import { BridgeError, int, rm, sessionsDir, socketPathFor, sliceOptions, type Request } from './bridgeSupport';
 import { AGENT_ACCESS_SETTING } from './bridge';
-import { localsReply, outputTail, pausedReply } from './bridgeDebug';
+import { localsReply, localsScope, outputTail, pausedReply } from './bridgeDebug';
 import { breakpoints, context, execRequest, requirePaused, select, stopOrFinished, stopRunner, stopReply, waitForStop, watches } from './bridgeDebugReply';
 import { clampCount, continueTo, continueUntil, stepCount, stepCountExtras } from '../debug/debugExec';
 import { parseTo } from './bridgeDebugShapes';
@@ -394,7 +394,7 @@ export class DebugSocketServer implements vscode.Disposable {
       case 'locals':
         requirePaused(ds, 'list the locals');
         return { locals: localsReply(await ds.debugLocals({ frameId: int(req.frameId), namesOnly: req.namesOnly === true,
-          names: Array.isArray(req.names) ? req.names.map(String) : undefined }), !!req.valueBag, req.namesOnly === true), modified: ds.modified };
+          names: Array.isArray(req.names) ? req.names.map(String) : undefined, scope: localsScope(req.scope) }), !!req.valueBag, req.namesOnly === true), modified: ds.modified };
       case 'eval': {
         const expression = typeof req.expression === 'string' ? req.expression.trim() : '';
         if (!expression) throw new BridgeError('eval needs expression', 'send {expression: "name.attr"}');

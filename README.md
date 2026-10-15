@@ -302,8 +302,9 @@ recording alongside it. Reopening reads evidence without resuming execution.
 The grouped `tracelight_debug` tool covers start/stop, stepping through `tracelight_step`,
 continue/pause/restart, conditional breakpoints and logpoints, locals and expression evaluation
 through `tracelight_value`. Names-only and named-value reads operate on the requested frame's
-lexical scopes. DebugMCP's named test/launch configuration and local/global/all scope selectors
-are not exposed here. See the [MCP reference](skills/tracelight/references/mcp.md) for the mapping.
+lexical scopes, or `scope` `local`, `global` or `all`; `start` takes a `.vscode/launch.json`
+`configuration` and a `node:test` `test` name, so DebugMCP's `configurationName`, `testName` and
+`scope` all have a counterpart. See the [MCP reference](skills/tracelight/references/mcp.md) for the mapping.
 
 The measure of useful agent support is a correct diagnosis with no unsupported fix claims, fewer
 reruns and tool calls, and fewer response bytes, accounting for recording time and storage. These
@@ -312,8 +313,9 @@ a same-model experiment compares the same cases and records those costs.
 
 For Claude Code: `claude mcp add tracelight -- tracelight mcp`, or with the checkout's path,
 `claude mcp add tracelight -- node /path/to/tracelight/node/bin/tracelight.mjs mcp`. Over HTTP,
-start `tracelight mcp --http` once and add `claude mcp add --transport http tracelight
-http://127.0.0.1:4787/mcp`; it binds loopback only unless given `--token`. Saved runs
+`tracelight mcp service install` keeps `tracelight mcp --http` running at login (launchd or
+systemd, restarted on extension updates), then `claude mcp add --scope user --transport http
+tracelight http://127.0.0.1:4787/mcp`; it binds loopback only unless given `--token`. Saved runs
 need nothing else. The live tools need agent access. The arguments of each tool are in
 `skills/tracelight/references/mcp.md`.
 

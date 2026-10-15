@@ -22,10 +22,27 @@ program doing nothing. Launch the entry file itself, with no watcher.
 ```
 tracelight debug FILE [--at NAME | --at FILE:LINE]... [--stop-on-entry] [--library-code]
                       [--record | --record-from NAME|FILE:LINE] [--cwd DIR] [--env K=V]...
-                      [--node PATH] [--no-focus] [--session NAME|PATH] [--json] [--args ...]
+                      [--node PATH] [--configuration NAME] [--test NAME] [--no-focus]
+                      [--session NAME|PATH] [--json] [--args ...]
 tracelight debug --live [--stop-on-entry]       # the open session's own file
 tracelight debug api/server.ts --cwd . --env PORT=8765
+tracelight debug --configuration "Checkout DE" --cwd ~/shop --at placeOrder
+tracelight debug checkout.test.ts --test "places an order" --at placeOrder
 ```
+
+`--configuration NAME` reads that configuration from the nearest `.vscode/launch.json` above FILE,
+`--cwd` or the current directory. A `node`, `pwa-node` or `bun` launch configuration gives
+`program`, `args`, `cwd`, `env`, `envFile` and `runtimeExecutable` (a `bun` type runs under Bun);
+VS Code's `${workspaceFolder}`, `${file}`, `${env:NAME}` and the other path variables are
+substituted, and `${file}` needs FILE. Flags given on the command line win over the
+configuration, except that its `program` wins over FILE. Keys it does not apply, such as
+`runtimeArgs`, are named on the first line of the reply. An `attach` configuration, another type
+or a missing name is an error that lists the configurations.
+
+`--test NAME` runs only that `node:test` test of the file: its own name, or its full name with the
+suites before it (`"math adds"`), matched exactly as `node --test-name-pattern` does. Other tests
+are skipped and `--at` stops inside the one that runs. A Bun program is refused, since a Bun test
+file does not run as a script.
 
 A cold start brings the VS Code window to the front at the first stop (`code --goto`), because
 the CLI runs in a terminal and the editor would otherwise move behind it. `--no-focus` or
@@ -184,7 +201,7 @@ Lines that ran in other functions have nothing, because nothing kept them; that 
 tracelight continue --live [--no-wait] [--until EXPR | --to FILE:LINE] [--no-start]
 tracelight step --live --into|--over|--out [--count N] [--scope]
 tracelight pause --live [--no-wait]
-tracelight locals --live [--frame N] [--names-only] [--name NAME]...
+tracelight locals --live [--frame N] [--names-only] [--name NAME]... [--scope local|global|all]
 tracelight eval --live EXPR [--frame N]
 tracelight exec --live SOURCE [--frame N]
 tracelight break --live [FILE:LINE ...] [--when EXPR] [--log-message TEXT] [--at NAME|FILE:LINE]... [--remove FILE:LINE|NAME]...
@@ -197,6 +214,12 @@ tracelight record --live
 
 Every one takes `--session NAME|PATH` and `--json`, and none has a saved-run form: without
 `--live` (or `--session`) they refuse. `debug FILE` is the only one that needs no `--live`.
+
+`locals` lists the frame's lexical scopes by default. `--scope local` narrows it to the paused
+function's own scopes (its parameters, `let`/`const`, block and `catch` bindings), `--scope global`
+lists what the program added to the global object and the script scope (a name the global object
+had before the program ran is left out), and `--scope all` lists every scope of the chain, module
+and closures included, plus those globals.
 
 `--frame N` sends `locals`, `eval` and `exec` to a caller frame; the stop's `stack:` numbers
 them, innermost 0. `--no-start` makes `continue`, `break` and `restart` fail when no debug session

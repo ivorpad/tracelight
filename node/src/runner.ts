@@ -88,7 +88,11 @@ class Child {
     this.runner = runner;
     this.runId = runId;
     const node = childNode(request);
-    this.proc = spawn(node.exe, childArgs(CHILD, node.version, node.kind), {
+    const args = childArgs(CHILD, node.version, node.kind);
+    // `debug --test NAME` (launchConfig.ts): node:test reads its filter from the command line, and NODE_OPTIONS is cleared below
+    const pattern = request.env?.[`${ENV}TEST_NAME_PATTERN`];
+    if (typeof pattern === 'string' && pattern && node.kind === 'node') args.splice(args.length - 1, 0, `--test-name-pattern=${pattern}`);
+    this.proc = spawn(node.exe, args, {
       cwd: request.cwd || undefined,
       env: { ...process.env, ...(request.env ?? {}), NODE_OPTIONS: '', TRACELIGHT_HOST_NODE: process.execPath },
       // fd 5: the control pipe of a debug run, read by the child's debugger thread while the program is paused

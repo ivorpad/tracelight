@@ -870,3 +870,27 @@ test('a main-thread breakpoint reached while a worker thread is held pauses the 
     d.close();
   }
 });
+
+test('locals --scope: the function\'s own scopes, the globals the program added, or every scope', async () => {
+  const d = new Driver();
+  try {
+    d.start({ 'main.js': 'globalThis.config = { mode: "x" };\nconst top = 1;\nfunction inner(a) {\n  const b = a + top;\n  { const c = b * 2;\n    return c;\n  }\n}\ninner(5);\n' }, 'main.js');
+    const first = await d.paused();
+    const path = d.seen.find((m) => m.type === 'file.instrumented')!.path;
+    await d.ask({ type: 'debug', action: 'breakpoints', set: [{ path, line: 6 }] });
+    await d.ask({ type: 'debug', action: 'continue' });
+    assert.equal((await d.paused()).line, 6, JSON.stringify(first));
+    const names = async (scope?: string) => (await d.ask({ type: 'debug', action: 'locals', ...(scope ? { scope } : {}) })).locals.map((l: Msg) => l.name).sort();
+    assert.deepEqual(await names('local'), ['a', 'b', 'c']);
+    const globals = await names('global');
+    assert.ok(globals.includes('config'), globals.join(','));
+    for (const builtin of ['console', 'process', 'setTimeout', 'Array', 'top', 'a']) assert.ok(!globals.includes(builtin), builtin);
+    const all = await names('all');
+    for (const n of ['a', 'b', 'c', 'top', 'config']) assert.ok(all.includes(n), `${n} in ${all.join(',')}`);
+    for (const n of ['require', 'module', 'exports', 'console']) assert.ok(!all.includes(n), n);
+    const bad = await d.ask({ type: 'debug', action: 'locals', scope: 'nope' });
+    assert.match(JSON.stringify(bad), /scope must be local, global or all/);
+  } finally {
+    d.close();
+  }
+});

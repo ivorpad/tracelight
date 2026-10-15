@@ -39,7 +39,7 @@ tracelight run FILE [--save RUN.JSON] [--json] [--timeout MS] [--max-steps N] [-
                     [--library-code] [--exclude GLOB]... [--only GLOB]... [--plugin MODULE]...
                     [--mode normal|profile|snaps] [--max-value-chars N] [--record-locals | --no-locals]
                     [--http off|record|replay] [--keep] [--trace-context STEP --watch EXPR]...
-                    [--instrumented] [--node PATH] [-- ARGS]
+                    [--instrumented] [--node PATH] [--test NAME] [-- ARGS]
 tracelight run -h
 ```
 
@@ -84,6 +84,9 @@ shell's environment (`PORT=8765 tracelight run server.ts ...`).
   defined` at a step where the name is out of scope.
 - `--instrumented` prints the instrumented JavaScript of `FILE` instead of running it, as
   `tracelight instrument FILE` does.
+- `--test NAME` records only that `node:test` test of the file (its name, or `"suite test"`),
+  as `node --test-name-pattern` with an exact match; the runner sets it from
+  `TRACELIGHT_TEST_NAME_PATTERN`, which `debug --test` uses too. Bun runs ignore it.
 - `--node PATH` runs the program with another Node (22.15 or newer) or native Bun, else
   `$TRACELIGHT_NODE`, else the Node running the CLI. Use `--node bun` for Bun APIs such as
   `Bun.file`. A run under Node that fails the way only a Node run would (`Bun is not defined`, or a
@@ -647,7 +650,8 @@ tracelight serve
 tracelight instrument FILE [--json]
 tracelight bindings FILE
 tracelight cache [--clear] [--json]
-tracelight mcp [--http [--port N] [--host H] [--token T]]
+tracelight mcp [--http [--port N] [--host H] [--token T] [--restart-on-change PATH]]
+tracelight mcp service install|uninstall|status [--port N] [--host H] [--token T]
 tracelight version
 tracelight web FILE | tracelight web ctl ...
 ```
@@ -668,7 +672,10 @@ tracelight web FILE | tracelight web ctl ...
 - `tracelight mcp` serves the verbs as MCP tools on stdin and stdout; `--http` serves them over
   Streamable HTTP at `http://127.0.0.1:4787/mcp` (`--port`, `TRACELIGHT_MCP_PORT`), with the older
   HTTP+SSE transport on `/sse`. Another `--host` than loopback needs `--token`
-  (`TRACELIGHT_MCP_TOKEN`), sent as `Authorization: Bearer T`: [mcp.md](mcp.md#over-http).
+  (`TRACELIGHT_MCP_TOKEN`), sent as `Authorization: Bearer T`. `--restart-on-change PATH` exits
+  once PATH changes, for a service manager to start the new version. `tracelight mcp service
+  install` keeps that server running at login (launchd on macOS, systemd on Linux), `status` says
+  whether it answers, `uninstall` stops and removes it: [mcp.md](mcp.md#over-http).
 - `tracelight version` (or `--version`) prints `tracelight 0.3.0 (node 24.19.0)`: the runtime's
   version and the Node running it.
 - `tracelight web` serves the browser page and drives it: [browser.md](browser.md).

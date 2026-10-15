@@ -162,7 +162,12 @@ export interface DebugRequest {
   frameId?: number;
   namesOnly?: boolean;
   names?: string[];
+  /** with action `locals`: the function's own scopes, the program's globals, or every scope; absent means the frame's lexical scopes */
+  scope?: LocalsScope;
 }
+
+/** `locals --scope`, as DebugMCP's `scope`: `local`, `global` or `all` */
+export type LocalsScope = 'local' | 'global' | 'all';
 
 /** One completion for a watch expression (`complete` reply, DAP `completions`, the panel's dropdown). */
 export type CompletionKind = 'variable' | 'attribute' | 'function' | 'method' | 'property' | 'class' | 'module' | 'builtin' | 'keyword';

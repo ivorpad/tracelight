@@ -30,7 +30,21 @@ claude mcp add --transport http tracelight http://127.0.0.1:4787/mcp     # Claud
 
 One long-running server for every client, the way DebugMCP serves `http://localhost:3001/mcp`.
 It prints `tracelight mcp: Streamable HTTP on http://127.0.0.1:4787/mcp (legacy SSE: /sse)` to
-stderr and runs until Ctrl+C. The port is 4787 unless `--port` or `TRACELIGHT_MCP_PORT` says
+stderr and runs until Ctrl+C.
+
+```
+tracelight mcp service install [--port N]     # start it at login and keep it running
+tracelight mcp service status                 # installed? answering? which version?
+tracelight mcp service uninstall
+```
+
+`service install` writes a launchd agent (`~/Library/LaunchAgents/dev.tracelight.mcp.plist`) on
+macOS or a systemd user unit (`~/.config/systemd/user/tracelight-mcp.service`) on Linux, starts it,
+waits until `http://127.0.0.1:PORT/` answers and prints the client lines. It runs the `tracelight`
+command the extension keeps in `~/.local/bin` with `--restart-on-change` on that file: an extension
+update rewrites it, the server lets its running calls finish (60 s at most) and exits, and launchd
+or systemd starts the new version within 5 s. Clients then get 404 on their old session and
+initialize again. Its log is `~/.tracelight/mcp-http.log`. `GET /` names the running version. The port is 4787 unless `--port` or `TRACELIGHT_MCP_PORT` says
 otherwise (the browser page keeps 4777). A JSON client config is
 `{"mcpServers": {"tracelight": {"type": "http", "url": "http://127.0.0.1:4787/mcp"}}}`.
 
@@ -49,7 +63,6 @@ otherwise (the browser page keeps 4777). A JSON client config is
   binds 127.0.0.1 and ::1 only, refuses a request whose `Origin` or `Host` header is not loopback
   (403, against DNS rebinding), and will not bind another `--host` without `--token`
   (`TRACELIGHT_MCP_TOKEN`). With a token every request needs `Authorization: Bearer T`, else 401.
-  Give clients `127.0.0.1` rather than `localhost` when IPv6 is off.
 - Clients can call tools at the same time. Calls that drive the VS Code debugger or the browser
   page (`tracelight_debug`, a `live` or `session` read, `tracelight_page`, `tracelight_scratchpad`)
   run one at a time in arrival order. `pause`, `stop` and `status` skip that queue, so they can
@@ -106,6 +119,7 @@ project: pass `save` with a path in your scratch directory instead. The rest are
 | `auto_log` | `--auto-log` | log every assignment and call |
 | `node` | `--node` | the Node or Bun that runs the program (`bun` is looked up on PATH) |
 | `cwd` | `--cwd` | the program's working directory |
+| `test` | `--test` | record only this `node:test` test (its name, or `"suite test"`) |
 
 The answer is the runtime, the step count and exit code, any uncaught error with its hint, the
 step-cap warning when the run was cut, the `.cpuprofile` path of a profile run, the kept runner's
@@ -216,9 +230,12 @@ in for the CLI's `watch`, which streams until Ctrl+C.
 | `names` | `locals` | optional list of binding names whose values to read in the requested frame |
 | `source` | `exec` (required) | the statement to run in the paused frame; it changes the program's state |
 | `wait_seconds` | `status` | wait up to this many seconds (at most 600) for a pause or the end of the run |
+| `configuration` | `start` | a Node or Bun configuration of the nearest `.vscode/launch.json` above `file` or `cwd`: its program, args, cwd, env, envFile and runtime; arguments given here win ([live-debugger.md](live-debugger.md#starting)). Under the service the server's directory is your home, so give `file` or `cwd` |
+| `test` | `start` | run only this `node:test` test of the file |
+| `scope` | `locals` | `local` (the function's own scopes), `global` (what the program added to the global object), `all` (every scope plus those globals); omitted, the frame's lexical scopes |
 
-`locals` reads the requested frame's lexical scopes; there is no `scope: local|global|all`
-selector. Names-only still enumerates engine binding descriptors internally, including primitives,
+`locals` reads the requested frame's lexical scopes unless `scope` asks for `local`, `global` or
+`all`. Names-only still enumerates engine binding descriptors internally, including primitives,
 but does not serialize their values. A logpoint logs at the breakpoint site without stopping
 there; its expressions are explicit live evaluation. API logpoints belong to the runtime's
 breakpoint list and appear in its reply, rather than the editor gutter. Remove them by FILE:LINE
@@ -311,7 +328,7 @@ selectors to the tools.
 | DebugMCP operation | Tracelight MCP |
 |---|---|
 | start with file and working directory | `tracelight_debug` action `start`, `file`, `cwd`; `args`, `env`, `node` are also available |
-| start a named test or launch configuration | no `testName` or `configurationName` selector |
+| start a named test or launch configuration (`testName`, `configurationName`) | action `start` with `test` (a `node:test` name) or `configuration` (a `.vscode/launch.json` name) |
 | stop, continue, pause, restart | same actions on `tracelight_debug` |
 | step over, into, out | `tracelight_step` with `live: true` and `move` |
 | conditional breakpoint | `tracelight_debug` action `break`, `add`, `when` |
@@ -319,7 +336,7 @@ selectors to the tools.
 | remove, clear, list breakpoints | action `break` with `remove` or `clear: true`; omit changes to list |
 | list variable names | action `locals`, `names_only: true`, optional `frame` |
 | read named variable values | action `locals`, `names`, optional `frame` |
-| local/global/all scope selection | frame lexical scopes only; no equivalent selector |
+| local/global/all scope selection | action `locals` with `scope`: `local`, `global` or `all` |
 | evaluate expression | `tracelight_value` action `eval`, `expression`, optional `frame`, `live: true` |
 | debug status, optionally waiting for a pause (`waitForPauseSeconds`) | `tracelight_debug` action `status`, `wait_seconds` up to 600; on the browser page, `tracelight_page` action `wait_pause` (up to 25 s) |
 | the HTTP server at `http://localhost:3001/mcp` | `tracelight mcp --http` at `http://127.0.0.1:4787/mcp`, the same loopback and Origin rules, plus the 2024-11-05 `/sse` transport DebugMCP retired |

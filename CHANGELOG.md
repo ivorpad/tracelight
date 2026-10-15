@@ -15,6 +15,17 @@
   hit a breakpoint or step in VS Code, as DebugMCP's `get_debug_status` does. `tracelight_run` takes
   `library_code`, `exclude`, `only`, `plugins`, `mode`, `max_value_chars`, `keep`, `auto_log`, `node`
   and `cwd`; `tracelight_map` takes graph `expand`, `no_statements`, `dot` and tour `prose`, `out`.
+- `tracelight mcp service install|uninstall|status` keeps the HTTP server running at login: a
+  launchd agent on macOS, a systemd user unit on Linux. It runs the extension's `tracelight` command
+  with the new `--restart-on-change`, so an extension update restarts it on the new version once
+  its running calls finish.
+- `debug --configuration NAME` takes program, args, cwd, env, envFile and runtime from a Node or Bun
+  configuration of `.vscode/launch.json`; `debug --test NAME` and `run --test NAME` run one
+  `node:test` test; `locals --scope local|global|all` picks the function's own scopes, the globals
+  the program added, or every scope. The MCP tools take them as `configuration`, `test` and
+  `scope`, the three DebugMCP options that had no counterpart.
+- A file the page or the editor starts watching is read again 250 ms and 1 s later: on macOS a
+  directory watch can miss a write made while it starts, and that edit never reached the page.
 - The page bridge waits as long as a `waitPause` asks (up to 25 s) instead of answering "the page did
   not answer" after 10 s.
 

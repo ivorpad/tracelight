@@ -1113,12 +1113,46 @@ async function exec(req: Req): Promise<void> {
 // scope is the wrapper's (require, module, ...), never the paused function's
 const MODULE_NOISE = new Set(['exports', 'require', 'module', '__filename', '__dirname', 'arguments']);
 
+let baseGlobals: Set<string> | null = null;
+
+/**
+ * The bindings `locals --scope` asks for: `local` the paused function's own scopes (its local,
+ * block and catch scopes), `global` what the program added to the global object and script scope,
+ * `all` every scope of the chain plus those globals. Runtime and CommonJS-wrapper names stay out.
+ */
+async function scopedBindings(frame: Frame, scope: 'local' | 'global' | 'all', group: string): Promise<Binding[]> {
+  if (frame.snapshot) return scope === 'global' ? [] : frame.snapshot.map((b) => ({ ...b, shown: b.shown || scope === 'all' }));
+  const out: Binding[] = [];
+  const seen = new Set<string>();
+  const add = (name: string, value: Remote, type: string): void => {
+    // the CommonJS wrapper's parameters, as bindingsOf hides them
+    if (!value || seen.has(name) || isRuntimeName(name) || (frame.isModule || type !== 'local') && MODULE_NOISE.has(name)) return;
+    seen.add(name);
+    out.push({ name, value, shown: true });
+  };
+  for (const sc of frame.scopeChain) {
+    const t = sc.type;
+    if (!sc.object?.objectId || t === 'with' || t === 'eval' || t === 'wasm-expression-stack') continue;
+    const local = t === 'local' || t === 'block' || t === 'catch';
+    if (scope === 'local' && !local) break;
+    if (scope === 'global' && t !== 'script' && t !== 'global') continue;
+    const props = await at('Runtime.getProperties', { objectId: sc.object.objectId, ownProperties: true, objectGroup: group });
+    if (t === 'global') {
+      baseGlobals ??= new Set<string>(await main('baseGlobals'));
+      for (const p of props.result ?? []) if (!baseGlobals.has(p.name) && p.name !== 'globalThis') add(p.name, p.value, t);
+    } else for (const p of props.result ?? []) add(p.name, p.value, t);
+    if (scope === 'local' && t === 'local') break;
+  }
+  return out;
+}
+
 async function locals(frame: Frame, req: Req): Promise<{ name: string; type?: string; text: string; valueBag?: unknown }[]> {
   const out: { name: string; type?: string; text: string; valueBag?: unknown }[] = [];
   if (req.namesOnly !== undefined && typeof req.namesOnly !== 'boolean') throw new TypeError('namesOnly must be a boolean');
   if (req.names !== undefined && (!Array.isArray(req.names) || req.names.some((name: unknown) => typeof name !== 'string'))) throw new TypeError('names must be an array of strings');
+  if (req.scope !== undefined && !['local', 'global', 'all'].includes(req.scope)) throw new TypeError('scope must be local, global or all');
   const names = req.names === undefined ? null : new Set<string>(req.names);
-  for (const b of await bindingsOf(frame, GROUP)) {
+  for (const b of req.scope ? await scopedBindings(frame, req.scope, GROUP) : await bindingsOf(frame, GROUP)) {
     if (!b.shown || names && !names.has(b.name)) continue;
     const type = b.value.subtype ?? b.value.type;
     out.push(req.namesOnly ? { name: b.name, type, text: '' } : { name: b.name, type, ...(await describeAt(b.value, b.name)) });

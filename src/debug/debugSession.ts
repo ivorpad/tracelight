@@ -12,7 +12,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { EventEmitter } from 'node:events';
-import type { Completions, ErrorEvent, RunEvent, RunFinishedEvent, OutputEvent, ValueBag, ValueNode } from '../shared/protocol';
+import type { Completions, ErrorEvent, LocalsScope, RunEvent, RunFinishedEvent, OutputEvent, ValueBag, ValueNode } from '../shared/protocol';
 import { EXEC_CAPABILITY, EXEC_CAPABILITY_ERROR, RECORD_CAPABILITY, RunnerClient } from '../runtime/runnerClient';
 import { resolveNode } from '../runtime/interpreter';
 import { jsRuntimeEntry, runtimeLanguage } from '../runtime/language';
@@ -388,7 +388,7 @@ export class DebugSession extends EventEmitter<DebugSessionEvents> {
     await this.action({ action: 'pause' });
   }
 
-  async debugLocals(opts: { frameId?: number; namesOnly?: boolean; names?: string[] } = {}): Promise<LocalVar[]> {
+  async debugLocals(opts: { frameId?: number; namesOnly?: boolean; names?: string[]; scope?: LocalsScope } = {}): Promise<LocalVar[]> {
     this.requirePaused('list the locals');
     const reply = await this.request({ action: 'locals', ...opts });
     if (reply['modified'] === true) this.modified = true;
@@ -564,7 +564,7 @@ export class DebugSession extends EventEmitter<DebugSessionEvents> {
     await this.request(body);
   }
 
-  private request(body: { action: 'continue' | 'step' | 'pause' | 'breakpoints' | 'watches' | 'locals' | 'exceptions'; kind?: StepKind; set?: BreakpointSpec[] | BreakWatchSpec[]; mode?: ExceptionMode; frameId?: number; namesOnly?: boolean; names?: string[] }): Promise<Record<string, unknown>> {
+  private request(body: { action: 'continue' | 'step' | 'pause' | 'breakpoints' | 'watches' | 'locals' | 'exceptions'; kind?: StepKind; set?: BreakpointSpec[] | BreakWatchSpec[]; mode?: ExceptionMode; frameId?: number; namesOnly?: boolean; names?: string[]; scope?: LocalsScope }): Promise<Record<string, unknown>> {
     const runner = this.runner;
     if (!runner || !this.runId) return Promise.reject(new Error('the debug session has ended'));
     return runner.debug(this.runId, body);

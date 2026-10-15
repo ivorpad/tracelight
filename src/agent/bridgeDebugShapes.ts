@@ -10,7 +10,8 @@ import type { Session } from '../session/session';
 import { mergeBreakpoints, type BreakpointSpec, type BreakWatchSpec, type DebugBreakpointEcho, type ExceptionMode, type LocalVar, type PausedInfo } from '../session/debugState';
 import { parseAt } from '../debug/debugSessionState';
 import { redact, redactValueBag } from '../util/redact';
-import { int, type Request } from './bridgeSupport';
+import { BridgeError, int, type Request } from './bridgeSupport';
+import type { LocalsScope } from '../shared/protocol';
 
 /** How much of the program's output a stop reply carries: the tail, not the whole run. */
 export const OUTPUT_TAIL = 4_000;
@@ -180,6 +181,13 @@ export function outputTail(output: string, limit = OUTPUT_TAIL): { text: string;
  * `length` for a sized value) so a reader can say "a list of 2" without the whole bag. A masked
  * value keeps its name and its masked text only.
  */
+/** a request's `scope`, checked: `local`, `global`, `all`, or absent for the frame's lexical scopes */
+export function localsScope(scope: unknown): LocalsScope | undefined {
+  if (scope === undefined || scope === null) return undefined;
+  if (scope === 'local' || scope === 'global' || scope === 'all') return scope;
+  throw new BridgeError(`scope must be local, global or all, not ${JSON.stringify(scope)}`, 'omit it for the frame\'s lexical scopes');
+}
+
 export function localsReply(vars: readonly LocalVar[], valueBag: boolean, namesOnly = false): Record<string, unknown>[] {
   return vars.map((v) => {
     if (namesOnly) return { name: v.name, type: v.type ?? v.valueBag?.data?.type ?? 'unknown' };

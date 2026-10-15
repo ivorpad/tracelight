@@ -1,8 +1,12 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { definitions, localImports } from '../../web/definitions';
+
+// The first lookup loads the typescript package through vitest's module runner: about 4.4 s here
+// against 0.4 s in plain Node, so the default 5 s limit failed whenever other suites ran alongside.
+vi.setConfig({ testTimeout: 30_000 });
 
 const roots: string[] = [];
 afterEach(() => roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true })));

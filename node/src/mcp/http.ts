@@ -20,7 +20,8 @@
  */
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { NAME } from '../protocol.ts';
+import { readFileSync } from 'node:fs';
+import { NAME, RUNTIME_VERSION } from '../protocol.ts';
 import { exclusiveCall, handle, PROTOCOL_VERSIONS } from './server.ts';
 import { closePages } from './page.ts';
 
@@ -41,6 +42,8 @@ export interface HttpOptions {
   log?: (line: string) => void;
   /** how often a call with a progress token reports, in ms (default 5,000) */
   progressMs?: number;
+  /** exit once this file changes (the extension rewrote its `tracelight` command), for launchd or systemd to start the new version */
+  restartOnChange?: string;
 }
 
 interface Session {
@@ -208,7 +211,12 @@ export class McpHttpServer {
     return null;
   }
 
+  /** requests being answered now; a restart waits for none */
+  active = 0;
+
   private async onRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    this.active++;
+    res.once('close', () => this.active--);
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
       const refused = this.refuse(req);
@@ -225,7 +233,7 @@ export class McpHttpServer {
       if (url.pathname === '/sse' && req.method === 'GET') return this.legacyStream(res);
       if (url.pathname === '/messages' && req.method === 'POST') return await this.legacyPost(req, res, url);
       if (url.pathname === '/' && req.method === 'GET') {
-        return sendJson(res, 200, { name: NAME, transport: 'streamable-http', endpoint: '/mcp', legacySse: '/sse', protocolVersions: PROTOCOL_VERSIONS });
+        return sendJson(res, 200, { name: NAME, version: RUNTIME_VERSION, transport: 'streamable-http', endpoint: '/mcp', legacySse: '/sse', protocolVersions: PROTOCOL_VERSIONS });
       }
       return sendJson(res, 404, rpcError(null, -32000, `no ${url.pathname} here: the MCP endpoint is /mcp`));
     } catch (e) {
@@ -378,7 +386,8 @@ export function parseHttpArgs(args: string[], env: NodeJS.ProcessEnv = process.e
     else if (a === '--port') opts.port = Number(value());
     else if (a === '--host') opts.host = value();
     else if (a === '--token') opts.token = value();
-    else throw new Error(`unknown option ${a}: ${NAME} mcp [--http [--port N] [--host H] [--token T]]`);
+    else if (a === '--restart-on-change') opts.restartOnChange = value();
+    else throw new Error(`unknown option ${a}: ${NAME} mcp [--http [--port N] [--host H] [--token T] [--restart-on-change PATH]]`);
   }
   if (!Number.isInteger(opts.port) || opts.port < 0 || opts.port > 65535) throw new Error(`--port must be 0 to 65535, got ${opts.port}`);
   return opts;
@@ -404,5 +413,31 @@ export async function serveHttp(args: string[]): Promise<number> {
     };
     process.once('SIGINT', end);
     process.once('SIGTERM', end);
+    if (opts.restartOnChange) watchForUpdate(opts.restartOnChange, server, end);
   });
+}
+
+/** what a file holds now, or null when it is gone */
+function snapshot(path: string): string | null {
+  try { return readFileSync(path, 'utf8'); } catch { return null; }
+}
+
+/**
+ * `--restart-on-change PATH`: every 15 s, compare PATH with what it held at start. Once it differs
+ * (an extension update rewrote the `tracelight` command, or removed the runtime it named), wait
+ * until no request is being answered, at most 60 s, and end; the service manager starts the new one.
+ */
+export function watchForUpdate(path: string, server: McpHttpServer, end: () => void, everyMs = 15_000): NodeJS.Timeout {
+  const first = snapshot(path);
+  let changedAt = 0;
+  const timer = setInterval(() => {
+    if (!changedAt && snapshot(path) === first) return;
+    changedAt ||= Date.now();
+    if (server.active > 0 && Date.now() - changedAt < 60_000) return;
+    clearInterval(timer);
+    process.stderr.write(`${NAME} mcp: ${path} changed; exiting for the service to start the new version\n`);
+    end();
+  }, everyMs);
+  timer.unref();
+  return timer;
 }

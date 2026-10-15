@@ -14,6 +14,8 @@ import { remember } from '../relaunch.ts';
 import { renderStop } from '../render.ts';
 import { execError, renderBreak, renderDebugExec, renderLocals, renderRecord, renderStopped, renderWatches } from '../render_debug.ts';
 import { AgentError, type RunSource } from '../source.ts';
+import { launchConfiguration, testNamePattern } from '../launchConfig.ts';
+import { dirname, resolve } from 'node:path';
 
 type Msg = Record<string, any>;
 
@@ -37,7 +39,7 @@ function noStartArg(p: ArgumentParser): void {
 
 /** `debug FILE` needs no flag: a file is always live */
 function isLiveDebug(args: Args): boolean {
-  if (args.command === 'debug' && args.program) return true;
+  if (args.command === 'debug' && (args.program || args.configuration)) return true;
   return !!(args.live || args.session);
 }
 
@@ -53,8 +55,28 @@ function parseEnv(items: unknown[]): Record<string, string> {
 }
 
 
+/**
+ * `debug --configuration NAME`: fill what the command line left out from that launch.json
+ * configuration. Its program wins over FILE (FILE still resolves `${file}`); the other flags given
+ * on the command line win over the configuration's.
+ */
+export function applyConfiguration(args: Args): void {
+  if (!args.configuration || args._configuration) return;
+  const from = args.program ? dirname(resolve(args.program)) : args.cwd ? resolve(args.cwd) : process.cwd();
+  const c = launchConfiguration(String(args.configuration), from, args.program ?? null);
+  args.program = c.program ?? args.program ?? null;
+  if (!args.program) throw new AgentError(`configuration ${JSON.stringify(c.name)} names no program`, 'pass the file as well as --configuration');
+  if (!args.args?.length) args.args = c.args;
+  args.cwd = args.cwd ?? c.cwd;
+  args.node = args.node || c.node;
+  args.env = [...Object.entries(c.env).map(([k, v]) => `${k}=${v}`), ...(args.env || [])];
+  if (c.stopOnEntry) args.stop_on_entry = true;
+  args._configuration = c;
+}
+
 /** the launch `debug FILE` asks for; null when it names no file */
 export function debugLaunch(args: Args): Msg | null {
+  applyConfiguration(args);
   if (!args.program) return null;
   splitAt(args);
   for (const one of [args.at, ...(args.also_at || [])]) if (one) parseAt(one); // anything else is an error before anything starts
@@ -65,13 +87,21 @@ export function debugLaunch(args: Args): Msg | null {
     program: args.program ?? null,
     args: [...(args.args || [])],
     cwd: args.cwd ?? null,
-    env: parseEnv(args.env || []),
+    env: { ...parseEnv(args.env || []), ...testEnv(args) },
     node: args.node || process.env[NODE_ENV] || null,
     stopOnEntry: !!args.stop_on_entry,
     libraryCode: !!args.library_code,
     record,
     recordFrom,
   });
+}
+
+/** `debug --test NAME`: the variable the runner turns into node's `--test-name-pattern` (runner.ts) */
+function testEnv(args: Args): Record<string, string> {
+  if (!args.test) return {};
+  const node = String(args.node || process.env[NODE_ENV] || '');
+  if (/(^|\/)bun(\.exe)?$/.test(node)) throw new AgentError('--test filters node:test tests, and a Bun program runs as a script here', 'debug the test file under Node, or put the test\'s body in a script');
+  return { TRACELIGHT_TEST_NAME_PATTERN: testNamePattern(String(args.test)) };
 }
 
 /** `debug FILE`: the three routes, then the connection to drive */
@@ -102,6 +132,7 @@ async function openDebugStart(args: Args): Promise<RunSource> {
 export async function openDebugVerb(args: Args): Promise<RunSource> {
   if (args.command === 'debug' || args.command === 'break') splitAt(args);
   if (DEBUG_COMMANDS.has(args.command) && !isLiveDebug(args)) throw new AgentError(`${args.command} drives the open VS Code session, not a saved run`, LIVE_HINT);
+  if (args.command === 'debug') applyConfiguration(args);
   if (args.command === 'debug' && args.program) return openDebugStart(args);
   fixLivePositionals(args);
   if (args.run !== null && args.run !== undefined) throw new AgentError(`--live reads the open VS Code session, not ${args.run}`, 'drop --live to read the saved run, or drop the file');
@@ -137,6 +168,7 @@ export async function runDebug(source: RunSource, args: Args): Promise<Msg> {
 /** a stop, or the verb's own text; the relaunch line first, then the stale lines */
 function rendered(own: NonNullable<Verb['render']>): NonNullable<Verb['render']> {
   return (result, source, args) => [
+    ...(args._configuration ? [`configuration ${JSON.stringify(args._configuration.name)} from ${args._configuration.file}${args._configuration.ignored.length ? ` (not applied: ${args._configuration.ignored.join(', ')})` : ''}`] : []),
     ...(args._relaunched ? [`no debug session was running: started the last launch from this directory again, \`${args._relaunched}\``] : []),
     ...(args._stale || []),
     ...(args.command === 'debug' ? renderStop : own)(result, source, args),
@@ -181,6 +213,8 @@ live({
     p.addArgument('--record', { action: 'store_true', help: 'also record the run, so the Time Machine, the Code Story and `why` open over it at every pause (slower)' });
     p.addArgument('--record-from', { dest: 'record_from', metavar: 'NAME|FILE:LINE', help: 'run at the debugger\'s speed up to here, pause, and record from this pause on: the Time Machine, `why`, `var` and `history` cover what runs after it. It is also an --at' });
     p.addArgument('--library-code', { dest: 'library_code', action: 'store_true', help: 'step into and pause inside third-party packages (node_modules) too; off by default, so a breakpoint in a library function and `step --into` on a library call both need it' });
+    p.addArgument('--configuration', { metavar: 'NAME', help: 'take program, args, cwd, env, envFile and runtimeExecutable from this Node or Bun configuration of the nearest .vscode/launch.json; flags given here win' });
+    p.addArgument('--test', { metavar: 'NAME', help: 'run only this node:test test of the file (its name, or "suite test"), as node --test-name-pattern does' });
     p.addArgument('--args', { nargs: 'remainder', default: [], metavar: '...', help: 'everything after this goes to the program (process.argv.slice(2)); must come last' });
   },
   run: runDebug,
@@ -288,8 +322,9 @@ live({
     p.addArgument('--frame', { type: 'int', default: null, metavar: 'N', help: 'which frame of the pause, innermost 0 (the stop\'s `stack` numbers them)' });
     p.addArgument('--names-only', { action: 'store_true', help: 'return names and types without formatting their values' });
     p.addArgument('--name', { action: 'append', default: [], metavar: 'NAME', help: 'only return this named binding; repeatable' });
+    p.addArgument('--scope', { choices: ['local', 'global', 'all'], default: null, help: "local: the paused function's own scopes; global: what the program added to the global object; all: every scope plus those globals (default: the frame's lexical scopes)" });
   },
-  run: (source, args) => source.locals({ valueBag: !!args.json, frame: args.frame ?? null, namesOnly: !!args.names_only, ...(args.name?.length ? { names: args.name } : {}) }),
+  run: (source, args) => source.locals({ valueBag: !!args.json, frame: args.frame ?? null, namesOnly: !!args.names_only, ...(args.name?.length ? { names: args.name } : {}), ...(args.scope ? { scope: args.scope } : {}) }),
   render: renderLocals,
 });
 

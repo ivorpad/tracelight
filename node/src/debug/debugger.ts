@@ -155,6 +155,8 @@ export class Debugger {
   private lastStop: { reason: string; extra: Record<string, unknown>; line: number | null; fileId: number } | null = null;
   breakOnException: ExceptionMode;
   modified = false;
+  /** the global object's own names before the program ran: `locals --scope global` lists only names the program added */
+  readonly baseGlobals: string[] = Object.getOwnPropertyNames(globalThis);
   pauses = 0;
   finished = false;
   /** the candidate of the trap in progress, for the worker */

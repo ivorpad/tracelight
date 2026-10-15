@@ -354,8 +354,8 @@ export class LiveRun {
     return this.request(req);
   }
 
-  locals(opts: { valueBag?: boolean; frame?: number | null; namesOnly?: boolean; names?: string[] } = {}): Promise<Msg> {
-    const req: Msg = { type: 'locals', ...(opts.namesOnly ? { namesOnly: true } : {}), ...(opts.names ? { names: opts.names } : {}) };
+  locals(opts: { valueBag?: boolean; frame?: number | null; namesOnly?: boolean; names?: string[]; scope?: string } = {}): Promise<Msg> {
+    const req: Msg = { type: 'locals', ...(opts.namesOnly ? { namesOnly: true } : {}), ...(opts.names ? { names: opts.names } : {}), ...(opts.scope ? { scope: opts.scope } : {}) };
     if (opts.valueBag) req.valueBag = true;
     if (opts.frame) req.frameId = opts.frame;
     return this.request(req);

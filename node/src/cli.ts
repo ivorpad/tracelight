@@ -31,6 +31,7 @@ import { statementBindings } from './bindings.ts';
 import { capInfo, warningLines } from './agent/recording.ts';
 import { redact, redactValue } from './agent/redact.ts';
 import { isUserFile } from './agent/walkthrough.ts';
+import { testNamePattern } from './agent/launchConfig.ts';
 
 type Msg = Record<string, any>;
 
@@ -60,9 +61,11 @@ export interface RunArgs {
   instrumented?: boolean;
   /** `--node PATH`: the Node that runs the program (else `${ENV}NODE`, else this one) */
   node?: string;
+  /** `--test NAME`: only this node:test test runs */
+  test?: string;
 }
 
-const RUN_USAGE = `usage: ${NAME} run FILE [--save run.json] [--json] [--timeout MS] [--max-steps N] [--library-code] [--exclude P] [--only P] [--plugin M] [--mode normal|profile|snaps] [--max-value-chars N] [--keep] [--trace-context STEP --watch EXPR] [--instrumented] [--node PATH] [-- ARGS]`;
+const RUN_USAGE = `usage: ${NAME} run FILE [--save run.json] [--json] [--timeout MS] [--max-steps N] [--library-code] [--exclude P] [--only P] [--plugin M] [--mode normal|profile|snaps] [--max-value-chars N] [--keep] [--trace-context STEP --watch EXPR] [--instrumented] [--node PATH] [--test NAME] [-- ARGS]`;
 
 function parseRunArgs(args: string[]): RunArgs {
   const out: RunArgs = { file: '', json: false, timeoutMs: 30000, autoLog: false, argv: [] };
@@ -91,6 +94,7 @@ function parseRunArgs(args: string[]): RunArgs {
     else if (a === '--instrumented') out.instrumented = true;
     else if (a === '--cwd') out.cwd = resolve(args[++i]!);
     else if (a === '--node') out.node = args[++i];
+    else if (a === '--test') out.test = args[++i];
     else if (!out.file) out.file = a;
     else out.argv.push(a);
   }
@@ -110,7 +114,7 @@ export function buildRequest(path: string, content: string, a: Partial<RunArgs>,
   const mode = a.mode && a.mode !== 'normal' ? a.mode : undefined;
   if (a.recordLocals ?? !!a.save) config.recordLocals = true;
   if (a.http && a.http !== 'off') config.http = a.http;
-  const req: Msg = { type: 'run', id: 1, runId, file: { path, displayName: path.split('/').pop(), content }, workspaceRoot: a.workspaceRoot ?? a.cwd ?? dirname(path), cwd: a.cwd ?? dirname(path), argv: a.argv ?? [], env: {}, config, ...(mode ? { mode } : {}) };
+  const req: Msg = { type: 'run', id: 1, runId, file: { path, displayName: path.split('/').pop(), content }, workspaceRoot: a.workspaceRoot ?? a.cwd ?? dirname(path), cwd: a.cwd ?? dirname(path), argv: a.argv ?? [], env: a.test ? { [`${ENV}TEST_NAME_PATTERN`]: testNamePattern(a.test) } : {}, config, ...(mode ? { mode } : {}) };
   if (a.watch?.length) req.watch = a.watch.map((exp, i) => ({ id: `w${i}`, exp }));
   if (a.traceContext !== undefined) req.traceContext = { step: a.traceContext, prefetch: 10 };
   if (a.node) req.node = a.node;
@@ -350,9 +354,10 @@ async function command(argv: string[]): Promise<number> {
       return new Promise<number>(() => {}); // the keeper ends the process itself
     case 'mcp': {
       if (rest[0] === '-h' || rest[0] === '--help') {
-        process.stdout.write(`usage: ${NAME} mcp [--http [--port N] [--host H] [--token T]]\n\nWithout --http: MCP over stdin and stdout. With --http: Streamable HTTP on http://127.0.0.1:4787/mcp\n(TRACELIGHT_MCP_PORT), legacy HTTP+SSE on /sse. A host other than loopback needs --token\n(TRACELIGHT_MCP_TOKEN), sent as Authorization: Bearer T.\n`);
+        process.stdout.write(`usage: ${NAME} mcp [--http [--port N] [--host H] [--token T] [--restart-on-change PATH]]\n       ${NAME} mcp service install|uninstall|status [--port N] [--host H] [--token T]\n\nWithout --http: MCP over stdin and stdout. With --http: Streamable HTTP on http://127.0.0.1:4787/mcp\n(TRACELIGHT_MCP_PORT), legacy HTTP+SSE on /sse. A host other than loopback needs --token\n(TRACELIGHT_MCP_TOKEN), sent as Authorization: Bearer T. --restart-on-change exits once PATH changes.\nservice install keeps the HTTP server running at login (launchd on macOS, systemd on Linux).\n`);
         return 0;
       }
+      if (rest[0] === 'service') return (await import('./mcp/service.ts')).cmdService(rest.slice(1));
       if (rest.length) return (await import('./mcp/http.ts')).serveHttp(rest);
       const { serve } = await import('./mcp/server.ts');
       return serve();

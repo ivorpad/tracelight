@@ -468,6 +468,11 @@ export class BridgeServer {
     if (this.watchedSources.has(file)) return;
     try { this.watchedSources.set(file, readBridgeFile(file).content); }
     catch { return; }
+    // A watch can miss a write made while it starts (FSEvents on macOS): read the file again once it has settled.
+    for (const ms of [250, 1000]) {
+      const key = `${file}\0settle${ms}`;
+      this.sourceWatchTimers.set(key, setTimeout(() => { this.sourceWatchTimers.delete(key); this.onDiskChange(file); }, ms));
+    }
     const dir = path.dirname(file);
     if (this.sourceWatchers.has(dir)) return;
     // Directory watches also survive editors saving by atomic rename.
