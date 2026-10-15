@@ -7,6 +7,8 @@ import { join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { project } from './helpers.ts';
 import { wordsDebug, wordsStep, wordsValue } from '../src/mcp/server.ts';
+import { getVerb, parserFor } from '../src/agent/commands.ts';
+import '../src/agent/verbs.ts';
 
 const BIN = resolve(import.meta.dirname, '../bin/tracelight.mjs');
 
@@ -45,7 +47,12 @@ test('each tool turns its arguments into the words of one agent command', () => 
   assert.deepEqual(wordsStep({ run: 'r.json', step: 4, move: 'into' }), ['step', '--into', '--', 'r.json', '4']);
   assert.deepEqual(wordsStep({ run: 'r.json', line: 'a.ts:3' }), ['context', '--line=a.ts:3', '--', 'r.json']);
   assert.deepEqual(wordsValue({ action: 'why', run: 'r.json', step: 9, name: 'total' }), ['why', '--', 'r.json', '9', 'total']);
-  assert.deepEqual(wordsDebug({ action: 'start', file: 'a.ts', at: ['main'], args: ['x'] }), ['debug', '--live', '--at=main', '--', 'a.ts', '--args', 'x']);
+  assert.deepEqual(wordsDebug({ action: 'start', file: 'a.ts', at: ['main'], args: ['x'] }), ['debug', '--live', '--at=main', 'a.ts', '--args', 'x']);
+  assert.deepEqual(wordsDebug({ action: 'start', file: '-odd.ts', args: ['--country', 'de'] }), ['debug', '--live', './-odd.ts', '--args', '--country', 'de']);
+  const [verb, ...argv] = wordsDebug({ action: 'start', file: 'main.ts', at: ['placeOrder'], args: ['--country', 'de'] });
+  const parsed = parserFor(getVerb(verb!)!).parse(argv);
+  assert.equal(parsed.program, 'main.ts');
+  assert.deepEqual(parsed.args, ['--country', 'de']);
   assert.deepEqual(wordsDebug({ action: 'break', add: ['a.ts:7'], when: 'count > 1', log_message: 'count={count}', clear: true }), ['break', '--live', '--when=count > 1', '--log-message=count={count}', '--clear', '--', 'a.ts:7']);
   assert.deepEqual(wordsDebug({ action: 'locals', frame: 2, names_only: true, names: ['total', 'payload'] }), ['locals', '--live', '--frame=2', '--names-only', '--name=total', '--name=payload']);
   assert.deepEqual(wordsDebug({ action: 'locals', names_only: false }), ['locals', '--live']);

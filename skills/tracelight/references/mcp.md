@@ -26,7 +26,18 @@ like the CLI.
 ```
 tracelight mcp --http [--port N] [--host H] [--token T]
 claude mcp add --transport http tracelight http://127.0.0.1:4787/mcp     # Claude Code
+mcporter config add tracelight --url http://127.0.0.1:4787/mcp --transport http --scope home
 ```
+
+Registered in mcporter instead of in each client, an agent with a shell reads the tools a piece at
+a time: `mcporter list tracelight --brief` (one signature per tool, about 3.4 KB),
+`mcporter list tracelight.tracelight_debug` (one tool), then
+`mcporter call tracelight.tracelight_debug action=start file=/abs/main.ts 'at=["placeOrder"]'`.
+Every `mcporter call` opens its own MCP session; debug sessions, pages and kept runners belong to
+the server process, so the next call finds them. Two catches. Relative paths resolve against the
+server's working directory (the home directory under `service install`), so pass absolute ones.
+`mcporter call` waits 60 seconds unless given `--timeout MS`, which a `tracelight_debug` `status`
+with a long `wait_seconds` needs.
 
 One long-running server for every client, the way DebugMCP serves `http://localhost:3001/mcp`.
 It prints `tracelight mcp: Streamable HTTP on http://127.0.0.1:4787/mcp (legacy SSE: /sse)` to

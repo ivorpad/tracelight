@@ -1,7 +1,7 @@
 ---
 name: tracelight
 description: >-
-  See what JavaScript or TypeScript code does with the `tracelight` CLI, the user's VS Code window and the browser page, in one of four modes given as the first argument. `ask` answers a question about code from a recording of it running, in chat: how it works, why a value is what it is, what it swallowed, what an edit changed, where the time goes. `debug` pauses a running Node program at a function or line, steps it and reads the frame, in VS Code or in the browser page. `explain` helps a person understand code interactively: inspect source, plan in memory, propose breakpoints and start a session, then jump by question or explain manual steps, with guided teaching when requested. `show` hands over a page where every value comes from a command: a tour of the whole run, or a code-history page around chosen steps. Use when asked to ask about, learn, debug, step, break, pause, explain, teach, walk through, review a change in, or "show me" what a JavaScript or TypeScript program did.
+  See what JavaScript or TypeScript code does with Tracelight's MCP tools or its `tracelight` CLI, the user's VS Code window and the browser page, in one of four modes given as the first argument. `ask` answers a question about code from a recording of it running, in chat: how it works, why a value is what it is, what it swallowed, what an edit changed, where the time goes. `debug` pauses a running Node program at a function or line, steps it and reads the frame, in VS Code or in the browser page. `explain` helps a person understand code interactively: inspect source, plan in memory, propose breakpoints and start a session, then jump by question or explain manual steps, with guided teaching when requested. `show` hands over a page where every value comes from a command: a tour of the whole run, or a code-history page around chosen steps. Use when asked to ask about, learn, debug, step, break, pause, explain, teach, walk through, review a change in, or "show me" what a JavaScript or TypeScript program did.
 argument-hint: ask | debug | explain | show [what to look at]
 disable-model-invocation: true
 ---
@@ -47,7 +47,7 @@ states one prediction question, runs on the person's word and is never graded
 The first word after the skill name is the mode: `/tracelight ask why is Ben's total NaN`,
 `$tracelight explain demo.ts`. Load that mode's file and follow it; it says what to deliver.
 Read no other reference up front. The job's first command and its `tracelight VERB --help` carry
-the flags (`tracelight debug FILE --at NAME` pauses a live program, `--node bun` for Bun); open
+the flags (through MCP, `mcporter list tracelight.TOOL` prints one tool's parameters) (`tracelight debug FILE --at NAME` pauses a live program, `--node bun` for Bun); open
 the CLI, debugger or browser reference when a command fails or its help does not answer.
 
 | mode | for | what you hand back | read |
@@ -112,8 +112,9 @@ They reach you on three surfaces; a saved run is a recording only, the other two
 Every command takes `--json` for the raw shape; the text form is for you. Every verb, flag, JSON
 shape and variable, with an example of each: [references/tracelight-cli.md](references/tracelight-cli.md).
 The debugger's full contract: [references/live-debugger.md](references/live-debugger.md). The page:
-[references/browser.md](references/browser.md). Without a shell, the same commands are MCP tools:
-[references/mcp.md](references/mcp.md).
+[references/browser.md](references/browser.md). The same commands are MCP tools, the first route
+when the server answers ([below](#use-the-mcp-server-when-it-answers), every argument in
+[references/mcp.md](references/mcp.md)).
 
 ## Before the first command: find the runtime and the editor
 
@@ -144,6 +145,57 @@ Batch independent path checks and small metadata reads. Keep resolved entry, pac
 paths in working memory. Once the caller and owning implementation are found, inspect enough to
 propose stops and launch; further source discovery can follow the user's questions. Screen
 inspection is for relevant visible state through the permitted UI tools, not a filesystem locator.
+
+### Use the MCP server when it answers
+
+Reach Tracelight through its MCP tools before the shell CLI. Check once per session and take the
+first route that works:
+
+1. Tools named `tracelight_run`, `tracelight_debug` and so on are in your tool list: call them.
+2. `mcporter list tracelight --brief` prints 18 signatures (about 3.4 KB): the server is
+   registered in mcporter. Call a tool with `mcporter call tracelight.TOOL key=value ...`, with
+   arrays as JSON (`'at=["placeOrder"]'`), or the whole object as `--args '{...}'`. Before the
+   first call to a tool, `mcporter list tracelight.TOOL` prints its parameters. Skip the full
+   listing without `--brief`: it is every tool's docs at once, about 29 KB.
+3. Neither works: use the CLI, resolved in the next section. `tracelight mcp service status` tells
+   a server that is installed but down from one that was never installed.
+
+`tracelight mcp service install` keeps a server at `http://127.0.0.1:4787/mcp`, and
+`mcporter config add tracelight --url http://127.0.0.1:4787/mcp --transport http --scope home`
+registers it. The references write commands in CLI form. Each maps to one tool:
+
+| CLI | tool and arguments |
+|---|---|
+| `run FILE --save R` | `tracelight_run` `file`, `save` |
+| `state`, `walkthrough`, `story`, `steps`, `find`, `graph`, `exceptions`, `http`, `tour`, `diff` | `tracelight_map` `action`, `run` |
+| `step R N --into` | `tracelight_step` `run`, `step`, `move: "into"` |
+| `var`, `why`, `origin`, `values`, `eval`, `expand`, `release` | `tracelight_value` `action`, `run`, `name`, `step` |
+| `debug FILE --at NAME --args ...` | `tracelight_debug` `action: "start"`, `file`, `at: [NAME]`, `args: [...]` |
+| `continue`, `pause`, `stop`, `restart`, `break`, `watches`, `locals`, `exec`, `record` with `--live` | `tracelight_debug` with that `action` |
+| `history`, `learn`, `pin`, `narrate`, `investigate`, `verify`, `coverage` | `tracelight_` plus the verb |
+| `web FILE --no-run`, then `web ctl ...` | `tracelight_page` `action: "open"`, `file`, `no_run: true`, then the ctl command as `action` |
+| `web ctl scratchpad OP ...` | `tracelight_scratchpad` `op` |
+| `--live`, `--session NAME`, `--json` | `live: true`, `session`, `json: true` (`tracelight_debug` is always live) |
+
+Four things differ from the shell:
+
+- **Absolute paths.** The server resolves `file`, `run`, `save`, `out` and `cwd` against its own
+  working directory, which is the home directory for the service, not yours. A relative
+  `file=main.ts` answers `no file ~/main.ts`.
+- **Timeouts.** `mcporter call` gives up after 60 seconds. Pass `--timeout MS` with
+  `tracelight_debug` `status` and `wait_seconds`, a `tracelight_run` whose `timeout_ms` is over
+  60000, and a cold `tracelight_debug` start that has to open VS Code.
+- **State lives in the server.** Each `mcporter call` is a new MCP session, and that costs
+  nothing: the debug session one call starts is the one the next `locals` reads, and a page from
+  `tracelight_page` `open` runs as the server's child until `close` or until the server exits.
+- **Hints name CLI commands.** An error comes back as the CLI's `error:` line and hint, so the
+  references' advice applies. Translate the hint's command through the table.
+
+`watch`, `shell`, `run --json`, `run --instrumented` and the plumbing verbs have no tool
+([mcp.md](references/mcp.md#what-the-tools-leave-out)); use the CLI for them. To finish clean
+through tools: `tracelight_debug` `break` with `remove`, then `break` alone lists what is left,
+then `stop`; `tracelight_page` `close` with its `port`; `tracelight_value` `release` for a kept
+runner.
 
 ### Resolve the control runtime once
 
@@ -207,7 +259,7 @@ its real path (`realpath`, `/private/var/...`). Or the run was `--mode profile`,
 steps on purpose and prints `profiled, no steps recorded`.
 
 **A debug session is made, not found.** In `debug` mode the first command is `tracelight debug
-FILE --at NAME`: it starts the session in the user's VS Code window and prints the first stop.
+FILE --at NAME` (`tracelight_debug` with `action: "start"`, `file` and `at`): it starts the session in the user's VS Code window and prints the first stop.
 Make it your first command: nothing is running until it starts the session, so a `--live` command
 sent before it answers `no live session`. Every `--live` command after the first stop drives that
 session.

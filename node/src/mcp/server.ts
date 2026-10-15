@@ -279,8 +279,9 @@ export function wordsDebug(a: Args): string[] {
     for (const flag of ['record', 'library_code', 'stop_on_entry', 'no_focus']) opt(words, a, flag, '--' + flag.replace('_', '-'));
     for (const [k, v] of Object.entries(a.env ?? {})) words.push(`--env=${k}=${v}`);
     for (const at of strings(a.at)) words.push(`--at=${at}`);
-    if (a.file) words.push('--', String(a.file));
-    if (Array.isArray(a.args) && a.args.length) words.push('--args', ...strings(a.args)); // `--args` takes the rest of the line
+    // FILE goes before `--args` (which takes the rest of the line) and not after `--`, where argparse would read `--args` as a positional
+    if (a.file) words.push(String(a.file).startsWith('-') ? `./${a.file}` : String(a.file));
+    if (Array.isArray(a.args) && a.args.length) words.push('--args', ...strings(a.args));
     return words;
   }
   if (action === 'restart') opt(words, a, 'stop_on_entry', '--stop-on-entry');

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `tracelight_debug` `start` with `args` failed with `unrecognized arguments: --args ...`: the file
+  went after `--`, where argparse reads `--args` as a positional. It now goes before `--args`.
+- The skill reaches Tracelight through its MCP tools first, called directly or through
+  `mcporter call tracelight.TOOL`, and keeps the CLI for what has no tool. SKILL.md maps each CLI
+  command to its tool and names what differs: absolute paths, mcporter's 60 s timeout, state held
+  by the server between calls.
 - `tracelight mcp --http` serves the MCP tools over Streamable HTTP at `http://127.0.0.1:4787/mcp`
   (`--port`, `TRACELIGHT_MCP_PORT`): sessions by `Mcp-Session-Id`, `tools/call` answered on an SSE
   stream with `notifications/progress` every 5 s when the client sends a progress token, `GET` and
