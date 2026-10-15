@@ -58,6 +58,12 @@ export interface InstrumentOptions {
   typescript?: boolean;
   /** an imported project module: its body is a scope of its own at depth 1 */
   moduleScope?: boolean;
+  /**
+   * the program's entry file. The runner imports it, so `import.meta.main` would be false and
+   * `require.main` would not be this module, and a body guarded by either would never run: those
+   * reads become `true` and `module`
+   */
+  entry?: boolean;
   autoLog?: boolean;
   /** pass each statement step a getter over its visible locals (recorder/localsPlan.ts) */
   recordLocals?: boolean;
@@ -1183,6 +1189,23 @@ export function toJavaScript(source: string, filename = 'x.ts', sourceType?: 'mo
   }
 }
 
+/** `import.meta.main` and `require.main` reads (not assignments), with what each means in the entry. */
+function entryMainReads(program: Node, commonjs: boolean): [Node, string][] {
+  const found: [Node, string][] = [];
+  const visit = (node: Node, parent: Node): void => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) visit(n, parent); return; }
+    if (node.type === 'MemberExpression' && !node.computed && node.property?.name === 'main'
+      && !(parent?.type === 'AssignmentExpression' && parent.left === node)) {
+      if (node.object?.type === 'MetaProperty' && node.object.meta?.name === 'import' && node.object.property?.name === 'meta') { found.push([node, 'true']); return; }
+      if (commonjs && node.object?.type === 'Identifier' && node.object.name === 'require') { found.push([node, 'module']); return; }
+    }
+    for (const key in node) if (key !== 'parent' && typeof node[key] === 'object') visit(node[key], node);
+  };
+  visit(program, null);
+  return found;
+}
+
 export function instrument(source: string, filename: string, fileId = 1, rangeBase = 0, options: InstrumentOptions = {}): InstrumentedFile {
   const ts = options.typescript ?? (isTypeScriptPath(filename) || isJsxPath(filename));
   let js = source;
@@ -1236,6 +1259,11 @@ export function instrument(source: string, filename: string, fileId = 1, rangeBa
   ins.snapRegions.push(...snapRegions);
   for (const st of program.body) ins.topLevel.add(st);
   ins.collect(program);
+  if (options.entry) for (const [node, value] of entryMainReads(program, sourceType === 'commonjs')) {
+    // same length when it fits on one line, so columns after it do not move (Bun runs without a map)
+    const text = js.slice(node.start, node.end);
+    ins.edits.push({ op: 'overwrite', start: node.start, end: node.end, parts: [text.includes('\n') ? value : value.padEnd(text.length)] });
+  }
   if (options.magic !== false && !options.library) ins.planMagic(parsed.comments ?? []);
   if (!options.library) ins.planMarkers();
   if (options.recordLocals) ins.localsAt = planLocals(program);

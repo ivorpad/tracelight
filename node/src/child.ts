@@ -485,6 +485,7 @@ export class RunChild {
     const options = {
       sourceType: format,
       moduleScope: !isMain && path !== this.entry,
+      entry: isMain,
       library,
       relocatable: library,
       snaps: isMain && this.mode === 'snaps',
