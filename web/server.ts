@@ -731,7 +731,8 @@ export class BridgeServer {
         const p = await this.profile();
         return json(res, p.error ? 409 : 200, { result: p.summary ? { path: p.path, totalMs: p.summary.totalMs, rows: p.summary.rows.slice(0, 20) } : null, ...(p.error ? { error: p.error } : {}) });
       }
-      const r = await this.agent(command);
+      // a waitPause holds the page for up to its own timeout (25 s at most); every other command answers within 10 s
+      const r = await this.agent(command, command.action === 'waitPause' ? Math.min(command.timeoutMs ?? 25_000, 25_000) + 5_000 : 10_000);
       return json(res, r.error ? 409 : 200, r);
     }
     if (req.method !== 'GET') return reply(res, 405, 'method not allowed');

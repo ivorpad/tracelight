@@ -63,7 +63,7 @@ test('a session: initialize, tools/list, run, map, step, value, errors', async (
     assert.equal(init.result.serverInfo.name, 'tracelight');
     s.notify('notifications/initialized');
     const list = await s.call('tools/list');
-    assert.deepEqual(list.result.tools.map((t: any) => t.name), ['tracelight_run', 'tracelight_map', 'tracelight_step', 'tracelight_value', 'tracelight_coverage', 'tracelight_debug', 'tracelight_investigate', 'tracelight_verify', 'tracelight_session', 'tracelight_seek', 'tracelight_save_investigation', 'tracelight_open_investigation']);
+    assert.deepEqual(list.result.tools.map((t: any) => t.name), ['tracelight_run', 'tracelight_map', 'tracelight_step', 'tracelight_value', 'tracelight_coverage', 'tracelight_debug', 'tracelight_investigate', 'tracelight_verify', 'tracelight_history', 'tracelight_learn', 'tracelight_pin', 'tracelight_narrate', 'tracelight_page', 'tracelight_scratchpad', 'tracelight_session', 'tracelight_seek', 'tracelight_save_investigation', 'tracelight_open_investigation']);
     assert.match(list.result.tools[1].description, /- walkthrough: \S/, 'action help comes from the verbs');
     for (const name of ['tracelight_investigate', 'tracelight_verify']) {
       const tool = list.result.tools.find((t: any) => t.name === name);

@@ -267,22 +267,27 @@ Every verb takes `--help`. The full reference, with recorded examples, is
 
 ### MCP
 
-`tracelight mcp` is the CLI as an MCP server on stdio, with twelve tools:
+`tracelight mcp` is the CLI as an MCP server on stdio, and `tracelight mcp --http` the same server
+over Streamable HTTP at `http://127.0.0.1:4787/mcp`, with eighteen tools:
 
 | Tool | What it covers |
 |---|---|
-| `tracelight_run` | record a run of a `.js`, `.mjs`, `.cjs`, `.ts`, `.mts`, `.cts`, `.jsx` or `.tsx` file |
+| `tracelight_run` | record a run of a `.js`, `.mjs`, `.cjs`, `.ts`, `.mts`, `.cts`, `.jsx` or `.tsx` file, with `run`'s flags (`only`, `exclude`, `keep`, `mode`, `node`, ...) |
 | `tracelight_map` | `state`, `walkthrough`, `story`, `steps`, `find`, `graph`, `exceptions`, `http`, `tour`, `diff` |
 | `tracelight_step` | `context` at a step, or `step` with a move (`into`, `over`, `out`, `back`, ...) |
 | `tracelight_value` | `var`, `why`, `origin`, `values`, `eval`, `expand`, `release` |
 | `tracelight_coverage` | the lines that ran and did not, per file |
-| `tracelight_debug` | the live debugger: `start`, `continue`, `pause`, `stop`, `restart`, `break`, `watches`, `locals`, `exec`, `record` |
+| `tracelight_debug` | the live debugger: `start`, `continue`, `pause`, `stop`, `restart`, `break`, `watches`, `locals`, `exec`, `record`, and `status`, which can wait up to 600 s for a pause |
 | `tracelight_investigate` | one bounded evidence bundle from a saved run: value history, context, why/origin, exceptions and coverage |
 | `tracelight_verify` | compare two saved runs and check explicit `NAME=TEXT` expectations against the after-run evidence |
 | `tracelight_session` | list sessions or read saved/live state, separating the live pause from recorded selection |
 | `tracelight_seek` | find the first/last recorded value equal to text, or execution of a file and line |
 | `tracelight_save_investigation` | save a question and named checkpoints referencing a recording and its hash |
 | `tracelight_open_investigation` | reopen those checkpoints after checking that the recording is unchanged |
+| `tracelight_history` | the data of a code-history page, written to a file |
+| `tracelight_learn`, `tracelight_pin`, `tracelight_narrate` | predict-then-reveal checkpoints, a private baseline copy, one model-written sentence per walkthrough moment |
+| `tracelight_page` | the browser page: open and close it, move the Time Machine, drive its live debugger, narration bubbles, values, `wait_pause` |
+| `tracelight_scratchpad` | the page's scratchpad: one-call experiments with copied inputs and labelled mocks |
 
 `tracelight_investigate` and `tracelight_verify` read saved recordings only. They return structured
 JSON with bounded detail and explicit omissions; they never rerun the program or write a recording.
@@ -306,7 +311,9 @@ bundles aim to reduce repeated evidence requests. No advantage over DebugMCP is 
 a same-model experiment compares the same cases and records those costs.
 
 For Claude Code: `claude mcp add tracelight -- tracelight mcp`, or with the checkout's path,
-`claude mcp add tracelight -- node /path/to/tracelight/node/bin/tracelight.mjs mcp`. Saved runs
+`claude mcp add tracelight -- node /path/to/tracelight/node/bin/tracelight.mjs mcp`. Over HTTP,
+start `tracelight mcp --http` once and add `claude mcp add --transport http tracelight
+http://127.0.0.1:4787/mcp`; it binds loopback only unless given `--token`. Saved runs
 need nothing else. The live tools need agent access. The arguments of each tool are in
 `skills/tracelight/references/mcp.md`.
 

@@ -647,7 +647,7 @@ tracelight serve
 tracelight instrument FILE [--json]
 tracelight bindings FILE
 tracelight cache [--clear] [--json]
-tracelight mcp
+tracelight mcp [--http [--port N] [--host H] [--token T]]
 tracelight version
 tracelight web FILE | tracelight web ctl ...
 ```
@@ -665,7 +665,10 @@ tracelight web FILE | tracelight web ctl ...
 - `tracelight cache` is the instrumented-package cache: `/Users/me/.tracelight/cache: 3 entries,
   1.2 MB`; `--clear` empties it; `--json` gives `{dir, entries, bytes}` (or `{dir, removed,
   bytes}`). `TRACELIGHT_CACHE_DIR` moves it, an empty value turns it off.
-- `tracelight mcp` serves the verbs as MCP tools on stdin and stdout: [mcp.md](mcp.md).
+- `tracelight mcp` serves the verbs as MCP tools on stdin and stdout; `--http` serves them over
+  Streamable HTTP at `http://127.0.0.1:4787/mcp` (`--port`, `TRACELIGHT_MCP_PORT`), with the older
+  HTTP+SSE transport on `/sse`. Another `--host` than loopback needs `--token`
+  (`TRACELIGHT_MCP_TOKEN`), sent as `Authorization: Bearer T`: [mcp.md](mcp.md#over-http).
 - `tracelight version` (or `--version`) prints `tracelight 0.3.0 (node 24.19.0)`: the runtime's
   version and the Node running it.
 - `tracelight web` serves the browser page and drives it: [browser.md](browser.md).
@@ -688,6 +691,8 @@ or the CLI and the window look in different places.
 | `TRACELIGHT_DEBUG` | `1` prints the stack of a `tracelight:` error |
 | `TRACELIGHT_RAW_TRANSFER` | `0` turns off the parser's raw transfer, a workaround for a parser that fails on this platform |
 | `TRACELIGHT_PORT` | the browser page's port, for `tracelight web` and `web ctl` (default 4777) |
+| `TRACELIGHT_MCP_PORT` | the port of `tracelight mcp --http` (default 4787) |
+| `TRACELIGHT_MCP_TOKEN` | the bearer token `tracelight mcp --http` requires, as `--token` does |
 | `TRACELIGHT_RUNTIME` | the browser page's `--runtime` |
 | `TRACELIGHT_EXPLAIN_COMMAND` | the model command the browser page's Narrate and tour call (prompt on stdin) |
 

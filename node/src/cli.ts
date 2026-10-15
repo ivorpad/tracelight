@@ -312,7 +312,7 @@ const START = `start here:
   teach in a browser  ${NAME} web FILE --no-run
 then \`${NAME} VERB --help\` for that command's flags`;
 
-const USAGE = `usage: ${NAME} serve | run FILE [--save run.json] [--keep] | instrument FILE | bindings FILE | mcp | web FILE | web ctl ... | cache [--clear] | version | VERB RUN.json ...\n  verbs: ${verbNames().join(', ')}\n\n${START}`;
+const USAGE = `usage: ${NAME} serve | run FILE [--save run.json] [--keep] | instrument FILE | bindings FILE | mcp [--http] | web FILE | web ctl ... | cache [--clear] | version | VERB RUN.json ...\n  verbs: ${verbNames().join(', ')}\n\n${START}`;
 
 /** the command line; a usage or input error prints its message (the stack with `${ENV}DEBUG=1`) and exits 2 */
 export async function main(argv: string[]): Promise<number> {
@@ -349,6 +349,11 @@ async function command(argv: string[]): Promise<number> {
       keepMain(rest);
       return new Promise<number>(() => {}); // the keeper ends the process itself
     case 'mcp': {
+      if (rest[0] === '-h' || rest[0] === '--help') {
+        process.stdout.write(`usage: ${NAME} mcp [--http [--port N] [--host H] [--token T]]\n\nWithout --http: MCP over stdin and stdout. With --http: Streamable HTTP on http://127.0.0.1:4787/mcp\n(TRACELIGHT_MCP_PORT), legacy HTTP+SSE on /sse. A host other than loopback needs --token\n(TRACELIGHT_MCP_TOKEN), sent as Authorization: Bearer T.\n`);
+        return 0;
+      }
+      if (rest.length) return (await import('./mcp/http.ts')).serveHttp(rest);
       const { serve } = await import('./mcp/server.ts');
       return serve();
     }

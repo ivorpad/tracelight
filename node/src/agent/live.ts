@@ -362,8 +362,9 @@ export class LiveRun {
   }
 
   /** `watch` once, then hand every streamed event over until the bridge closes */
-  async watch(onEvent: (ev: Msg) => void): Promise<void> {
+  async watch(onEvent: (ev: Msg) => void, onWatching?: () => void): Promise<void> {
     await this.request({ type: 'watch' });
+    onWatching?.();
     try {
       for (;;) {
         let msg: Msg;

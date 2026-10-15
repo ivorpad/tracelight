@@ -1,9 +1,10 @@
 # Tracelight as an MCP server
 
-`tracelight mcp` serves the CLI's commands over stdin and stdout to any MCP client. Use it where
-an agent has MCP tools but no shell, or where tool calls are easier to allow than shell commands.
-It speaks JSON-RPC 2.0, one message per line (protocol versions 2025-11-25, 2025-06-18,
-2025-03-26 and 2024-11-05), and answers `initialize` with a short method in `instructions`.
+`tracelight mcp` serves the CLI's commands over stdin and stdout to any MCP client, and
+`tracelight mcp --http` serves the same tools over HTTP. Use it where an agent has MCP tools but
+no shell, or where tool calls are easier to allow than shell commands. It speaks JSON-RPC 2.0
+(protocol versions 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05) and answers `initialize`
+with a short method in `instructions`.
 
 ```
 claude mcp add tracelight -- tracelight mcp            # Claude Code
@@ -20,7 +21,44 @@ Codex's `~/.codex/config.toml`: `[mcp_servers.tracelight]` with `command = "trac
 `args = ["mcp"]`. The commands run inside the server's process, so it needs Node 22.18 or newer
 like the CLI.
 
-## The twelve tools
+## Over HTTP
+
+```
+tracelight mcp --http [--port N] [--host H] [--token T]
+claude mcp add --transport http tracelight http://127.0.0.1:4787/mcp     # Claude Code
+```
+
+One long-running server for every client, the way DebugMCP serves `http://localhost:3001/mcp`.
+It prints `tracelight mcp: Streamable HTTP on http://127.0.0.1:4787/mcp (legacy SSE: /sse)` to
+stderr and runs until Ctrl+C. The port is 4787 unless `--port` or `TRACELIGHT_MCP_PORT` says
+otherwise (the browser page keeps 4777). A JSON client config is
+`{"mcpServers": {"tracelight": {"type": "http", "url": "http://127.0.0.1:4787/mcp"}}}`.
+
+- Streamable HTTP (2025-03-26 and later) on `/mcp`. `POST` takes one message or a batch;
+  notifications alone get 202. A `tools/call` is answered on a `text/event-stream` response when
+  the client accepts it, and a call whose `params._meta.progressToken` is set gets a
+  `notifications/progress` event every 5 seconds while it runs (`progress` is the elapsed
+  seconds; there is no total). Other requests, and clients that accept only `application/json`,
+  get one JSON body. `initialize` returns `Mcp-Session-Id`; a later request without it is 400, an
+  unknown or ended one is 404 (initialize again), an `MCP-Protocol-Version` header outside the
+  four versions is 400. `GET /mcp` opens the session's stream, which carries only keepalive
+  comments since the server sends no requests of its own; `DELETE /mcp` ends the session.
+- The older HTTP+SSE transport (2024-11-05) on `/sse`: its first event, `endpoint`, names
+  `/messages?sessionId=…`; POSTs there get 202 and their replies arrive on the stream.
+- The tools run programs (`tracelight_run`, `exec`, live `eval`, the scratchpad), so the server
+  binds 127.0.0.1 and ::1 only, refuses a request whose `Origin` or `Host` header is not loopback
+  (403, against DNS rebinding), and will not bind another `--host` without `--token`
+  (`TRACELIGHT_MCP_TOKEN`). With a token every request needs `Authorization: Bearer T`, else 401.
+  Give clients `127.0.0.1` rather than `localhost` when IPv6 is off.
+- Clients can call tools at the same time. Calls that drive the VS Code debugger or the browser
+  page (`tracelight_debug`, a `live` or `session` read, `tracelight_page`, `tracelight_scratchpad`)
+  run one at a time in arrival order. `pause`, `stop` and `status` skip that queue, so they can
+  reach a `continue` that is still waiting, as does the page's `wait_pause`. Saved-run reads and
+  `tracelight_run` never wait for each other.
+
+Over stdio the server reads one message per line and answers each before the next.
+
+## The eighteen tools
 
 The six CLI-backed tools return the command's own text, exactly what `tracelight VERB ...` prints.
 A command's `error:` and its hint come back as `isError` with the same two lines, so the method in
@@ -55,8 +93,23 @@ The answer includes the saved path as `run`, or `before` and `after`.
 30,000), `max_steps` (default 999,999).
 
 `save` defaults to `.tracelight/runs/<name>.json` next to the file, which is inside the user's
-project: pass `save` with a path in your scratch directory instead. The answer is the runtime, the
-step count and exit code, any uncaught error, the run's path and the next call:
+project: pass `save` with a path in your scratch directory instead. The rest are `run`'s flags:
+
+| argument | CLI flag | what |
+|---|---|---|
+| `library_code` | `--library-code` | also record inside `node_modules` |
+| `exclude`, `only` | `--exclude`, `--only` | glob lists of files not to record, or the only files to record (under Bun, name source directories) |
+| `plugins` | `--plugin` | runtime plugin modules |
+| `mode` | `--mode` | `normal`; `profile` writes a `.cpuprofile` and records no steps; `snaps` |
+| `max_value_chars` | `--max-value-chars` | characters kept of one value |
+| `keep` | `--keep` | keep the runner so `tracelight_value` `eval` and `expand` work; `release` ends it |
+| `auto_log` | `--auto-log` | log every assignment and call |
+| `node` | `--node` | the Node or Bun that runs the program (`bun` is looked up on PATH) |
+| `cwd` | `--cwd` | the program's working directory |
+
+The answer is the runtime, the step count and exit code, any uncaught error with its hint, the
+step-cap warning when the run was cut, the `.cpuprofile` path of a profile run, the kept runner's
+pid, the run's path and the next call:
 
 ```
 node 24.19.0 (/usr/local/bin/node), tracelight 0.3.0
@@ -83,6 +136,9 @@ next: tracelight_map {"action": "walkthrough", "run": "/private/tmp/s/inv.json"}
 | `limit` | `find`, `story`, `diff` | `--limit` |
 | `goal` | `tour` (a variable's last value, NAME, or a line's last pass, FILE:LINE) | `--goal` |
 | `budget` | `tour` (default 40,000 tokens) | `--budget` |
+| `prose`, `out` | `tour`: check a `tour.prose.json` against the run and merge it; write the tour to this file | `--prose`, `--out` |
+| `expand` | `graph`: unroll these packages into their functions (a list) | `--expand` |
+| `no_statements`, `dot` | `graph`: no statement nodes; a Graphviz digraph instead of text | `--no-statements`, `--dot` |
 | `before` | `diff` (required): the run.json from before the edit | first RUN |
 | `after` | `diff`: the run.json from after, or `live: true` for the open session | second RUN |
 
@@ -126,7 +182,16 @@ line by line with hit counts.
 The live debugger in VS Code (the window opens on `start`). Every action that runs the program
 returns the next stop the way `tracelight_step` prints one. `action` picks the command: `start`
 (`tracelight debug`), `continue`, `pause`, `stop`, `restart`, `break`, `watches`, `locals`, `exec`,
-`record`.
+`record`, and `status`, which reads the session's state (`tracelight state --live`) without
+moving it.
+
+`status` with `wait_seconds` (0 to 600) first waits for the running program to pause or finish:
+a breakpoint, a watch, or the person stepping or pressing Continue in VS Code. It returns at once
+when the program is already paused, has ended, or is a recording session, and otherwise when the
+first `paused` or `finished` event arrives, with `paused after waiting 2.3 s` or `still running
+after 30 s` above the state. The wait subscribes before it reads the state, so a pause between the
+two is not missed. This is DebugMCP's `get_debug_status` with `waitForPauseSeconds`, and it stands
+in for the CLI's `watch`, which streams until Ctrl+C.
 
 | argument | for | what |
 |---|---|---|
@@ -150,6 +215,7 @@ returns the next stop the way `tracelight_step` prints one. `action` picks the c
 | `names_only` | `locals` | return binding names without serializing values, expanding objects or calling getters |
 | `names` | `locals` | optional list of binding names whose values to read in the requested frame |
 | `source` | `exec` (required) | the statement to run in the paused frame; it changes the program's state |
+| `wait_seconds` | `status` | wait up to this many seconds (at most 600) for a pause or the end of the run |
 
 `locals` reads the requested frame's lexical scopes; there is no `scope: local|global|all`
 selector. Names-only still enumerates engine binding descriptors internally, including primitives,
@@ -255,7 +321,8 @@ selectors to the tools.
 | read named variable values | action `locals`, `names`, optional `frame` |
 | local/global/all scope selection | frame lexical scopes only; no equivalent selector |
 | evaluate expression | `tracelight_value` action `eval`, `expression`, optional `frame`, `live: true` |
-| debug status, optionally waiting for a pause (`waitForPauseSeconds`) | `tracelight_map` action `state` with `live: true` reads it without waiting; `continue` and `pause` wait for their own stop unless `no_wait`; no tool waits for a pause the person causes by stepping in VS Code (the page's WebMCP `tracelight_wait_pause` does, for up to 25 seconds) |
+| debug status, optionally waiting for a pause (`waitForPauseSeconds`) | `tracelight_debug` action `status`, `wait_seconds` up to 600; on the browser page, `tracelight_page` action `wait_pause` (up to 25 s) |
+| the HTTP server at `http://localhost:3001/mcp` | `tracelight mcp --http` at `http://127.0.0.1:4787/mcp`, the same loopback and Origin rules, plus the 2024-11-05 `/sse` transport DebugMCP retired |
 
 This maps the operations and their limits; it does not establish interchangeable sessions or
 tested DebugMCP compatibility. Tracelight adds recorded provenance, reverse history and saved
@@ -305,11 +372,90 @@ response bytes and recording overhead. Fewer calls alone is insufficient if rele
 missing. A same-model comparison on the same cases is needed before claiming better results than
 DebugMCP.
 
+### `tracelight_history`
+
+`history`: the data behind a code-history page ([show.md](show.md), [code-history.md](code-history.md)),
+written to `out` (required). It needs at least one checkpoint.
+
+| argument | CLI flag | what |
+|---|---|---|
+| `at` | `--at` | checkpoints at these steps or FILE:LINEs (a list of strings) |
+| `var` | `--var` | a checkpoint per recorded change of each name |
+| `why` | `--why STEP NAME` | a list of `{step, name}`: the provenance chain of NAME after STEP |
+| `pause` | `--pause` | with `live`: the debug session's current pause, read without moving it |
+| `prose`, `pad`, `limit`, `lang`, `scope`, `append`, `value_chars` | `--prose`, `--pad`, `--limit`, `--lang`, `--scope`, `--append`, `--value-chars` | as in the CLI reference |
+
+The answer names the file it wrote and the command that renders the page.
+
+```json
+{"run":"/private/tmp/s/run.json","out":"/private/tmp/s/history.json","var":["total"]}
+```
+
+### `tracelight_learn`, `tracelight_pin`, `tracelight_narrate`
+
+`tracelight_learn` is `learn`: without `at` it lists checkpoints to predict; with `at` (a step) it
+keeps the recorded values back until `reveal` is true, and stores `prediction` beside them.
+`tracelight_pin` is `pin`: a private copy of the recording at `out` (required; an existing file
+is refused) to compare a later run with. `tracelight_narrate` is `narrate`: it pipes a prompt to
+`command` (default `claude -p`, else `codex exec`) and stores one sentence per walkthrough moment
+in the saved run; `dry_run` prints the prompt and runs nothing.
+
+### `tracelight_page`
+
+The browser page ([browser.md](browser.md)) for a person watching: code pane, Time Machine, live
+debugger and narration bubbles. `action` picks what happens; `port` (default 4777 or
+`TRACELIGHT_PORT`) picks the page.
+
+`open` starts `tracelight web FILE` as a child of the MCP server and waits until it listens. It
+takes `file` (required), `runtime`, `node`, `only`, `no_run` (default true: nothing runs until
+`debug` or `run`), `no_watch` and `open_browser`. A port that already serves the same file is
+reused; one serving another file is refused. `close` stops a page this server started, and the
+server stops its pages when it exits. `list` names them, plus whatever serves the default port.
+
+Every other action is one command to the page's `/api/command`, exactly what
+`tracelight web ctl` sends, and the reply is the bridge's JSON (also as `structuredContent`). The
+page has to be open in exactly one browser tab; none or two is the bridge's own error. `isError`
+follows `ctl`'s exit code: a move whose shown source is not `position.ready`, or a scratchpad run
+with an error or a missing mock, is an error even though the bridge answered 200.
+
+| action | arguments | what |
+|---|---|---|
+| `state`, `position` | `mode` (`live`, `recorded`, `visible`), `focus` | what the tab shows and whether it is ready to teach from |
+| `goto`, `step`, `line` | `step`; `kind` (`next`, `into`, `over`, `out`, `back`, `backOver`, `backOut`); `line`, `file`; `say` | move the recording |
+| `start`, `stop`, `run`, `story`, `profile` | | start or stop the Time Machine, record again, open the Code Story, profile |
+| `debug` | `op` (`start`, `restart`, `continue`, `step`, `pause`, `stop`, `state`), `kind`, `say` | the live debugger, recording that execution |
+| `breakpoint` | `line`, `file`, `on`, `condition` | set, clear or toggle one |
+| `say`, `clear` | `text`, `line`, `step`, `file`, `note_id`, `note_kind` | narration bubbles |
+| `values`, `inspect`, `peek` | `mode`, `names`, `name`, `visible`, `file`, `line` | show captured bindings beside the source; nothing is evaluated |
+| `eval`, `var`, `why`, `watch` | `expression`, `name`, `step`, `remove` | read values |
+| `wait_pause` | `after`, `timeout_ms` (at most 25,000) | without `after`, the current pause cursor; with it, wait for the person's next step |
+
+Any command takes `expect` (`source`, `runId`, `step`, `frame`, `file`) and is refused when the tab
+shows something else.
+
+```json
+{"action":"open","file":"/repo/examples/js/checkout/main.ts"}
+{"action":"breakpoint","line":57,"on":true}
+{"action":"debug","op":"start","say":"placeOrder gets the cart here"}
+```
+
+### `tracelight_scratchpad`
+
+The page's scratchpad ([scratchpad.md](scratchpad.md)): a copied function run with copied inputs
+in a separate process, which never moves the live pause. `op` is `experiment` (prepare and run
+in one call: `code`, `inputs`, `mocks`, `mock_labels`, `auto_run`), `open` (the function at the
+pause, or at `line`), `close`, `state`, `update`, `run`, `restore`, `create` (`title`, `file`),
+`save`, `list`, `load` and `history` (`id`, `version`). `list` and `history` work with no tab open.
+Replies carry `diagnostics` and `ready`; `port` and `expect` work as for `tracelight_page`.
+
+```json
+{"op":"experiment","code":"const n: number = a + b;\nconsole.log(n);\nexport {};","inputs":{"a":2,"b":3},"auto_run":false}
+```
+
 ## What the tools leave out
 
-The MCP tools cover the commands an investigation needs. These are CLI only: `history` (the
-code-history page), `tour --prose` and `tour --out` (a tour page), `graph --expand`,
-`--no-statements` and `--dot`, `narrate`, `shell`, `watch`, `web` (the browser page), and `run`'s
-`--library-code`, `--exclude`, `--only`, `--max-value-chars`, `--keep`, `--mode` and `--auto-log`.
-When the work needs one of them and there is a shell, use the CLI; without one, say which part is
-missing.
+`shell` reads commands from stdin over one bridge connection, which an MCP session already is.
+`watch` streams until Ctrl+C; `tracelight_debug` `status` with `wait_seconds` waits for the same
+events one at a time. Also CLI only: `run --json` (the raw event stream), `run --trace-context`
+with `--watch`, `run --instrumented`, and the plumbing (`serve`, `instrument`, `bindings`,
+`cache`). When the work needs one of them and there is a shell, use the CLI.

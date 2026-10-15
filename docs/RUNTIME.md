@@ -29,7 +29,7 @@ npm test --prefix node                      # node:test, about 300 tests in 15 s
 | `child.ts` | the run child: the `module.registerHooks` loader (ESM, CJS, TS), stream patching, the end of a run, `expand` and `source` |
 | `runner.ts` | the NDJSON server: one child per run, timeout, stop, `runId` and `seq` |
 | `bindings.ts` | the `bindings` request: what each statement assigns, reads and calls |
-| `cli.ts` | `tracelight serve`, `run [--save] [--keep] [--http]`, `instrument`, `bindings`, `mcp`, `cache`, `version`, and the agent verbs |
+| `cli.ts` | `tracelight serve`, `run [--save] [--keep] [--http]`, `instrument`, `bindings`, `mcp [--http]`, `cache`, `version`, and the agent verbs |
 | `lower.ts` | `enum`, `namespace`, parameter properties, `import =`, `export =` and JSX lowered as edits, columns mapped back |
 | `select.ts` | which files are instrumented: project files, `libraryCode`, `exclude`, `only` |
 | `cache.ts` | the library instrumentation cache (`~/.tracelight/cache`, `TRACELIGHT_CACHE_DIR`) |
@@ -40,7 +40,7 @@ npm test --prefix node                      # node:test, about 300 tests in 15 s
 | `pure.ts`, `evaluate.ts` | side-effect-free evaluation (write check, V8 `throwOnSideEffect`, allowlisted methods); evaluate and complete after a run |
 | `http/` | `store.ts` (the recording file and its keys), `record.ts` (`@mswjs/interceptors` for http/https, `fetch`, XHR); `plugins/http.ts` loads it |
 | `agent/` | the agent verbs (`story`, `step`, `why`, `origin`, `tour`, `history`, `debug`, ...), registered in `agent/verbs.ts` |
-| `mcp/` | twelve tools over the agent verbs and workflow helpers: live control, bounded evidence/verification, session state, recorded destinations and saved investigation checkpoints |
+| `mcp/` | eighteen tools over the agent verbs and workflow helpers: live control, bounded evidence/verification, session state, recorded destinations, saved investigation checkpoints, code-history data, and the browser page and scratchpad (`page.ts`); `server.ts` is the stdio transport, `http.ts` Streamable HTTP and legacy SSE |
 
 On the extension's side, `src/runtime/language.ts` says which documents run,
 `src/runtime/interpreter.ts` `resolveNode` finds Node, `src/session/session.ts` starts the runner

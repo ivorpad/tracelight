@@ -21,6 +21,7 @@ import { DEBUG_ACTIONS, DEBUG_COMMAND, MAP_ACTIONS, MOVES, VALUE_ACTIONS, toolDe
 import { boundedEvidence } from './evidence.ts';
 import { callWorkflow, workflowDefinitions } from './workflowTools.ts';
 import { AgentError } from '../agent/source.ts';
+import { callPage, callScratchpad, PageError } from './page.ts';
 
 type Args = Record<string, any>;
 type Msg = Record<string, any>;
@@ -42,6 +43,9 @@ tracelight_seek {run, value: "total", equals: "NaN"} finds a recorded destinatio
 tracelight_save_investigation {path, run, question, checkpoints: [{name, step}]} writes a new private checkpoint artifact. Keep it and its recording. tracelight_open_investigation {path} verifies the recording hash and reopens recorded evidence without running code.
 For a program running now in VS Code (setting tracelight.agentAccess), pass live: true instead of run; tracelight_debug {action: "start", file, at: ["func"]} starts the debugger and returns the first stop, then "continue", "locals", tracelight_step with a move.
 For expression breakpoints use tracelight_debug {action: "watches", add: ["total > 100"], break_when: "true"}, or break with add: ["file.ts:12"] and when. break with log_message uses pure {expression} substitutions without pausing. locals with names_only lists names/types; names requests only selected binding values.
+tracelight_debug {action: "status", wait_seconds: 60} waits for the person to hit a breakpoint or step in VS Code, then prints the state; pause, stop and status are answered even while a continue waits.
+To teach in a browser: tracelight_page {action: "open", file} returns a URL for the person to open in one tab; then breakpoint, debug {op: "start"}, say for narration bubbles, wait_pause for their next step, and tracelight_scratchpad {op: "experiment", code, inputs, mocks, mock_labels} for copied-function experiments. close stops a page this server started.
+tracelight_history {run, out, var: ["total"]} writes code-history data; tracelight_learn, tracelight_pin and tracelight_narrate are the learn, pin and narrate commands.
 The text results are the form to read; json: true gives the raw shape.`;
 
 const JS_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', '.tsx']);
@@ -144,10 +148,15 @@ export function wordsMap(a: Args): string[] {
   if (action === 'graph') {
     opt(words, a, 'scope', '--scope');
     opt(words, a, 'all', '--all');
+    for (const pkg of strings(a.expand)) words.push(`--expand=${pkg}`);
+    opt(words, a, 'no_statements', '--no-statements');
+    opt(words, a, 'dot', '--dot');
   }
   if (action === 'tour') {
     opt(words, a, 'goal', '--goal');
     opt(words, a, 'budget', '--budget');
+    opt(words, a, 'prose', '--prose');
+    opt(words, a, 'out', '--out');
   }
   if (action === 'find') {
     opt(words, a, 'limit', '--limit');
@@ -311,6 +320,43 @@ export function wordsDebug(a: Args): string[] {
   return words;
 }
 
+export function wordsHistory(a: Args): string[] {
+  const [opts, pos] = sourceWords(a);
+  const words = ['history', ...opts, `--out=${need(a, 'out', 'tracelight_history', '{"run": "run.json", "out": "/tmp/s/history.json", "var": ["total"]}')}`];
+  for (const at of strings(a.at)) words.push(`--at=${at}`);
+  for (const v of strings(a.var)) words.push(`--var=${v}`);
+  if (a.why !== undefined) {
+    if (!Array.isArray(a.why) || a.why.some((w: any) => !w || typeof w !== 'object' || !Number.isInteger(w.step) || typeof w.name !== 'string' || !w.name)) throw new ToolError('why must be a list of {step, name} objects', 'e.g. [{"step": 40, "name": "total"}]');
+    for (const w of a.why) words.push('--why', String(w.step), String(w.name));
+  }
+  for (const flag of ['prose', 'pad', 'limit', 'lang', 'value_chars']) opt(words, a, flag, '--' + flag.replace('_', '-'));
+  for (const flag of ['pause', 'scope', 'append']) opt(words, a, flag, '--' + flag);
+  if (!strings(a.at).length && !strings(a.var).length && !(a.why ?? []).length && !a.pause) throw new ToolError('a history needs at least one checkpoint: `at`, `var`, `why` or `pause`', 'e.g. {"run": "run.json", "out": "history.json", "var": ["total"]}');
+  return [...words, '--', ...pos];
+}
+
+export function wordsLearn(a: Args): string[] {
+  const [opts, pos] = sourceWords(a);
+  const words = ['learn', ...opts];
+  opt(words, a, 'at', '--at');
+  opt(words, a, 'prediction', '--prediction');
+  opt(words, a, 'reveal', '--reveal');
+  return [...words, '--', ...pos];
+}
+
+export function wordsPin(a: Args): string[] {
+  const [opts, pos] = sourceWords(a);
+  return ['pin', ...opts, `--out=${need(a, 'out', 'tracelight_pin', '{"run": "run.json", "out": "/tmp/s/baseline.json"}')}`, '--', ...pos];
+}
+
+export function wordsNarrate(a: Args): string[] {
+  const [opts, pos] = sourceWords(a);
+  const words = ['narrate', ...opts];
+  opt(words, a, 'command', '--command');
+  opt(words, a, 'dry_run', '--dry-run');
+  return [...words, '--', ...pos];
+}
+
 // -- running a call ---------------------------------------------------------------------------
 
 /** Whether a saved run was written by this runtime (`meta.language`, the first key of the file). */
@@ -381,21 +427,37 @@ export async function callRun(a: Args): Promise<[string, boolean]> {
   oneOf(http, ['off', 'record', 'replay'], 'http mode');
   if (extname(path) === '.py') throw new ToolError(`cannot run ${basename(path)}: it is Python`, NOT_JAVASCRIPT_HINT);
   if (!JS_EXTENSIONS.has(extname(path))) throw new ToolError(`cannot run ${basename(path)}`, 'tracelight_run takes .js, .mjs, .cjs, .jsx, .ts, .mts, .cts or .tsx');
+  const mode = String(a.mode || 'normal');
+  oneOf(mode, ['normal', 'profile', 'snaps'], 'mode');
+  if (!empty(a.max_value_chars) && int(a.max_value_chars) < 0) throw new ToolError(`max_value_chars must be 0 or more, got ${a.max_value_chars}`);
+  const cwd = empty(a.cwd) ? undefined : resolve(String(a.cwd));
+  if (cwd && !(existsSync(cwd) && statSync(cwd).isDirectory())) throw new ToolError(`no directory ${cwd}`);
   const { recordRun } = await import('../cli.ts');
+  const { capInfo, warningLines } = await import('../agent/recording.ts');
   const { meta, events, finished } = await recordRun({
-    file: path, save, json: false, autoLog: false, argv: strings(a.args),
+    file: path, save, json: false, autoLog: !!a.auto_log, argv: strings(a.args),
     timeoutMs: empty(a.timeout_ms) ? 30000 : int(a.timeout_ms),
     maxSteps: empty(a.max_steps) ? undefined : int(a.max_steps),
     recordLocals: !a.no_locals, http,
+    libraryCode: !!a.library_code, exclude: strings(a.exclude), only: strings(a.only), plugins: strings(a.plugins),
+    mode, maxValueChars: empty(a.max_value_chars) ? undefined : int(a.max_value_chars), keep: !!a.keep,
+    ...(cwd ? { cwd } : {}), ...(empty(a.node) ? {} : { node: String(a.node) }),
   });
-  const lines = [`node ${meta.node} (${process.execPath}), ${NAME} ${RUNTIME_VERSION}`];
+  const lines = [`${String(meta.executable).includes('bun') ? 'bun' : 'node'} ${meta.node} (${meta.executable}), ${NAME} ${RUNTIME_VERSION}`];
   const errors = events.filter((e) => e.type === 'error' && !e.handled);
   for (const e of events.filter((e) => e.type === 'runner.error')) lines.push(`runner: ${e.message}`);
-  for (const e of errors) lines.push(`error: ${e.errorType}: ${e.message}`);
+  for (const e of errors) lines.push(`error: ${e.errorType}: ${e.message}${e.hint ? `\n  hint: ${e.hint}` : ''}`);
+  const traceEv = [...events].reverse().find((e) => e.type === 'trace' && !e.partial);
+  const cap = capInfo(traceEv, meta, (p: string) => p, Math.min(finished.stepCount ?? 0, traceEv?.cap ?? Infinity));
+  if (cap) lines.push(...warningLines(cap));
   const h = finished.http;
-  lines.push(`${finished.stepCount} steps, exit ${finished.exitCode ?? 'killed'}${finished.timedOut ? ' (timed out)' : ''}${h && h.requests ? `, ${h.requests} HTTP request(s) ${h.mode === 'off' ? 'seen' : h.mode === 'record' ? 'recorded' : 'replayed'}` : ''}`);
+  const profile = typeof finished.profile?.path === 'string' ? finished.profile.path : null;
+  lines.push(`${profile ? 'profiled, no steps recorded' : `${finished.stepCount} steps`}, exit ${finished.exitCode ?? 'killed'}${finished.timedOut ? ' (timed out)' : ''}${h && h.requests ? `, ${h.requests} HTTP request(s) ${h.mode === 'off' ? 'seen' : h.mode === 'record' ? 'recorded' : 'replayed'}` : ''}`);
+  if (profile) lines.push(`profile: ${profile}`);
   lines.push(`run: ${save}`);
-  lines.push(`next: tracelight_map {"action": "walkthrough", "run": ${JSON.stringify(save)}}`);
+  if (meta.keep) lines.push(`kept: runner pid ${meta.keep.pid}; tracelight_value eval and expand read the finished run, release ends it`);
+  lines.push(profile ? 'next: load the .cpuprofile in Chrome DevTools (Performance > Load profile) or VS Code; a profile run has no steps to map'
+    : `next: tracelight_map {"action": "walkthrough", "run": ${JSON.stringify(save)}}`);
   return [lines.join('\n') + '\n', false];
 }
 
@@ -407,7 +469,81 @@ const TOOLS: Record<string, (a: Args) => string[]> = {
   tracelight_debug: wordsDebug,
   tracelight_investigate: wordsInvestigate,
   tracelight_verify: wordsVerify,
+  tracelight_history: wordsHistory,
+  tracelight_learn: wordsLearn,
+  tracelight_pin: wordsPin,
+  tracelight_narrate: wordsNarrate,
 };
+
+/** the tools answered outside `TOOLS`: they run something themselves instead of one verb */
+const OWN_TOOLS = ['tracelight_run', 'tracelight_page', 'tracelight_scratchpad'];
+
+export function knownTool(name: string): boolean {
+  return OWN_TOOLS.includes(name) || !!TOOLS[name] || workflowDefinitions.some(d => d.name === name);
+}
+
+/**
+ * Whether a call drives something live (the VS Code debugger, the browser page) and so must not
+ * overlap another such call. Reading a saved run or recording a new one never conflicts. `pause`,
+ * `stop` and `status` stay free so they can reach a `continue` that is still waiting, and a page's
+ * `wait_pause` is the one page command the bridge lets wait beside another.
+ */
+export function isExclusive(name: string, a: Args): boolean {
+  if (name === 'tracelight_debug') return !['pause', 'stop', 'status'].includes(a.action);
+  if (name === 'tracelight_page') return !['wait_pause', 'list', 'open', 'close'].includes(a.action);
+  if (name === 'tracelight_scratchpad') return !['list', 'history'].includes(a.op);
+  if (name === 'tracelight_session' || name === 'tracelight_seek' || name === 'tracelight_open_investigation' || name === 'tracelight_save_investigation') return false;
+  return !!(a.live || a.session);
+}
+
+let exclusiveTail: Promise<unknown> = Promise.resolve();
+
+/** Run `call` now, or after the exclusive calls before it when it is exclusive itself. */
+export function exclusiveCall<T>(name: string, a: Args, call: () => Promise<T>): Promise<T> {
+  if (!a || typeof a !== 'object' || !isExclusive(name, a)) return call();
+  const result = exclusiveTail.then(call, call);
+  exclusiveTail = result.catch(() => undefined);
+  return result;
+}
+
+/**
+ * `tracelight_debug` action `status`: the live session's state, after waiting up to
+ * `wait_seconds` for a pause or the end of the run when it is running. The watch is in place
+ * before the state is read, so a pause between the two is not missed.
+ */
+export async function callStatus(a: Args): Promise<[string, boolean]> {
+  const seconds = empty(a.wait_seconds) ? 0 : int(a.wait_seconds);
+  if (seconds < 0 || seconds > 600) throw new ToolError('wait_seconds must be 0 to 600');
+  const words = ['state', '--live', ...(a.session ? [`--session=${a.session}`] : []), ...(a.json ? ['--json'] : [])];
+  if (!seconds) return runNative(words);
+  const { openSource, parseVerbArgs } = await import('../agent/commands.ts');
+  const verb = getVerb('watch')!;
+  const parsed = parseVerbArgs(verb, ['--live', ...(a.session ? [`--session=${a.session}`] : [])], { out: () => {}, err: () => {} });
+  if (typeof parsed === 'number') throw new ToolError('could not read the live session');
+  const source = await openSource(verb, parsed) as any;
+  let settle: (ev: Msg | null) => void = () => {};
+  const event = new Promise<Msg | null>((res) => { settle = res; });
+  let watching: () => void = () => {};
+  const subscribed = new Promise<void>((res) => { watching = res; });
+  const watch = source.watch((ev: Msg) => { if (ev.event === 'paused' || ev.event === 'finished') settle(ev); }, watching)
+    .then(() => settle(null), () => settle(null));
+  const timer = setTimeout(() => settle(null), seconds * 1000);
+  const started = Date.now();
+  try {
+    await Promise.race([subscribed, watch]);
+    const now = JSON.parse((await runNative(['state', '--live', '--json', ...(a.session ? [`--session=${a.session}`] : [])]))[0]);
+    if (now.error || now.kind !== 'debug' || now.paused || now.running === false) return runNative(words);
+    const ev = await event;
+    const waited = Math.round((Date.now() - started) / 100) / 10;
+    const [text, isError] = await runNative(words);
+    if (a.json) return [text, isError];
+    const head = ev ? `${ev.event === 'paused' ? 'paused' : `finished: exit ${ev.exitCode ?? '?'}`} after waiting ${waited} s` : `still running after ${seconds} s`;
+    return [`${head}\n${text}`, isError];
+  } finally {
+    clearTimeout(timer);
+    source.close();
+  }
+}
 
 /** A `tools/call` result: the command's text, `isError` when it failed. */
 export async function callTool(name: string, args: Args): Promise<Msg> {
@@ -419,6 +555,11 @@ export async function callTool(name: string, args: Args): Promise<Msg> {
       return { content: [{ type: 'text', text: JSON.stringify(payload) }], structuredContent: payload, isError: false };
     }
     if (name === 'tracelight_run') [text, isError] = await callRun(args);
+    else if (name === 'tracelight_page' || name === 'tracelight_scratchpad') {
+      const r = await (name === 'tracelight_page' ? callPage(args) : callScratchpad(args));
+      return { content: [{ type: 'text', text: r.text }], ...(r.structured ? { structuredContent: r.structured } : {}), isError: r.isError };
+    }
+    else if (name === 'tracelight_debug' && args.action === 'status') [text, isError] = await callStatus(args);
     else if (TOOLS[name]) {
       const words = TOOLS[name]!(args);
       if (!nativeFor(words)) throw refusal(words);
@@ -435,9 +576,9 @@ export async function callTool(name: string, args: Args): Promise<Msg> {
         }
       }
     }
-    else throw new ToolError(`unknown tool ${name}`, 'tools: tracelight_run, ' + Object.keys(TOOLS).join(', '));
+    else throw new ToolError(`unknown tool ${name}`, 'tools: ' + [...OWN_TOOLS, ...Object.keys(TOOLS)].join(', '));
   } catch (e) {
-    if (e instanceof ToolError || e instanceof AgentError) text = `error: ${e.message}${e.hint ? '\n' + e.hint : ''}`;
+    if (e instanceof ToolError || e instanceof AgentError || e instanceof PageError) text = `error: ${e.message}${e.hint ? '\n' + e.hint : ''}`;
     else if (e instanceof TypeError) text = `error: bad argument: ${e.message}`;
     else {
       process.stderr.write(`${(e as Error).stack ?? e}\n`);
@@ -484,7 +625,7 @@ export async function handle(msg: any): Promise<Msg | null> {
       if (!params || typeof params !== 'object' || typeof params.name !== 'string') return rpcError(id, -32602, 'tools/call needs params.name');
       const args = params.arguments ?? {};
       if (!args || typeof args !== 'object' || Array.isArray(args)) return rpcError(id, -32602, 'tools/call params.arguments must be an object');
-      if (params.name !== 'tracelight_run' && !TOOLS[params.name] && !workflowDefinitions.some(d => d.name === params.name)) return rpcError(id, -32602, `unknown tool ${params.name}`);
+      if (!knownTool(params.name)) return rpcError(id, -32602, `unknown tool ${params.name}`);
       return { jsonrpc: '2.0', id, result: await callTool(params.name, args) };
     }
     case 'resources/list':

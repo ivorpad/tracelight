@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- `tracelight mcp --http` serves the MCP tools over Streamable HTTP at `http://127.0.0.1:4787/mcp`
+  (`--port`, `TRACELIGHT_MCP_PORT`): sessions by `Mcp-Session-Id`, `tools/call` answered on an SSE
+  stream with `notifications/progress` every 5 s when the client sends a progress token, `GET` and
+  `DELETE /mcp`, and the 2024-11-05 HTTP+SSE transport on `/sse`. It binds 127.0.0.1 and ::1,
+  refuses a non-loopback `Origin` or `Host`, and needs `--token` to bind anything else. Calls
+  that drive the debugger or the page run one at a time; `pause`, `stop` and `status` do not wait.
+- Six more MCP tools, eighteen in all: `tracelight_page` and `tracelight_scratchpad` drive the
+  browser page (open and close it, every `web ctl` command, `wait_pause`), `tracelight_history`
+  writes code-history data, and `tracelight_learn`, `tracelight_pin` and `tracelight_narrate`.
+  `tracelight_debug` gains `status` with `wait_seconds` (up to 600), which waits for the person to
+  hit a breakpoint or step in VS Code, as DebugMCP's `get_debug_status` does. `tracelight_run` takes
+  `library_code`, `exclude`, `only`, `plugins`, `mode`, `max_value_chars`, `keep`, `auto_log`, `node`
+  and `cwd`; `tracelight_map` takes graph `expand`, `no_statements`, `dot` and tour `prose`, `out`.
+- The page bridge waits as long as a `waitPause` asks (up to 25 s) instead of answering "the page did
+  not answer" after 10 s.
+
 - Bare `tracelight` (and `tracelight --help`) ends with a first command for each job: `run FILE
   --save run.json` then `story run.json --file FILE`, `debug FILE --at NAME` (`--node bun` for Bun),
   `web FILE --no-run`, then `VERB --help`. A Codex agent spent 7 minutes reading 67 KB of
