@@ -50,6 +50,16 @@ export function registerLanguageSource(path: string, content: string): void {
   refreshLibraries();
 }
 
+/** Ask the TypeScript worker directly, so the answer never depends on whether markers were refreshed yet. */
+export async function checkModel(model: monaco.editor.ITextModel): Promise<{ code?: string; message: string; line: number; severity: number }[]> {
+  const factory = await (model.getLanguageId() === 'typescript' ? monaco.languages.typescript.getTypeScriptWorker() : monaco.languages.typescript.getJavaScriptWorker());
+  const worker = await factory(model.uri);
+  const uri = model.uri.toString();
+  const found = [...await worker.getSyntacticDiagnostics(uri), ...await worker.getSemanticDiagnostics(uri)];
+  const text = (m: unknown): string => typeof m === 'string' ? m : `${(m as { messageText: unknown }).messageText}`;
+  return found.map(d => ({ code: String(d.code), message: text(d.messageText), line: model.getPositionAt(d.start ?? 0).lineNumber, severity: d.category === 1 ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning }));
+}
+
 export async function staticHover(model: monaco.editor.ITextModel, position: monaco.Position): Promise<monaco.languages.Hover | undefined> {
   try {
     const factory = await (model.getLanguageId() === 'typescript' ? monaco.languages.typescript.getTypeScriptWorker() : monaco.languages.typescript.getJavaScriptWorker());

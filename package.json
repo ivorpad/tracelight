@@ -1913,6 +1913,7 @@
     "typecheck": "tsc --noEmit -p .",
     "test": "npm run typecheck && vitest run && npm run test:node",
     "test:node": "npm test --prefix node",
+    "test:web-smoke": "node test/web-smoke/scratchpad.mjs",
     "test:e2e": "vscode-test"
   },
   "devDependencies": {

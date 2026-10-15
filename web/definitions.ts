@@ -39,3 +39,28 @@ export function definitions(file: string, content: string, offset: number) {
     });
   } finally { service.dispose(); }
 }
+
+/**
+ * The project files the entry reaches through relative imports, read statically. The editor needs
+ * them before any run, or a page started with `--no-run` reports every local import as missing.
+ */
+export function localImports(entry: string, limit = 200): string[] {
+  const options: ts.CompilerOptions = { allowJs: true, allowImportingTsExtensions: true, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, noDtsResolution: true };
+  const found = new Set<string>();
+  const queue = [entry];
+  while (queue.length && found.size < limit) {
+    const from = queue.shift()!;
+    const text = ts.sys.readFile(from);
+    if (text === undefined) continue;
+    for (const { fileName } of ts.preProcessFile(text, true, true).importedFiles) {
+      if (!fileName.startsWith('.')) continue;
+      const resolved = ts.resolveModuleName(fileName, from, options, ts.sys).resolvedModule?.resolvedFileName;
+      if (!resolved || resolved.endsWith('.d.ts') || resolved.includes(`${path.sep}node_modules${path.sep}`)) continue;
+      const full = path.resolve(resolved);
+      if (full === entry || found.has(full)) continue;
+      found.add(full);
+      queue.push(full);
+    }
+  }
+  return [...found];
+}

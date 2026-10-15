@@ -2,7 +2,7 @@ import { afterEach, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { definitions } from '../../web/definitions';
+import { definitions, localImports } from '../../web/definitions';
 
 const roots: string[] = [];
 afterEach(() => roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true })));
@@ -50,4 +50,18 @@ it('returns both the class declaration and constructor for an imported library c
   const result = definitions(path.join(root, 'main.ts'), content, content.lastIndexOf('Agent'));
   expect(result.map(target => target.range.startLineNumber)).toEqual([1, 2]);
   expect(result.every(target => target.path === path.join(pkg, 'index.js'))).toBe(true);
+});
+
+it('lists the local files an entry reaches before any run, as the editor needs them, and nothing from packages', () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tl-imports-')));
+  roots.push(root);
+  const write = (rel: string, text: string) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  write('package.json', JSON.stringify({ type: 'module' }));
+  write('index.ts', "import { a } from './models/a.ts';\nimport { readFileSync } from 'node:fs';\nimport x from 'example';\nexport type { B } from './b';\n");
+  write('models/a.ts', "export { c as a } from '../lib/c.js';\n");
+  write('b.ts', 'export type B = 1;\n');
+  write('lib/c.ts', 'export const c = 1;\n');
+  write('node_modules/example/index.js', 'export default 1;\n');
+  write('unused.ts', 'export {};\n');
+  expect(localImports(path.join(root, 'index.ts')).sort()).toEqual(['b.ts', 'lib/c.ts', 'models/a.ts'].map(rel => path.join(root, rel)));
 });

@@ -9,7 +9,7 @@ import type { ScratchResult } from './scratchpadRuntime';
 import type { ScratchBaseline, ScratchCommand, ScratchEntry, ScratchState, ScratchSummary } from './scratchpadProtocol';
 import { scratchInput } from './scratchpadValues';
 import { scratchExperiment, validateScratchUpdate } from './scratchpadExperiment';
-import { registerRuntimeLibraries } from './languageService';
+import { checkModel, registerRuntimeLibraries } from './languageService';
 import type { ScratchCompatibility } from './scratchpadCompatibility';
 function valueNode(value: unknown, id = 'scratch'): ValueNode {
   if (value === null || value === undefined) return { id, queryPath: [], type: 'None', value: String(value) };
@@ -50,6 +50,7 @@ export class Scratchpad {
   private resize: ResizeObserver;
   private activeRequest?: AbortController;
   private inputNames: string[] = [];
+  private declared: string | null = null;
   private helperNames: string[] = [];
   private capturedValues: ScratchResult['values'] = [];
 
@@ -149,6 +150,7 @@ export class Scratchpad {
     } finally { this.updating = false; }
     this.pane.hidden = false; document.body.classList.add('pkw-scratch-open'); this.onLayout(); this.editor.layout();
     this.pane.querySelector('.pkw-scratch-file')!.textContent = `${this.file.split('/').pop()} · saved v${entry.version} · no execution on reopen`;
+    this.declareContext();
     this.status(this.error ?? ''); this.renderResult(this.result ?? { values: [], output: [] }); this.fixtureLabels();
     await this.refreshLibrary(); this.saveStatus();
   }
@@ -182,7 +184,18 @@ export class Scratchpad {
     const mocks = parse(this.mocks.getValue());
     return { diagnostics:monaco.editor.getModelMarkers({resource:this.model.uri}).map(m=>({code:typeof m.code==='string'?m.code:m.code?.value,message:m.message,line:m.startLineNumber,severity:m.severity})), id: this.id, title: this.title, loadedVersion: this.loadedVersion, saving: Boolean(this.saveTimer || this.pendingSaves), savedVersion: this.id ? this.versions.get(this.id) ?? 0 : 0, saveError: this.saveError, open: !this.pane.hidden, file: this.file, code: this.model.getValue(), inputs: parse(this.inputs.getValue()), mocks, inputsText: this.inputs.getValue(), mocksText: this.mocks.getValue(), mockLabels: Object.fromEntries(Object.keys(mocks ?? {}).map(path => [path, this.mockLabels[path] ?? 'manual synthetic fixture'])), autoRun: this.auto.checked, revision: this.revision, status: this.runStatus, preparation: this.provenance ? { requiresReceiver: this.requiresReceiver } : null, result: this.result, error: this.error, provenance: this.provenance, liveExecutionChanged: false };
   }
+  /** Every control reply carries diagnostics the TypeScript worker computed for the code in that reply. */
   async control(command: ScratchCommand): Promise<ScratchState> {
+    const state = await this.apply(command);
+    if (state.open !== true || !this.id && !this.provenance) return { ...state, ready: false };
+    this.declareContext();
+    const code = this.model.getValue();
+    const diagnostics = await checkModel(this.model);
+    if (this.model.getValue() !== code) throw new Error('Scratchpad code changed while it was being checked; read state again');
+    const errors = diagnostics.filter(d => d.severity === monaco.MarkerSeverity.Error);
+    return { ...state, diagnostics, ready: errors.length === 0 && state.status !== 'error' && state.status !== 'needsPreparation' };
+  }
+  private async apply(command: ScratchCommand): Promise<ScratchState> {
     await this.environment;
     const op = command.op ?? (typeof command.open === 'boolean' ? command.open ? 'open' : 'close' : 'state');
     if (!['experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'].includes(op)) throw new Error('Unknown scratchpad operation');
@@ -239,7 +252,7 @@ export class Scratchpad {
     if (command.mocks !== undefined) { this.mocks.setValue(JSON.stringify(command.mocks, null, 2)); this.mockLabels = { ...command.mockLabels }; }
     this.result = null; this.error = null; this.capturedValues = []; this.values.clear();
     render(null, this.pane.querySelector('.pkw-scratch-results')!); this.status('');
-    this.fixtureLabels();
+    this.fixtureLabels(); this.declareContext();
   }
   private publish(): void {
     this.pane.hidden = false; document.body.classList.add('pkw-scratch-open');
@@ -281,7 +294,7 @@ export class Scratchpad {
       return { range: new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn), contents: [{ value: `Scratchpad value\n\n\`\`\`json\n${JSON.stringify(observed.value, null, 2)}\n\`\`\`` }] };
     } });
     this.model.onDidChangeContent(() => this.schedule());
-    this.inputs.onDidChangeModelContent(() => this.schedule()); this.mocks.onDidChangeModelContent(() => { if (!this.updating) this.mockLabels = {}; this.schedule(); });
+    this.inputs.onDidChangeModelContent(() => { if (!this.updating) { try { const value = JSON.parse(this.inputs.getValue()); if (value && typeof value === 'object' && !Array.isArray(value)) this.inputNames = Object.keys(value).filter(n => /^[A-Za-z_$][\w$]*$/.test(n)); } catch {} } this.schedule(); }); this.mocks.onDidChangeModelContent(() => { if (!this.updating) this.mockLabels = {}; this.schedule(); });
     this.auto.onchange = () => this.schedule();
     pane.querySelector('[aria-label="Close scratchpad"]')!.addEventListener('click', () => this.close());
     const addFunction = document.createElement('button');
@@ -363,8 +376,16 @@ export class Scratchpad {
     labels.textContent = fixtures && typeof fixtures === 'object' ? Object.keys(fixtures).map(path => `${path}: ${this.mockLabels[path] ?? 'manual synthetic fixture'}`).join(' · ') : '';
     (labels as HTMLElement).hidden = !labels.textContent;
   }
+  /** Input and helper names are bindings the editor must know before the first run. */
+  private declareContext(): void {
+    const declarations = [...new Set([...this.inputNames, ...this.helperNames])].map(name => `declare const ${name}: any;`).join('\n');
+    if (declarations === this.declared) return;
+    this.declared = declarations;
+    registerRuntimeLibraries([{content:`${declarations}\n`,filePath:'inmemory://scratchpad/context.d.ts'}]);
+  }
   private schedule(reason = 'edit'): void {
     if (this.updating) return;
+    this.declareContext();
     this.fixtureLabels();
     this.loadedVersion = null;
     this.runStatus = 'dirty'; this.result = null; this.error = null;
@@ -394,10 +415,9 @@ export class Scratchpad {
     try {
       await this.environment;
       if (this.environmentError) throw new Error(this.environmentError);
+      this.declareContext();
       const inputs = JSON.parse(this.inputs.getValue()), mocks = JSON.parse(this.mocks.getValue());
       if (!inputs || Array.isArray(inputs) || typeof inputs !== 'object' || !mocks || Array.isArray(mocks) || typeof mocks !== 'object') throw new Error('Inputs and mocks must be JSON objects.');
-      const declarations = [...this.inputNames, ...this.helperNames].map(name => `declare const ${name}: any;`).join('\n');
-      registerRuntimeLibraries([{content:`${declarations}\n`,filePath:'inmemory://scratchpad/context.d.ts'}]);
       const response = await fetch('/api/scratchpad/run', { method: 'POST', headers: { 'content-type': 'application/json' }, signal: this.activeRequest.signal, body: JSON.stringify({ file: this.file, code: this.model.getValue(), inputs, mocks }) });
       const data = await response.json() as ScratchResult;
       if (revision !== this.revision) return;

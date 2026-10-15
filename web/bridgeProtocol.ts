@@ -105,7 +105,7 @@ export interface BridgeNarration {
 }
 
 export type BridgeToPage =
-  | { type: 'hello'; file: BridgeFile; runtime: RuntimeInfo; watch: boolean; /** a narration backend exists (claude, codex, TRACELIGHT_EXPLAIN_COMMAND) */ canNarrate: boolean }
+  | { type: 'hello'; file: BridgeFile; runtime: RuntimeInfo; watch: boolean; /** a narration backend exists (claude, codex, TRACELIGHT_EXPLAIN_COMMAND) */ canNarrate: boolean; /** identity of the page bundle this bridge serves; a page loaded from another build reloads */ build?: string }
   /** the file changed on disk (or `file.read` asked for another one) */
   | { type: 'file'; file: BridgeFile }
   | { type: 'event'; event: RunEvent }

@@ -4,6 +4,7 @@
  * VS Code Simple Browser tab next to the real editor; `?layout=code` the code pane alone.
  * The page sets `window.__tracelight` (worker and codicons) before this script; see web/index.html.
  */
+import { staleBuild } from './pageBuild';
 import { render } from 'preact';
 import { App } from '../webview/App';
 import { bootMonaco } from '../webview/monaco';
@@ -96,6 +97,8 @@ const code = new CodePane(
 const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 const storyCode = new CodePane($('pkw-story-code'), () => {}, () => {});
 let storyVisible = false;
+/** the bridge build this page's code came from, set by the first hello */
+let pageBuild: string | undefined;
 code.showStory = file => { storyCode.showFile(file); storyVisible = true; };
 code.storyShown = () => storyVisible;
 code.renderStory = decorations => storyCode.render(decorations);
@@ -273,6 +276,11 @@ function onBridge(msg: BridgeToPage): void {
       (err) => link.send({ type: 'agent.result', id: msg.id, result: null, error: err instanceof Error ? err.message : String(err) }),
     );
     return;
+  }
+  if (msg.type === 'hello' && msg.build) {
+    // A bridge restarted on a new build serves page code this tab does not have.
+    if (staleBuild(pageBuild, msg.build, code.dirty)) { location.reload(); return; }
+    pageBuild ??= msg.build;
   }
   host.onBridge(msg);
   if (msg.type === 'hello' || msg.type === 'runtime') {

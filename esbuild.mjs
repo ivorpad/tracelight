@@ -89,8 +89,9 @@ mkdirSync('dist/web', { recursive: true });
 cpSync('web/index.html', 'dist/web/index.html');
 cpSync('web/source.html', 'dist/web/source.html');
 cpSync('media/logo.png', 'dist/web/logo.png');
-// The web scratchpad compiles copied TypeScript at runtime.
-for (const dependency of ['typescript', 'esbuild', '@esbuild']) {
+// The web scratchpad compiles copied TypeScript at runtime, and its editors type-check against the
+// selected runtime's declarations (web/scratchpadCompatibility.ts): the vsix has no other node_modules.
+for (const dependency of ['typescript', 'esbuild', '@esbuild', '@types/node', 'undici-types', 'bun-types']) {
   // Replace executables with fresh inodes so macOS does not retain stale code-signing cache entries.
   rmSync(`dist/web/node_modules/${dependency}`, { recursive: true, force: true });
   cpSync(`node_modules/${dependency}`, `dist/web/node_modules/${dependency}`, { recursive: true, dereference: true });

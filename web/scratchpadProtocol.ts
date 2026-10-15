@@ -19,6 +19,8 @@ export interface ScratchCommand {
 }
 export interface ScratchState {
   diagnostics?: {code?:string;message:string;line:number;severity:number}[];
+  /** control replies only: the TypeScript worker checked this exact code, it has no errors, and nothing failed or waits for preparation */
+  ready?: boolean;
   id: string | null;
   title: string;
   savedVersion: number;

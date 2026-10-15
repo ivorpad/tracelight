@@ -11,6 +11,7 @@ import { decodeFrames, encodeFrame } from '../../web/ws';
 import type { BridgeToPage } from '../../web/bridgeProtocol';
 import * as pathShim from '../../web/pathShim';
 import { runtimeLabelText } from '../../web/pageHost';
+import { staleBuild } from '../../web/pageBuild';
 
 const fake = path.join(__dirname, 'fixtures', 'fakeRunner.cjs');
 
@@ -260,6 +261,38 @@ describe('BridgeServer', () => {
     });
   }
 
+  it('sends the files the entry imports with hello, so the editor resolves them before any run', async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tl-imports-')));
+    fs.writeFileSync(path.join(dir, 'dep.ts'), 'export const dep = 1;\n');
+    const entry = path.join(dir, 'main.ts');
+    fs.writeFileSync(entry, "import { dep } from './dep.ts';\nconsole.log(dep);\n");
+    server = new BridgeServer({ file: entry, port: 0, host: '127.0.0.1', runtime: `"${process.execPath}" "${fake}"`, watch: false, initialRun: false, open: false, distDir: dir, stateDir: dir });
+    await server.start();
+    const page = await connect(Number(new URL(server.url).port));
+    const sent = await page.next(m => m.type === 'file' && m.file.path === path.join(dir, 'dep.ts')) as Extract<BridgeToPage, { type: 'file' }>;
+    page.ws.close();
+    expect(sent.file.content).toBe('export const dep = 1;\n');
+  });
+
+  it('names the served page build in hello, so a tab from an older build reloads', async () => {
+    const { port } = await start(false);
+    const dist = path.join(path.dirname(server!['opts'].file), 'web');
+    fs.mkdirSync(dist, { recursive: true });
+    fs.writeFileSync(path.join(dist, 'app.js'), 'old');
+    const first = await connect(port);
+    const before = await first.next(m => m.type === 'hello') as Extract<BridgeToPage, { type: 'hello' }>;
+    fs.writeFileSync(path.join(dist, 'app.js'), 'rebuilt');
+    const second = await connect(port);
+    const after = await second.next(m => m.type === 'hello') as Extract<BridgeToPage, { type: 'hello' }>;
+    first.ws.close(); second.ws.close();
+    expect(before.build).toBeTruthy();
+    expect(after.build).not.toBe(before.build);
+    expect(staleBuild(before.build, after.build, false)).toBe(true);
+    expect(staleBuild(before.build, after.build, true)).toBe(false);
+    expect(staleBuild(undefined, after.build, false)).toBe(false);
+    expect(staleBuild(after.build, after.build, false)).toBe(false);
+  });
+
   it('propagates the selected program executable to recording, live debug and profiling', async () => {
     const { port } = await start(false, process.execPath);
     const page = await connect(port);
@@ -285,12 +318,14 @@ describe('BridgeServer', () => {
     const content = 'import { helper } from "./helper.js";\nhelper();';
     fs.writeFileSync(file, content);
     fs.writeFileSync(helper, 'export function helper() { return 1; }');
+    const unrelated = path.join(dir, 'unrelated.ts');
+    fs.writeFileSync(unrelated, content);
     server = new BridgeServer({ file, port: 0, host: '127.0.0.1', runtime: `"${process.execPath}" "${fake}"`, watch: false, initialRun: false, open: false, distDir: dir, stateDir: dir });
     await server.start();
     const page = await connect(Number(new URL(server.url).port));
     const request = (source: string) => fetch(new URL('/api/definitions', server!.url), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: source, content, offset: content.lastIndexOf('helper') }) });
     try {
-      expect((await request(helper)).status).toBe(403);
+      expect((await request(unrelated)).status).toBe(403);
       const response = await request(file);
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject([{ path: helper }]);

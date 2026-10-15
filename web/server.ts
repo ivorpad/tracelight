@@ -29,7 +29,7 @@ import { runtimeRoot } from './runtimeRoot';
 import { ScratchpadStore } from './scratchpadStore';
 import { tracelightHome } from '../src/util/paths';
 import { scratchFunction, runScratch, formatScratchCode, type ScratchRequest } from './scratchpadRuntime';
-import { definitions } from './definitions';
+import { definitions, localImports } from './definitions';
 import { blocksBridgeRun } from './runPolicy';
 
 export const DEFAULT_PORT = 4777;
@@ -194,6 +194,24 @@ export class BridgeServer {
     if (addr && typeof addr === 'object') this.opts.port = addr.port;
     this.watchFile();
     if (this.opts.initialRun !== false) void this.run('start');
+  }
+
+  /** The editor resolves local imports before any run instruments them; those files become readable sources. */
+  private sendImports(ws?: WebSocketConnection): void {
+    let files: string[] = [];
+    try { files = localImports(this.file.path); } catch { return; }
+    for (const file of files) {
+      this.definitionFiles.add(file);
+      try {
+        const message = { type: 'file' as const, file: readBridgeFile(file) };
+        if (ws) this.sendTo(ws, message); else this.broadcast(message);
+      } catch { /* removed since it was resolved */ }
+    }
+  }
+
+  /** A rebuild replaces app.js, so its size and mtime identify the page code this bridge serves. */
+  private pageBuild(): string | undefined {
+    try { const s = fs.statSync(path.join(this.opts.distDir, 'web', 'app.js')); return `${s.size}-${Math.round(s.mtimeMs)}`; } catch { return undefined; }
   }
 
   async close(): Promise<void> {
@@ -427,7 +445,8 @@ export class BridgeServer {
     this.remember(this.file);
     this.clearSourceWatchers();
     this.watchFile();
-    this.broadcast({ type: 'hello', file: this.file, runtime: this.runtimeInfo, watch: this.opts.watch, canNarrate: this.views.canNarrate() });
+    this.broadcast({ type: 'hello', file: this.file, runtime: this.runtimeInfo, watch: this.opts.watch, canNarrate: this.views.canNarrate(), build: this.pageBuild() });
+    this.sendImports();
     await this.run('open');
     return null;
   }
@@ -502,7 +521,8 @@ export class BridgeServer {
       }
       void this.onPageMessage(ws, msg);
     });
-    this.sendTo(ws, { type: 'hello', file: this.file, runtime: this.runtimeInfo, watch: this.opts.watch, canNarrate: this.views.canNarrate() });
+    this.sendTo(ws, { type: 'hello', file: this.file, runtime: this.runtimeInfo, watch: this.opts.watch, canNarrate: this.views.canNarrate(), build: this.pageBuild() });
+    this.sendImports(ws);
     if (this.current) {
       this.sendTo(ws, { type: 'run.begin', ...this.current });
       for (const ev of this.events) this.sendTo(ws, { type: 'event', event: ev });
@@ -669,7 +689,7 @@ export class BridgeServer {
       } catch (e) { return json(res, 400, { error: e instanceof Error ? e.message : String(e) }); }
     }
     if (url.pathname === '/api/scratchpad/environment' && req.method === 'GET') {
-      try { return json(res, 200, await scratchCompatibility(this.scratchExecutable(), path.dirname(this.opts.distDir))); }
+      try { return json(res, 200, await scratchCompatibility(this.scratchExecutable(), path.join(this.opts.distDir, 'web'))); }
       catch (e) { return json(res, 500, {error:e instanceof Error ? e.message : String(e)}); }
     }
     if (url.pathname.startsWith('/api/scratchpad/') && req.method === 'POST') {
