@@ -1,5 +1,5 @@
 /**
- * The debugger in the Time Machine view (docs/HANDOFF-debugger.md): the header that says where the
+ * The debugger in the Time Machine view (docs/PROTOCOL.md): the header that says where the
  * run is paused and why, and the "not run yet" block past the frontier on the strips. The paused
  * frame's variables are VS Code's Variables view, over the same debug session.
  */

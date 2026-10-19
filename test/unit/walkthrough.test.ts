@@ -2,7 +2,7 @@
  * The host's walkthrough builder over a fixture run (`fixtures/walkthrough-run.json`): it must
  * produce exactly the moments in `fixtures/walkthrough-moments.json`. Both files were recorded from
  * a Python program before the split and nothing in this repository writes them, so they stay as
- * they are until a JavaScript writer exists (docs/HANDOFF.md, "Open work").
+ * they are until a JavaScript writer exists (docs/DEVELOPMENT.md, "Open work").
  */
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';

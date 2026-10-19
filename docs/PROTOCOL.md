@@ -828,7 +828,7 @@ A save while an agent navigates re-runs and re-anchors (Time Machine rules);
 ### Debugging over the bridge
 
 A debug run is an ordinary run whose frontier can pause (the runtime's `debug` request and
-`debug.paused` event above; `docs/HANDOFF-debugger.md`). Over the bridge, every reply that
+`debug.paused` event above; `docs/PROTOCOL.md`). Over the bridge, every reply that
 reports a stop is the context slice of the frontier step, exactly what `step` and `context`
 return, plus `paused`, `locals` and `output`, so a stop answers "where, with what, after what
 was printed" without a second call:

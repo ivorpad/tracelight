@@ -114,8 +114,7 @@ export function readSource(ds: DebugSession, fileId: number): string[] | undefin
  * that has never run and whose line numbers can disagree with the ones in the stack. `disk` means
  * the file changed under the run, so the block is the new text against the old line numbers.
  * Reported as one undifferentiated "changed since the run", it reads as noise, and a reader who
- * has seen it on a run they just started learns to skip it — which is what happened
- * (handoffs/2026-09-15-debugger-streaming-output.md, item 6).
+ * has seen it on a run they just started learns to skip it.
  */
 export function staleness(ds: DebugSession): 'unsaved' | 'disk' | null {
   const file = ds.launch.program ?? ds.mainFile;

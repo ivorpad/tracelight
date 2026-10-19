@@ -391,7 +391,7 @@ Tracelight active.
 
 **A file records 0 steps.** If its path goes through a symlink, the runtime runs it without
 instrumenting it. On macOS `/tmp` and `/var/folders` are symlinks, so open the file by its real
-path. This is a known bug ([docs/HANDOFF.md](docs/HANDOFF.md)).
+path. This is a known bug ([docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)).
 
 **The band shows an old title or follows the wrong CLI.** Claude Code keeps the plugin code it
 loaded when the session started. Restart it.
@@ -414,7 +414,7 @@ claude plugin test claude-plugin/tracelight-band
 
 `npm test` runs the typecheck, vitest and the runtime tests in a row. On macOS give it the real
 `TMPDIR` as above, or most runtime tests hit the symlink bug. Four runtime tests fail on macOS with
-Node 24 (named in [docs/HANDOFF.md](docs/HANDOFF.md)), so `npm test` stops at the runtime step
+Node 24 (named in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)), so `npm test` stops at the runtime step
 until they are fixed. Run the typecheck and vitest on their own to see their result.
 
 After cloning, run `git config core.hooksPath .githooks` once. The commit-msg hook checks the
@@ -433,7 +433,7 @@ GitHub release.
 | `claude-plugin/tracelight-band/` | the Claude Code band |
 | `test/unit`, `test/e2e`, `node/test` | vitest, vscode-test, node:test |
 
-[docs/HANDOFF.md](docs/HANDOFF.md) has the decisions, the commands and the quirks.
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) has the decisions, the commands and the quirks.
 [docs/LEARNINGS.md](docs/LEARNINGS.md) is what went wrong and the rule each time taught.
 [docs/RUNTIME.md](docs/RUNTIME.md) is the runtime's layout, [docs/PROTOCOL.md](docs/PROTOCOL.md)
 the wire protocol between the extension and the runtime, [docs/WEB.md](docs/WEB.md) the browser

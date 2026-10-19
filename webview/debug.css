@@ -1,4 +1,4 @@
-/* The debugger in the Time Machine view (docs/HANDOFF-debugger.md): the paused header, the frontier on the strips, the frontier locals. */
+/* The debugger in the Time Machine view (docs/PROTOCOL.md): the paused header, the frontier on the strips, the frontier locals. */
 :root {
   --pk-frontier: #ffcc00;
   --pk-go: #89d185;

@@ -58,7 +58,7 @@ export interface TracelightApi {
   startDebugSession(launch: Record<string, unknown>): Promise<void>;
   /** feed a `vscode://ivor.tracelight/debug` URI to this window (the e2e suite must never run the real `code`) */
   handleDebugUri(uri: vscode.Uri): Promise<void>;
-  /* the recording debugger (docs/HANDOFF-debugger.md): the session's `debug*` methods, for the e2e suite */
+  /* the recording debugger (docs/PROTOCOL.md): the session's `debug*` methods, for the e2e suite */
   debug(session: Session): DebugState;
   startDebug(session: Session): Promise<void>;
   debugContinue(session: Session): Promise<void>;

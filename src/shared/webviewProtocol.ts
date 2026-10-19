@@ -120,7 +120,7 @@ export interface PreviewCaller {
 }
 
 /**
- * The debugger (docs/HANDOFF-debugger.md) as the Time Machine view shows it: present while debug mode is
+ * The debugger (docs/PROTOCOL.md) as the Time Machine view shows it: present while debug mode is
  * on. `paused` is the frontier: the run stopped before `frontier` executed, the frame there is live and
  * `locals` are its variables; `location` is a display path with the line. Reason detail for the header.
  */
@@ -429,7 +429,7 @@ export type WebviewToHost =
   | { type: 'debugger.action'; action: 'stepInto' | 'stepBackInto' | 'stepOver' | 'stepBackOver' | 'stepOut' | 'stepBackOut' | 'runToLine' | 'runBackToLine' | 'stop' | 'start' | 'autoPlay' | 'pause' | 'toggleCallStack' | 'toggleEcho' | 'toggleCodePreview' }
   | { type: 'debugger.previewRequest'; step: number }
   | { type: 'debugger.selectFrame'; index: number }
-  /** the debugger's toolbar and pane (docs/HANDOFF-debugger.md): resume, pause at the next statement, execute a step at the frontier, stop debugging */
+  /** the debugger's toolbar and pane (docs/PROTOCOL.md): resume, pause at the next statement, execute a step at the frontier, stop debugging */
   | { type: 'debugContinue' }
   | { type: 'debugPause' }
   | { type: 'debugStep'; kind: 'into' | 'over' | 'out' }

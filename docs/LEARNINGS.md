@@ -2,7 +2,7 @@
 
 What went wrong while Tracelight became its own project and was first driven for real, how it
 showed, and the rule each time taught. The build and test quirks themselves are in
-[HANDOFF.md](HANDOFF.md#quirks); this file is the reasoning behind a few of them.
+[DEVELOPMENT.md](DEVELOPMENT.md#quirks); this file is the reasoning behind a few of them.
 
 ## A build-time rename leaks (2026-10-11)
 
@@ -108,7 +108,7 @@ The check looked for Pyokka's identifiers, so it missed Python text that never m
 **Rule:** a check for another project's leftovers also looks for its language: the manifest test
 now rejects `python`, `pyproject` and `requirements.txt` as well as `pyokka`. A fixture names the
 command in this repository that rewrites it. When that command is gone, the fixture says it is
-frozen. The walkthrough and band fixtures are in that state ([HANDOFF.md](HANDOFF.md#open-work)).
+frozen. The walkthrough and band fixtures are in that state ([RUNTIME.md](RUNTIME.md)).
 
 ## The bump hook reads command text (2026-10-12)
 
@@ -130,7 +130,7 @@ tests need `TMPDIR=$(realpath "$TMPDIR")`. Separately, four runtime tests fail o
 Node 24 because they pin the platform's output instead of Tracelight's: one runs `/bin/true`, which
 macOS keeps at `/usr/bin/true`, two get the thread name `WorkerThread` where they expect
 `Worker 2`, and one expects how `util.inspect` printed a pending Promise before Node 24. Both problems are written up
-in [HANDOFF.md](HANDOFF.md#quirks).
+in [DEVELOPMENT.md](DEVELOPMENT.md#quirks).
 
 **Rule:** compare against `main` before calling a failure new. A test asserts what Tracelight
 produces, not how Node formats it.

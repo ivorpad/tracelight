@@ -1,5 +1,5 @@
 /**
- * Pure helpers for the debugger in the Time Machine view (docs/HANDOFF-debugger.md): the header
+ * Pure helpers for the debugger in the Time Machine view (docs/PROTOCOL.md): the header
  * sentence for a pause. No DOM, so vitest covers them (test/unit/webview/debugView.test.tsx).
  */
 import type { DebugPanelInfo } from './src-shared';

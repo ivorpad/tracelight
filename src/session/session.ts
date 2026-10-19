@@ -112,7 +112,7 @@ export class Session extends EventEmitter<SessionEvents> {
   readonly watches: WatchEntry[] = [];
   readonly nav: NavState = freshNavState();
   readonly startedAt = Date.now();
-  /** the debugger (docs/HANDOFF-debugger.md): debug mode, the pause at the frontier, breakpoints; use the `debug*` methods below */
+  /** the debugger (docs/PROTOCOL.md): debug mode, the pause at the frontier, breakpoints; use the `debug*` methods below */
   readonly debugCtl = new DebugController(this);
 
   runMode: RunMode;

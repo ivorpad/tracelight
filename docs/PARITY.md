@@ -6,7 +6,7 @@
 Tracelight is Pyokka (live values, coverage, Time Machine, frontier debugger, agent CLI) for
 JavaScript and TypeScript on Node.js. This file lists every Pyokka feature with its source
 file, the Node mechanism or library that replaces it, a difficulty, and the workstream that
-owns it. Sources: `README.md`, `docs/PROTOCOL.md`, `docs/HANDOFF.md`,
+owns it. Sources: `README.md`, `docs/PROTOCOL.md`, `docs/DEVELOPMENT.md`,
 `skills/pyokka/references/pyokka-cli.md`, `package.json` `contributes`,
 `python/pyokka_runtime/**` and `src/**`.
 

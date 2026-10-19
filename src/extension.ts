@@ -368,7 +368,7 @@ export function activate(context: vscode.ExtensionContext): TracelightApi {
     const s = active();
     if (s) timeMachine.stop(s);
   });
-  /* ---------- the debugger (pause at the frontier; docs/HANDOFF-debugger.md) ---------- */
+  /* ---------- the debugger (pause at the frontier; docs/PROTOCOL.md) ---------- */
 
   // the seven control commands dispatch through the facade and nowhere else: the debug session when
   // one exists, else the active run-all session in debug mode (activeDebugTarget)

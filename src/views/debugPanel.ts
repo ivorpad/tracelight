@@ -1,5 +1,5 @@
 /**
- * Host side of the debugger in the panel (docs/HANDOFF-debugger.md): the `debug` fields merged into
+ * Host side of the debugger in the panel (docs/PROTOCOL.md): the `debug` fields merged into
  * the Time Machine view's state, the locals of the paused frame fetched at each pause, and the four
  * toolbar messages (continue, pause, step, stop). Kept out of outputPanel.ts so the panel stays a
  * message router; whyPane.ts is the same pattern.
