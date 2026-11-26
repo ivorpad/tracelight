@@ -157,6 +157,189 @@ describe('PageHost', () => {
     expect(await result).toMatchObject({ notes: [{ noteId: 'current', line: 3, text: 'new line' }] });
   });
 
+  async function teachingSession() {
+    const session = setup();
+    const { host, link, feed } = session;
+    const runId = 'd-lesson';
+    feed({ type: 'debug.begin', runId, content: SOURCE });
+    feed({ type: 'debug.event', event: runEvents(runId)[1]! });
+    let step = 2;
+    const pause = async () => {
+      ++step;
+      link.replies.push({ type: 'debug.result', id: step, locals: [{ name: 'a', text: '1' }] });
+      feed({ type: 'debug.event', event: { runId, seq: step + 10, type: 'debug.paused', step, rid: 2, fileId: 1, line: 2, scopeId: 1, depth: 1, reason: 'step', stack: [{ name: 'add', fileId: 1, line: 2 }] } });
+      await tick();
+    };
+    await pause();
+    let stage = { lesson: false, open: false, ready: false } as import('../../web/scratchpadProtocol').ScratchState;
+    host.onScratchpad = async command => {
+      if (command.op === 'lesson') {
+        const position = await host.confirmPosition('live', true);
+        const live = position.live!;
+        stage = { ...stage, id: 'stage', code: command.code!, inputsText: '{}', mocksText: '{}', lesson: true, open: true, ready: true, autoRun: false, status: 'dirty', error: null, result: null,
+          provenance: { file: live.file, line: live.line, runId: live.runId, step: live.step, frame: live.frame, runStartedAt: host.debug.run?.startedAt, capturedInputs: {} } };
+      }
+      return stage;
+    };
+    let moves = 0;
+    host.debug.control = async () => { ++moves; await pause(); };
+    const prepare = () => runAgentCommand(host, link, { action: 'scratchpad', op: 'lesson', file: MAIN.path, line: 2, code: 'a + b', explanation: 'Add the copied inputs.' });
+    const advance = (op: 'step' | 'continue' | 'restart' | 'start' = 'step') => runAgentCommand(host, link, { action: 'debug', op });
+    return { ...session, prepare, advance, pause, getStage: () => stage, moves: () => moves };
+  }
+
+  it('permits ordinary debugging without a scratchpad lesson', async () => {
+    const s = await teachingSession();
+    await s.advance();
+    expect(s.moves()).toBe(1);
+  });
+
+  it('requires a new paired scratchpad after every lesson move, even on the same source line', async () => {
+    const s = await teachingSession();
+    await s.prepare();
+    await s.advance();
+    for (const op of ['step', 'continue', 'restart', 'start'] as const) {
+      await expect(s.advance(op)).rejects.toThrow('prepare scratchpad op=lesson');
+    }
+    expect(s.moves()).toBe(1);
+    await s.prepare();
+    await s.advance('continue');
+    expect(s.moves()).toBe(2);
+  });
+
+  it('rejects closed, replaced, invalid or auto-running stages before executing anything', async () => {
+    const s = await teachingSession();
+    for (const patch of [
+      { open: false }, { lesson: false }, { ready: false }, { autoRun: true },
+      { status: 'running' as const }, { error: 'fixture failed' },
+    ]) {
+      await s.prepare();
+      Object.assign(s.getStage(), patch);
+      await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+    }
+    expect(s.moves()).toBe(0);
+    await s.prepare();
+    await expect(runAgentCommand(s.host, s.link, { action: 'run' })).rejects.toThrow('Lesson is active');
+    await expect(runAgentCommand(s.host, s.link, { action: 'debug', op: 'state' })).resolves.toMatchObject({ paused: true });
+  });
+
+  it('checks run, frame and run start time as well as file and line', async () => {
+    const s = await teachingSession();
+    for (const patch of [{ runId: 'other' }, { frame: 1 }, { runStartedAt: -1 }, { file: '/other.ts' }, { line: 3 }]) {
+      await s.prepare();
+      Object.assign(s.getStage().provenance!, patch);
+      await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+    }
+    expect(s.moves()).toBe(0);
+  });
+
+  it('enforces the same guard through the WebMCP tool', async () => {
+    const s = await teachingSession();
+    await s.prepare();
+    s.getStage().open = false;
+    const tool = webMcpTools(s.host, s.link).find(t => t.name === 'tracelight_debug')!;
+    expect((await tool.execute({ op: 'continue' })).isError).toBe(true);
+    expect(s.moves()).toBe(0);
+  });
+
+  it('allows stopping an invalid lesson and returning to ordinary debugging', async () => {
+    const s = await teachingSession();
+    await s.prepare();
+    s.getStage().open = false;
+    s.host.debug.stop = () => s.feed({ type: 'debug.end', runId: 'd-lesson' });
+    await runAgentCommand(s.host, s.link, { action: 'debug', op: 'stop' });
+    s.feed({ type: 'debug.begin', runId: 'd-lesson', content: SOURCE });
+    s.feed({ type: 'debug.event', event: runEvents('d-lesson')[1]! });
+    await s.pause();
+    await s.advance();
+    expect(s.moves()).toBe(1);
+  });
+
+  it('invalidates a stage after a manual learner step without blocking the manual controls', async () => {
+    const s = await teachingSession();
+    await s.prepare();
+    await s.pause(); // Learner's controls bypass the agent command entry point.
+    await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+    await s.prepare();
+    await s.advance();
+    expect(s.moves()).toBe(1);
+  });
+
+  it('consumes a stage before sending control, even when the runtime rejects the move', async () => {
+    const s = await teachingSession();
+    await s.prepare();
+    s.host.debug.control = async () => { throw new Error('runtime refused'); };
+    await expect(s.advance()).rejects.toThrow('runtime refused');
+    await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+  });
+
+  it('rejects another pause event with identical run/step/line metadata', async () => {
+    const s = await teachingSession();
+    await s.prepare();
+    const paused = s.host.debug.paused!;
+    s.link.replies.push({ type: 'debug.result', id: 42, locals: [] });
+    s.feed({ type: 'debug.event', event: { ...paused } });
+    await tick();
+    await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+    expect(s.moves()).toBe(0);
+  });
+
+  it('keeps a failed first lesson in the awaiting-stage state', async () => {
+    const s = await teachingSession();
+    s.host.onScratchpad = async command => {
+      if (command.op === 'lesson') throw new Error('bad code');
+      return s.getStage();
+    };
+    await expect(s.prepare()).rejects.toThrow('bad code');
+    await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+    expect(s.moves()).toBe(0);
+  });
+
+  it('refuses preparation when a manual move changes the pause during its async work', async () => {
+    const s = await teachingSession();
+    const prepare = s.host.onScratchpad!;
+    s.host.onScratchpad = async command => {
+      const stage = await prepare(command);
+      if (command.op === 'lesson') await s.pause();
+      return stage;
+    };
+    await expect(s.prepare()).rejects.toThrow('Pause changed while preparing');
+    await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+    expect(s.moves()).toBe(0);
+  });
+
+  it('does not restart an ended lesson without explicitly stopping lesson mode', async () => {
+    const s = await teachingSession();
+    await s.prepare();
+    s.feed({ type: 'debug.end', runId: 'd-lesson' });
+    for (const op of ['start', 'restart'] as const) await expect(s.advance(op)).rejects.toThrow('prepare scratchpad op=lesson');
+    expect(s.moves()).toBe(0);
+  });
+
+  it('rejects edited or loaded stages and a separate profile run', async () => {
+    const s = await teachingSession();
+    for (const patch of [{ code: 'unrelated()' }, { inputsText: '{"a":7}' }, { mocksText: '{"f":8}' }]) {
+      await s.prepare(); Object.assign(s.getStage(), patch);
+      await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+    }
+    await s.prepare();
+    await expect(runAgentCommand(s.host, s.link, { action: 'profile' })).rejects.toThrow('Lesson is active');
+    await runAgentCommand(s.host, s.link, { action: 'scratchpad', op: 'load', id: 'stage' });
+    await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+    expect(s.moves()).toBe(0);
+  });
+
+  it('invalidates a stage when navigating the recording, and permits a successful scratchpad result', async () => {
+    const s = await teachingSession();
+    await s.prepare();
+    await runAgentCommand(s.host, s.link, { action: 'goto', step: s.host.debug.paused!.step });
+    await expect(s.advance()).rejects.toThrow('prepare scratchpad op=lesson');
+    await s.prepare();
+    Object.assign(s.getStage(), { status: 'completed', result: { values: [], output: [[3]] } });
+    await s.advance();
+    expect(s.moves()).toBe(1);
+  });
+
   it('reports runtime rejection of a debugger step instead of returning success', async () => {
     const { host, link, feed } = setup();
     feed({ type: 'debug.begin', runId: 'd-error', content: SOURCE });

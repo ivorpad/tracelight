@@ -328,7 +328,7 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
     {
       name: 'tracelight_scratchpad',
       title: 'Browser scratchpad',
-      description: "The browser page's scratchpad: run a copied function with copied paused inputs in a separate process, beside the live pause, which it never moves. Prepare a teaching experiment in ONE call with op experiment and complete code, inputs, mocks and mock_labels; read status, result.values, result.error, result.missingMocks and ready. Other ops: open (the function at the pause, or at line), close, state, update, run, restore, create, save, list, load, history. Fixture results are simulations; label every mock.",
+      description: "The browser page's scratchpad. For learning existing code, set a breakpoint and start/reuse the live debugger, then op lesson with expected file/line, complete code containing the paused source line, and explanation prose displayed as comments. Token inclusion and prose presence do not establish correctness. Lesson focuses and checks the live source, copies paused inputs, forces Auto run off and does not execute. The first lesson attempt activates lesson mode: a prepared stage permits one agent move, consumed before execution control is sent. Prepare a new stage after each move; debug stop ends lesson mode. Manual learner steps remain available. Missing or mismatched pauses fail. Run a copied function with copied paused inputs in a separate process, beside the live pause, which it never moves. Prepare a teaching experiment in ONE call with op experiment and complete code, inputs, mocks and mock_labels; read status, result.values, result.error, result.missingMocks and ready. Other ops: open (the function at the pause, or at line), close, state, update, run, restore, create, save, list, load, history. Fixture results are simulations; label every mock.",
       inputSchema: {
         type: 'object',
         properties: {
@@ -336,10 +336,11 @@ export function toolDefinitions(helps: Record<string, string>): Schema[] {
           port: { type: 'integer', description: "the page's port (default 4777, or TRACELIGHT_PORT)" },
           id: { type: 'string', description: 'load, history, save: the scratchpad id (list names them)' },
           title: { type: 'string', description: 'create: the new scratchpad\'s name' },
-          file: { type: 'string', description: 'create: the source file the copied code resolves imports from' },
+          file: { type: 'string', description: 'lesson: required expected paused source file; create: source file for imports' },
           version: { type: 'integer', description: 'load, history: a saved version (default the latest)' },
-          line: { type: 'integer', description: 'open: copy the function at this line of the shown file' },
-          code: { type: 'string', description: 'experiment, update: the whole scratch code' },
+          line: { type: 'integer', description: 'lesson: required expected paused line; open: containing function line' },
+          code: { type: 'string', description: 'lesson, experiment, update: the complete scratch code' },
+          explanation: { type: 'string', description: 'lesson: required explanation, displayed as comments above code. Include the paused source line verbatim in code; token inclusion does not verify meaning.' },
           inputs: { type: 'object', description: 'experiment, update: the input values by name (replaces the whole object)' },
           mocks: { type: 'object', description: 'experiment, update: fixture return values by dotted function path (replaces the whole object)' },
           mock_labels: { type: 'object', additionalProperties: { type: 'string' }, description: 'experiment, update: a label per mock path saying what the fixture stands for' },

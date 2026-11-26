@@ -12,6 +12,28 @@ first ([learning-patterns.md](learning-patterns.md)). A toy cannot show wiring. 
 at the same place, the original code paused or recorded, where each reconstructed idea is mapped
 onto its real symbol ([Map back to the original](#map-back-to-the-original)).
 
+## First handoff
+
+"Learn this", "help me understand this mechanism" and "start a scratchpad to learn" select
+this workflow paired with the real implementation paused at the relevant breakpoint.
+Keep future complexity out of the active stage. Read the source, choose one missing idea, and
+use `op: "lesson"` with the expected absolute source `file`, paused `line`, complete code containing the paused operation, `explanation` prose and a concrete controlled input. The MCP forces Auto run off and checks the live source.
+Show the code, input and one optional prediction prompt together. Check editor diagnostics and
+`ready`, but leave `result` empty. Preparation is complete when the live source and copied provenance match and the first stage is ready to run,
+not when the complete mechanism has been simulated.
+
+The sequence is concrete situation → prediction → execution → inspect the state change →
+explain the rule → try one new input. A prediction can be mental. Never demand an answer or
+turn it into a graded quiz. Execute when the learner says run, answers the prediction, or has
+already asked to skip predictions. "Start a scratchpad" alone does not request execution.
+Once execution is requested, inspect and repair runtime and application errors before teaching
+from the result. Do not pre-run the visible stage to satisfy the general verification rule.
+
+For an agent loop, begin with one supplied reply and the finish/tool-call decision. Change only
+the reply to make tool handling necessary. Introduce message persistence and repetition when the
+observed case needs them. Starting with a full request/tool/request simulation hides those reasons.
+Keep each later stage separate and proceed when the learner directs it.
+
 ## Plan from the missing model
 
 Read the original first: its observable behaviour, the state that outlives one call, the events
@@ -71,19 +93,21 @@ about UTF-8.
 ## Running the stages
 
 Start the page with the original as its file (`tracelight web FILE --no-run`) so imports
-resolve from the original's directory. A lesson needs no live pause. Create each stage as its
+resolve from the original's directory. Set a breakpoint inside the relevant implementation and
+start/reuse the debugger there. Confirm the visible live source. Prepare each stage as its
 own named scratchpad, titled by its question, with the complete code and the controlled input
 in `inputs`, then run it:
 
 ```json
-{ "op": "create", "title": "B · why pending must outlive feed", "code": "…", "inputs": { "chunks": ["al", "pha\nbe", "ta\n"] }, "autoRun": false }
+{ "op": "lesson", "file": "/absolute/parser.ts", "line": 42, "title": "B · why pending must outlive feed", "code": "…", "inputs": { "chunks": ["al", "pha\nbe", "ta\n"] }, "autoRun": false }
 ```
 
 ```json
 { "op": "run" }
 ```
 
-CLI: `ctl scratchpad create --title TITLE --data FILE`, then `ctl scratchpad run`. `experiment`
+CLI: `ctl scratchpad lesson --data FILE`, then `ctl scratchpad run` on request.
+Only an explicitly requested standalone simulation uses `create` without a live pause. `experiment`
 is for a function copied at a live pause and refuses without one. Earlier stages stay in
 **Saved scratchpads**, so the active view holds the current question while the previous ones
 stay one `load` away. Change only the input within a stage (`update` with `inputs`, then `run`),

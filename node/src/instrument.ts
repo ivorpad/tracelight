@@ -1216,7 +1216,15 @@ export function instrument(source: string, filename: string, fileId = 1, rangeBa
       ({ js, orig: base, lowered } = toJavaScript(source, filename, options.sourceType));
     } catch (e) {
       const err = e as Error & { code?: string };
-      return emptyResult(filename, fileId, rangeBase, `TypeScriptError: ${err.message.split('\n')[0]}`, lineOf(err.message), null);
+      let line = lineOf(err.message);
+      // Node's type stripper may omit the location from its diagnostic.
+      try {
+        const diagnostic = parseSync(filename, source, { lang: /\.tsx$/i.test(filename) ? 'tsx' : /\.jsx$/i.test(filename) ? 'jsx' : 'ts', sourceType: options.sourceType ?? 'unambiguous' } as any).errors?.[0];
+        const at = diagnostic?.labels?.[0]?.start;
+        if (typeof at === 'number') line = new LineIndex(source).line(at);
+      } catch { /* retain the compiler diagnostic when parsing also fails */ }
+      const type = err.code === 'ERR_INVALID_TYPESCRIPT_SYNTAX' ? 'SyntaxError' : 'TypeScriptError';
+      return emptyResult(filename, fileId, rangeBase, `${type}: ${err.message.split('\n')[0]}`, line, null);
     }
   }
   const sourceType = options.sourceType === 'commonjs' ? 'commonjs' : options.sourceType === 'module' ? 'module' : 'unambiguous';

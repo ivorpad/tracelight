@@ -6,8 +6,47 @@
 import type { AgentCommand, PageState } from './bridgeProtocol';
 import type { Link, PageHost } from './pageHost';
 import { renderValueNode } from '../src/views/valueText';
+import { requireLessonProvenance } from './scratchpadExperiment';
 
 const pending = new WeakSet<PageHost>();
+// Once a lesson starts, closing or replacing its scratchpad cannot bypass the next stage.
+type PreparedStage = {
+  pause: NonNullable<PageHost['debug']['paused']>;
+  run: PageHost['debug']['run'];
+  frame: number;
+  id: string | null;
+  code: string;
+  inputs: string;
+  mocks: string;
+};
+// false: ordinary debugging; {}: awaiting a stage; {prepared}: one permitted move.
+const lessons = new WeakMap<PageHost, { prepared?: PreparedStage } | false>();
+
+async function requireTeachingStage(host: PageHost): Promise<void> {
+  const stage = await host.onScratchpad?.({ op: 'state' });
+  if (stage?.lesson && !lessons.has(host)) lessons.set(host, {});
+  const lesson = lessons.get(host);
+  if (!lesson) return;
+  const repair = 'Lesson needs an open, ready scratchpad at this exact live pause; prepare scratchpad op=lesson before advancing';
+  const prepared = lesson.prepared;
+  if (!prepared || prepared.pause !== host.debug.paused || prepared.run !== host.debug.run || prepared.frame !== host.debug.selectedFrame ||
+      prepared.id !== stage?.id || prepared.code !== stage.code || prepared.inputs !== stage.inputsText || prepared.mocks !== stage.mocksText ||
+      !stage.lesson || !stage.open || !stage.ready || stage.autoRun || stage.error ||
+      stage.status === 'running' || stage.status === 'scheduled' || stage.result?.error ||
+      stage.result?.missingMocks?.length || stage.result?.applicationErrors?.length) throw new Error(repair);
+  try {
+    requireLessonProvenance(stage.provenance, await host.confirmPosition('live'), host.debug.run?.startedAt);
+    if (prepared.pause !== host.debug.paused || prepared.run !== host.debug.run || prepared.frame !== host.debug.selectedFrame) throw new Error('Pause changed while checking the stage');
+  } catch (error) {
+    throw new Error(`${repair}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function consumeTeachingStage(host: PageHost): void {
+  const lesson = lessons.get(host);
+  if (lesson) delete lesson.prepared;
+}
+
 
 /** Shared entry point for HTTP/CLI and WebMCP. Concurrent writes never race the same pause. */
 export async function runAgentCommand(host: PageHost, link: Link, cmd: AgentCommand): Promise<unknown> {
@@ -52,10 +91,12 @@ async function executeCommand(host: PageHost, link: Link, cmd: AgentCommand): Pr
     case 'position':
       return host.confirmPosition(cmd.mode, cmd.focus);
     case 'goto':
+      await requireTeachingStage(host); consumeTeachingStage(host);
       if (!host.nav.active) host.start({ step: cmd.step });
       else host.goto(cmd.step);
       return afterMove(host, cmd.say);
     case 'step': {
+      await requireTeachingStage(host); consumeTeachingStage(host);
       let moved = true;
       if (!host.nav.active) host.start();
       else if (cmd.kind === 'next') {
@@ -66,6 +107,7 @@ async function executeCommand(host: PageHost, link: Link, cmd: AgentCommand): Pr
       return { moved, state: await afterMove(host, cmd.say) };
     }
     case 'line': {
+      await requireTeachingStage(host); consumeTeachingStage(host);
       if (cmd.file && host.resolvePresentationFile(cmd.file) !== host.state().shownFile) throw new Error('line targets a file that is not shown; open it first');
       if (!host.trace) throw new Error('nothing recorded yet: the run has no trace');
       const fileId = host.shownFileId() ?? host.mainFileId();
@@ -82,6 +124,7 @@ async function executeCommand(host: PageHost, link: Link, cmd: AgentCommand): Pr
     case 'say':
       if (cmd.text === '') { host.say(null, undefined, { noteId: cmd.noteId }); return presentationState(host); }
             if (cmd.step !== undefined) {
+        await requireTeachingStage(host); consumeTeachingStage(host);
         if (!host.nav.active) host.start({ step: cmd.step });
         else host.goto(cmd.step);
         const position = await host.confirmPosition('recorded', true);
@@ -101,12 +144,16 @@ async function executeCommand(host: PageHost, link: Link, cmd: AgentCommand): Pr
     case 'peek':
       return host.peekValue(cmd.name);
     case 'start':
+      await requireTeachingStage(host); consumeTeachingStage(host);
       host.start();
       return afterMove(host, undefined);
     case 'stop':
+      await requireTeachingStage(host); consumeTeachingStage(host);
       host.stop();
       return host.state();
     case 'run':
+      await requireTeachingStage(host);
+      if (lessons.get(host)) throw new Error('Lesson is active; use live debug movement with a matching scratchpad, or debug stop to end the lesson');
       host.rerun();
       await new Promise((r) => setTimeout(r, 50));
       await host.idle();
@@ -156,14 +203,29 @@ async function executeCommand(host: PageHost, link: Link, cmd: AgentCommand): Pr
     }
     case 'debug':
       return debugCommand(host, cmd);
-    case 'scratchpad':
+    case 'scratchpad': {
       if (!host.onScratchpad) throw new Error('Scratchpad is unavailable');
-      return host.onScratchpad(cmd);
+      // An unsuccessful preparation must not switch the lesson back to debugging.
+      if (cmd.op === 'lesson') lessons.set(host, {});
+      const pause = host.debug.paused, run = host.debug.run, frame = host.debug.selectedFrame;
+      const stage = await host.onScratchpad(cmd);
+      if (cmd.op === 'lesson' && (pause !== host.debug.paused || run !== host.debug.run || frame !== host.debug.selectedFrame)) throw new Error('Pause changed while preparing the stage');
+      if (cmd.op === 'load' && stage.lesson) lessons.set(host, {});
+      if (cmd.op === 'lesson' && stage.ready && stage.open && !stage.autoRun && !stage.error && stage.result === null && pause &&
+          pause === host.debug.paused && run === host.debug.run && frame === host.debug.selectedFrame) {
+        requireLessonProvenance(stage.provenance, await host.confirmPosition('live'), run?.startedAt);
+        if (pause !== host.debug.paused || run !== host.debug.run || frame !== host.debug.selectedFrame) throw new Error('Pause changed while preparing the stage');
+        lessons.set(host, { prepared: { pause, run, frame, id: stage.id, code: stage.code, inputs: stage.inputsText, mocks: stage.mocksText } });
+      }
+      return stage;
+    }
     case 'story': {
       if (!(await host.openStory())) throw new Error('no recorded run to tell: run the file first');
       return host.storyText();
     }
     case 'profile': {
+      await requireTeachingStage(host);
+      if (lessons.get(host)) throw new Error('Lesson is active; debug stop ends lesson mode before a separate profile run');
       const p = await host.profileRun();
       if (p.error || !p.summary) throw new Error(p.error ?? 'no profile');
       return { path: p.path, totalMs: p.summary.totalMs, rows: p.summary.rows.slice(0, 20) };
@@ -177,6 +239,7 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
   const d = host.debug;
   if (!['start', 'restart', 'continue', 'step', 'pause', 'stop', 'state'].includes(cmd.op)) throw new Error('unknown debug operation');
   if (cmd.kind && !['into', 'over', 'out'].includes(cmd.kind)) throw new Error('unknown debug step kind');
+  if (cmd.op === 'continue' || cmd.op === 'step' || ((cmd.op === 'start' || cmd.op === 'restart') && (d.active || lessons.get(host) || host.onScratchpad))) await requireTeachingStage(host);
   const wait = (): Promise<void> => d.nextStop();
   switch (cmd.op) {
     case 'restart':
@@ -196,6 +259,7 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
           resolve();
         }, 10_000);
       });
+      consumeTeachingStage(host);
       d.start(cmd.op === 'restart' ? d.run?.content : undefined);
       await waiting;
       if (!d.run || d.run.runId === before || (d.run.running && !d.paused)) throw new Error('debug start did not reach a confirmed pause or end');
@@ -209,6 +273,7 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
       if (cmd.op === 'pause' && d.paused) break;
       const before = d.paused;
       const stop = wait();
+      consumeTeachingStage(host);
       await d.control(cmd.op === 'continue' ? 'continue' : cmd.op === 'pause' ? 'pause' : cmd.kind === 'over' ? 'stepOver' : cmd.kind === 'out' ? 'stepOut' : 'stepInto', true);
       await stop;
       if (d.active && (!d.paused || d.paused === before)) throw new Error('debug command did not reach a new pause');
@@ -217,6 +282,7 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
     case 'stop':
       { const stopped = wait(); d.stop(); await stopped; }
       if (d.active) throw new Error('debug stop was not confirmed');
+      lessons.set(host, false);
       break;
     case 'state':
       break;
@@ -225,7 +291,7 @@ async function debugCommand(host: PageHost, cmd: Extract<AgentCommand, { action:
   for (let i = 0; i < 20 && d.paused && d.locals?.step !== d.paused.step; i++) await new Promise((r) => setTimeout(r, 25));
   const position = await host.confirmPosition('live', cmd.op !== 'state' && cmd.op !== 'stop');
   if (position.ready && cmd.say !== undefined && d.paused?.line) host.say(cmd.say, d.paused.line);
-  return { ...debugSummary(host), position };
+  return { ...debugSummary(host), position, ...(lessons.get(host) ? { lesson: { active: true, next: d.paused ? 'prepare matching scratchpad before advancing' : 'run ended' } } : {}) };
 }
 
 export function debugSummary(host: PageHost) {
@@ -281,9 +347,11 @@ export function webMcpTools(host: PageHost, link: Link): WebMcpTool[] {
     },
   });
   return [
-    tool('tracelight_scratchpad', 'Prepare teaching experiments in ONE call with op=experiment and complete code, inputs, receiver/helpers, mocks/mockLabels and autoRun policy. Formats readable code, opens with captured provenance, publishes only the complete package, executes once and awaits structured results/errors. Never prepare through open/update/run calls. Other controls: open, state, update, run, restore, close; create makes a separate named scratchpad; list returns saved experiments; save adds a checkpoint; history(id, optional version) reads saved snapshots; load(id, optional version) reopens without running. Creation, edits and results autosave across reloads and bridge restarts. Inspect savedVersion, saving and saveError. Receiver-dependent bare copies wait for preparation before automatic execution. Label every mock and resolve errors before teaching. Local dependencies resolve automatically; unavailable/capped data stays explicit. Never advances live execution or makes real provider calls; fixture results are simulations.', {
-      op: { type: 'string', enum: ['experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'] },
+    tool('tracelight_scratchpad', 'For learning existing code, set a breakpoint and start/reuse the live debugger, then use op=lesson with expected file/line, complete code containing the paused source line, and explanation prose displayed as comments. Token inclusion and prose presence do not establish correctness. Lesson focuses and checks the live source, copies pause provenance, forces Auto run off and publishes without execution. The first lesson attempt activates a guard. A prepared stage permits one agent move, consumed before execution control is sent; after moving, prepare a new matching stage before advancing again. It refuses missing or mismatched pauses. Use op=experiment and complete code, inputs, receiver/helpers, mocks/mockLabels and autoRun policy. Formats readable code, opens with captured provenance, publishes only the complete package, executes once and awaits structured results/errors. Never prepare through open/update/run calls. Other controls: open, state, update, run, restore, close; create makes a separate named scratchpad; list returns saved experiments; save adds a checkpoint; history(id, optional version) reads saved snapshots; load(id, optional version) reopens without running. Creation, edits and results autosave across reloads and bridge restarts. Inspect savedVersion, saving and saveError. Receiver-dependent bare copies wait for preparation before automatic execution. Label every mock and resolve errors before teaching. Local dependencies resolve automatically; unavailable/capped data stays explicit. Never advances live execution or makes real provider calls; fixture results are simulations.', {
+      op: { type: 'string', enum: ['lesson', 'experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'] },
+      id: { type: 'string' }, title: { type: 'string' }, file: { type: 'string' }, version: { type: 'integer', minimum: 1 },
       open: { type: 'boolean' }, line: { type: 'integer', minimum: 1 }, code: { type: 'string', maxLength: 100000 },
+      explanation: { type: 'string', description: 'lesson: required prose shown above code. Code must include the paused source line verbatim; inclusion does not verify its meaning.' },
       inputs: { type: 'object' }, mocks: { type: 'object' }, mockLabels: { type: 'object', additionalProperties: { type: 'string' } }, autoRun: { type: 'boolean' },
     }, [], i => ({ ...i, action: 'scratchpad' } as Extract<AgentCommand, { action: 'scratchpad' }>)),
     tool('tracelight_wait_pause', 'Wait for a new live debugger pause caused by manual Step, Step into, Step over, Step out or Continue. Call without after to obtain the current cursor, then wait with after equal to the previous cursor. Returns nearby source, stack, pause provenance and captured structured value bags together after locals and the editor are ready. Use these values directly for explanation without extra inspect, peek or evaluate calls; preserve capped/unavailable markers. Re-arm after explaining each changed pause. Does not step, evaluate, or open an overlay. Event-driven within an active agent session; cannot wake an idle chat. Timeout is at most 25000 ms.', { after: { type: 'integer', minimum: 0 }, timeoutMs: { type: 'integer', minimum: 0, maximum: 25000 } }, [], i => ({ action: 'waitPause', ...(typeof i['after'] === 'number' ? { after: i['after'] } : {}), ...(typeof i['timeoutMs'] === 'number' ? { timeoutMs: i['timeoutMs'] } : {}) })),
@@ -306,7 +374,7 @@ export function webMcpTools(host: PageHost, link: Link): WebMcpTool[] {
     tool('tracelight_breakpoint', 'Set, clear or toggle a live breakpoint in the main file or a known imported source file.', { line: { type: 'integer', minimum: 1 }, file: { type: 'string' }, on: { type: 'boolean' }, condition: { type: 'string' } }, ['line'], (i) => ({ action: 'breakpoint', line: Number(i['line']), ...(typeof i['file'] === 'string' ? { file: i['file'] } : {}), ...(typeof i['on'] === 'boolean' ? { on: i['on'] } : {}), ...(typeof i['condition'] === 'string' ? { condition: i['condition'] } : {}) })),
     tool('tracelight_story', 'Open the Code Story of the recorded run (every pass through a scope, in execution order) in the code pane; returns its text and the row of the Time Machine step.', {}, [], () => ({ action: 'story' })),
     tool('tracelight_profile', 'Run the file once under the runtime profiler and show the hottest functions (self and total ms) in the code pane.', {}, [], () => ({ action: 'profile' })),
-    tool('tracelight_debug', 'Drive the live debugger and record that same execution for code history: start (runs to the first breakpoint, or pauses at the first statement when no breakpoint is set), restart, continue, step (into/over/out), pause, stop, state. Returns where it paused, the stack and the variables.', { op: { type: 'string', enum: ['start', 'restart', 'continue', 'step', 'pause', 'stop', 'state'] }, kind: { type: 'string', enum: ['into', 'over', 'out'] }, say: SAY }, ['op'], (i) => ({ action: 'debug', op: String(i['op']) as Extract<AgentCommand, { action: 'debug' }>['op'], ...(typeof i['kind'] === 'string' ? { kind: i['kind'] as 'into' | 'over' | 'out' } : {}), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
+    tool('tracelight_debug', 'Drive the live debugger and record that same execution for code history: start (runs to the first breakpoint, or pauses at the first statement when no breakpoint is set), restart, continue, step (into/over/out), pause, stop, state. Returns where it paused, the stack and the variables. Once scratchpad lesson mode starts, every agent move requires an open, ready stage for that exact pause; prepare a new lesson after each move. Stop ends lesson mode. Manual learner controls remain available.', { op: { type: 'string', enum: ['start', 'restart', 'continue', 'step', 'pause', 'stop', 'state'] }, kind: { type: 'string', enum: ['into', 'over', 'out'] }, say: SAY }, ['op'], (i) => ({ action: 'debug', op: String(i['op']) as Extract<AgentCommand, { action: 'debug' }>['op'], ...(typeof i['kind'] === 'string' ? { kind: i['kind'] as 'into' | 'over' | 'out' } : {}), ...(typeof i['say'] === 'string' ? { say: i['say'] } : {}) })),
   ];
 }
 

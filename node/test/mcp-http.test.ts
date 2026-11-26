@@ -334,3 +334,14 @@ test('--restart-on-change ends the server once the file changes and no request i
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('MCP lessons accept only an aligned, prepared and unrun stage as success', () => {
+  assert.deepEqual(scratchCommand({ op: 'lesson', file: '/app/agent.ts', line: 91, code: 'console.log(reply);' }), { action: 'scratchpad', op: 'lesson', file: '/app/agent.ts', line: 91, code: 'console.log(reply);' });
+  assert.equal(scratchCommand({ op: 'lesson', explanation: 'Show the captured reply.' }).explanation, 'Show the captured reply.');
+  const command = { action: 'scratchpad', op: 'lesson' };
+  const ready = { ready: true, position: { ready: true }, autoRun: false, result: null, liveExecutionChanged: false };
+  assert.equal(pageSucceeded(command, true, { result: ready }), true);
+  for (const change of [{ ready: false }, { position: { ready: false } }, { autoRun: true }, { result: { values: [] } }, { liveExecutionChanged: true }]) {
+    assert.equal(pageSucceeded(command, true, { result: { ...ready, ...change } }), false);
+  }
+});

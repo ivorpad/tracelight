@@ -1,8 +1,9 @@
+import type { ConfirmedPosition } from './bridgeProtocol';
 import type { ScratchResult } from './scratchpadRuntime';
 
 /** All edits affect the visible scratch copy only. Inputs/mocks replace their whole JSON object. */
 export interface ScratchCommand {
-  op?: 'experiment' | 'open' | 'close' | 'state' | 'update' | 'run' | 'restore' | 'create' | 'save' | 'list' | 'load' | 'history';
+  op?: 'lesson' | 'experiment' | 'open' | 'close' | 'state' | 'update' | 'run' | 'restore' | 'create' | 'save' | 'list' | 'load' | 'history';
   id?: string;
   title?: string;
   file?: string;
@@ -12,6 +13,8 @@ export interface ScratchCommand {
   open?: boolean;
   line?: number;
   code?: string;
+  /** lesson: prose displayed as comments above the copied operation, not a correctness claim. */
+  explanation?: string;
   inputs?: Record<string, unknown>;
   mocks?: Record<string, unknown>;
   mockLabels?: Record<string, string>;
@@ -21,6 +24,9 @@ export interface ScratchState {
   diagnostics?: {code?:string;message:string;line:number;severity:number}[];
   /** control replies only: the TypeScript worker checked this exact code, it has no errors, and nothing failed or waits for preparation */
   ready?: boolean;
+  /** lesson replies confirm the matching live source and pause. */
+  position?: ConfirmedPosition;
+  lesson?: boolean;
   id: string | null;
   title: string;
   savedVersion: number;
@@ -44,7 +50,7 @@ export interface ScratchState {
   preparation: { requiresReceiver: boolean } | null;
   result: ScratchResult | null;
   error: string | null;
-  provenance: { file: string; line: number | null; runId: string | null; frame: number; capturedInputs: Record<string, unknown> } | null;
+  provenance: { file: string; line: number | null; runId: string | null; frame: number; step?: number; runStartedAt?: number; capturedInputs: Record<string, unknown> } | null;
   liveExecutionChanged: false;
 }
 

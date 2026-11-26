@@ -10,8 +10,21 @@ import { scratchEnvironment } from './scratchpadEnvironment';
 export interface ScratchRequest { file: string; code: string; inputs: Record<string, unknown>; mocks: Record<string, unknown> }
 export interface ScratchResult { values: { name: string; line: number; value: unknown }[]; output: unknown[]; result?: unknown; error?: string; missingMocks?: string[]; caps?: { values: boolean; output: boolean }; applicationErrors?: { path: string; value: unknown }[] }
 
-export function formatScratchCode(code: string): string {
+export function formatScratchCode(code: string, operation?: string): string {
   if (typeof code !== 'string' || code.length > 100000) throw new Error('Invalid scratchpad code');
+  if (operation !== undefined) {
+    if (typeof operation !== 'string' || !operation.trim()) throw new Error('lesson needs the paused source operation');
+    // Literal token inclusion only. Comments/quoted copies do not count, and this says
+    // nothing about whether the wrapper, copied inputs or explanation preserve meaning.
+    const tokens = (text: string): string[] => {
+      const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, text);
+      const result: string[] = [];
+      while (scanner.scan() !== ts.SyntaxKind.EndOfFileToken) result.push(scanner.getTokenText());
+      return result;
+    };
+    const expected = tokens(operation), actual = tokens(code);
+    if (!expected.length || !actual.some((_, i) => expected.every((token, j) => actual[i + j] === token))) throw new Error('lesson code must include the paused source operation; keep its tokens and label any wrapper');
+  }
   const checked = ts.transpileModule(code, { reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } });
   const errors = checked.diagnostics?.filter(d => d.category === ts.DiagnosticCategory.Error) ?? [];
   if (errors.length) throw new Error(ts.flattenDiagnosticMessageText(errors[0]!.messageText, '\n'));

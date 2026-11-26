@@ -1,7 +1,12 @@
 # Scratchpad
 
-Use the browser scratchpad to experiment with a function and copied inputs while the live
-program stays paused. It opens beside the source in a right side panel. Edits run in a separate
+Choose the scratchpad workflow from the person's intent. Learning a mechanism uses
+[scratchpad-lessons.md](scratchpad-lessons.md): small named stages, concrete inputs and an unrun
+first stage. Read it before preparing a lesson. Learning existing code requires a matching live pause. A whole mocked loop run
+immediately is not a staged lesson.
+
+Inspecting a particular paused function uses the copied-function workflow below. Use the browser
+scratchpad to experiment with that function and copied inputs while the live program stays paused. It opens beside the source in a right side panel. Edits run in a separate
 process; they do not step, evaluate in, or mutate the live debugger's frame.
 
 Give the experiment one question. Establish a baseline with the copied inputs, change one input
@@ -15,7 +20,7 @@ handles its result like that. A second real run of the entry point with one chan
 does ([learning-patterns.md](learning-patterns.md#contrast)), so use the scratchpad next to it,
 not instead of it, and label its results as scratchpad results.
 
-To teach how code behaves by rebuilding it in small staged experiments, without a live pause,
+To teach how code behaves by rebuilding it in small staged experiments beside its live pause,
 follow [scratchpad-lessons.md](scratchpad-lessons.md). This file covers the tool those lessons use.
 
 ## Open the current function
@@ -34,7 +39,26 @@ use ONE `op: "experiment"` call containing the complete code, inputs, receiver/d
 in code or bindings, explicit mocks/labels and `autoRun` policy. It copies pause provenance,
 formats the code, publishes only the complete package and awaits one execution. It does not
 auto-run the initial copied function. CLI: `ctl scratchpad experiment --data FILE`.
-Do not prepare a lesson through separate open → update → run calls.
+Do not assemble a copied-function experiment through separate open → update → run calls.
+For staged learning, use ONE `op: "lesson"` call with expected absolute `file`, paused `line`,
+complete code containing the paused operation's tokens, required `explanation` prose, optional replacement inputs and labelled mocks. The explanation is displayed as comments above the code. The command focuses and checks
+the actual live source, refuses missing/stale/mismatched pauses, copies provenance, forces
+`autoRun: false` and publishes without executing. Omit `inputs` to keep captured bindings;
+label any supplied replacement as a controlled fixture in the stage. The reply includes
+`position`; require its `ready` and matching live location as well as scratchpad `ready`.
+Use a separate `run` only when execution is requested. `create` without a pause is reserved for
+explicitly requested standalone simulations. If the installed runtime lacks `lesson`, update it;
+do not silently fall back to a detached scratchpad.
+
+A lesson attempt activates the movement guard even if preparation fails. A successful stage
+permits one agent move, consumed before execution control is sent. Every new pause needs a new
+stage, including another visit to the same line. Loading a saved stage does not grant a move.
+Debug stop exits lesson mode; ordinary debugging and manual learner controls remain available.
+The guard belongs to this page's agent session. After a reload or in a new tab, declare the
+lesson again with `op: "lesson"`; the tool does not infer teaching intent from chat.
+The tool checks paused-line token inclusion, explanation presence, diagnostics, visibility and pause
+identity. A multi-line operation may extend beyond that line. The agent must choose the relevant excerpt. The tool does not establish that the explanation is correct, that a wrapper preserves the
+operation's meaning, that replacement inputs are faithful, or that the learner understood it.
 
 Discover the page's
 actual tool name, then use `op: "open"`, `"state"`, `"update"`, `"run"`, `"restore"` or `"close"`.

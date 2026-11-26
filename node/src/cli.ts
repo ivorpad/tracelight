@@ -258,7 +258,8 @@ async function cmdRun(args: string[]): Promise<number> {
     // an error raised outside the recorded files (a module that did not compile) has only its stack frame
     const errorWhere = (e: Msg) => {
       const top = e.stack?.[0];
-      return ranges.has(e.fileId) || !top?.path ? where(e.fileId, e.rid) : `${display(top.path, request.workspaceRoot)}:${top.line}`;
+      const range = ranges.get(e.fileId)?.[e.rid - (bases.get(e.fileId) ?? 0)];
+      return range || !top?.path ? where(e.fileId, e.rid) : `${display(top.path, request.workspaceRoot)}:${top.line}`;
     };
     for (const e of events) {
       if (e.type === 'log') process.stdout.write(`${where(e.fileId, e.rid)}  ${e.context && e.kind !== 'log' ? e.context + ' = ' : ''}${e.text}\n`);

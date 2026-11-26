@@ -393,12 +393,15 @@ that you explain the latest pause when they write
 listen between turns.
 
 `scratchpad open [--line N]` opens a TypeScript scratchpad beside the source. WebMCP
-`tracelight_scratchpad` accepts `op: experiment|open|close|state|update|run|restore|create|save|list|load|history`, optional `line`,
+`tracelight_scratchpad` accepts `op: lesson|experiment|open|close|state|update|run|restore|create|save|list|load|history`, optional `line`,
 and atomic `code`, `inputs`, `mocks`, `mockLabels`, `autoRun` updates. It copies the containing
 function and captured inputs, returns current editor state and completed structured results. Code and JSON input edits auto-run in a separate worker. Local helpers
 and imports resolve from the source file; external calls need explicit mock fixtures.
 The live program remains paused. Missing captured data stays marked unavailable.
-For teaching, use ONE `experiment` command with the complete prepared package. It formats code,
+For learning existing code, use ONE `lesson` command with expected absolute `file` and paused
+`line`. It focuses and verifies the live source, copies inputs, forces Auto run off and leaves
+the stage unrun. It rejects missing or mismatched pauses. Saved lessons retain pause provenance;
+state is not ready and Run refuses if the pause changes. For immediate execution, use ONE `experiment` command with the complete prepared package. It formats code,
 publishes no intermediate copy, and awaits one scratch execution. Prepare and repair it before
 teaching ([scratchpad.md](scratchpad.md#prepare-before-teaching)), and verify visible indentation
 and errors first. Its results show what the copy computes, not how the application wires it.
@@ -409,7 +412,7 @@ For the full editing, inspection, mock and verification workflow, read
 
 ```sh
 tracelight web FILE [--only PATTERN]
-tracelight web ctl scratchpad experiment|open|close|state|update|run|restore|create|save|list|load|history [--line N] [--data FILE] [--id ID] [--title TITLE] [--version N]
+tracelight web ctl scratchpad lesson|experiment|open|close|state|update|run|restore|create|save|list|load|history [--line N] [--data FILE] [--id ID] [--title TITLE] [--version N]
 ```
 
 `--only` can be repeated to select project files to instrument.

@@ -20,7 +20,7 @@ type Msg = Record<string, any>;
 export const PAGE_ACTIONS = ['open', 'close', 'list', 'state', 'position', 'goto', 'step', 'line', 'say', 'clear', 'values', 'inspect', 'peek', 'start', 'stop', 'run', 'eval', 'var', 'why', 'watch', 'breakpoint', 'debug', 'story', 'profile', 'wait_pause'] as const;
 export const PAGE_STEP_KINDS = ['next', 'into', 'over', 'out', 'back', 'backOver', 'backOut'] as const;
 export const PAGE_DEBUG_OPS = ['start', 'restart', 'continue', 'step', 'pause', 'stop', 'state'] as const;
-export const SCRATCH_OPS = ['experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'] as const;
+export const SCRATCH_OPS = ['lesson', 'experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'] as const;
 
 /** A page call that cannot be made: an `isError` result with a hint. */
 export class PageError extends Error {
@@ -174,7 +174,7 @@ export function scratchCommand(a: Args): Msg {
   if ((op === 'history' || op === 'load') && empty(a.id)) throw new PageError(`${op} needs \`id\``, 'op "list" names the saved scratchpads');
   return pick({
     action: 'scratchpad', op, id: str(a, 'id'), title: str(a, 'title'), file: str(a, 'file'), version: int(a, 'version', 1), line: int(a, 'line', 1),
-    code: str(a, 'code'), inputs: a.inputs, mocks: a.mocks, mockLabels: a.mock_labels, autoRun: typeof a.auto_run === 'boolean' ? a.auto_run : undefined, expect: a.expect,
+    code: str(a, 'code'), explanation: str(a, 'explanation'), inputs: a.inputs, mocks: a.mocks, mockLabels: a.mock_labels, autoRun: typeof a.auto_run === 'boolean' ? a.auto_run : undefined, expect: a.expect,
   });
 }
 
@@ -191,6 +191,7 @@ export function pageSucceeded(command: Msg, httpOk: boolean, reply: unknown): bo
     return result?.status === 'completed' && !result.error && result.liveExecutionChanged === false
       && !!result.result && !result.result.error && !result.result.missingMocks?.length && !result.result.applicationErrors?.length;
   }
+  if (command.action === 'scratchpad' && command.op === 'lesson') return result?.ready === true && result.position?.ready === true && result.autoRun === false && result.result === null && result.liveExecutionChanged === false;
   if (command.action === 'position') return result?.ready === true;
   const navigation = ['goto', 'step', 'line', 'start'].includes(command.action)
     || (command.action === 'say' && command.step !== undefined)

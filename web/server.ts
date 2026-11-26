@@ -701,7 +701,7 @@ export class BridgeServer {
       if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return reply(res, 415, 'send application/json');
       try {
         const body = JSON.parse(await readBody(req));
-        if (url.pathname === '/api/scratchpad/format') return json(res, 200, { code: formatScratchCode(body.code) });
+        if (url.pathname === '/api/scratchpad/format') return json(res, 200, { code: formatScratchCode(body.code, body.operation) });
         if (url.pathname === '/api/scratchpad/library') {
           const store = new ScratchpadStore(path.join(this.opts.stateDir ?? tracelightHome(), 'scratchpads'));
           if (body.op === 'list') return json(res, 200, store.list());
@@ -853,7 +853,7 @@ const USAGE = `usage:
                  | position live|recorded|visible [--focus true|false]
                  | say TEXT [--line N] [--step N] [--file FILE] [--id ID] [--kind explanation|prediction]
                  | clear [--id ID] | values NAME... [--file FILE] [--line N] | values --all|--hide | peek NAME | peek --hide | inspect open|close NAME
-                 | scratchpad experiment|open|close|state|update|run|restore|create|save|list|load|history [--id ID] [--version N] [--title NAME] [--line N] [--data FILE]
+                 | scratchpad lesson|experiment|open|close|state|update|run|restore|create|save|list|load|history [--id ID] [--version N] [--title NAME] [--line N] [--data FILE]
                  | start | stop | run | eval EXPR
                  | var NAME | why NAME [--step N] | watch EXPR [--remove]
                  | break LINE [on|off] [--file FILE] [--if COND] | debug start|restart|continue|step [into|over|out]|pause|stop|state
@@ -920,7 +920,7 @@ function parseCtlAction(args: string[]): AgentCommand {
       if (!words.length && !flags.has('hide')) throw new Error('peek needs NAME or --hide');
       return { action, name: flags.has('hide') ? '' : words.join(' ') };
     case 'scratchpad':
-      if (!['experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'].includes(words[0] ?? '')) throw new Error('scratchpad needs experiment|open|close|state|update|run|restore|create|save|list|load|history');
+      if (!['lesson', 'experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'].includes(words[0] ?? '')) throw new Error('scratchpad needs lesson|experiment|open|close|state|update|run|restore|create|save|list|load|history');
       return { ...(flags.has('data') ? JSON.parse(fs.readFileSync(flags.get('data')!, 'utf8')) : {}), action, op: words[0], ...(flags.has('id') ? { id: flags.get('id') } : {}), ...(flags.has('title') ? { title: flags.get('title') } : {}), ...(flags.has('version') ? { version: int(flags.get('version'), '--version') } : {}), ...(flags.has('line') ? { line: int(flags.get('line'), '--line') } : {}) };
     case 'inspect':
       if (!['open', 'close'].includes(words[0] ?? '') || !words[1]) throw new Error('inspect needs open|close NAME');
@@ -981,6 +981,7 @@ export function ctlExitCode(command: AgentCommand, httpOk: boolean, reply: unkno
       && result.result && !result.result.error && !result.result.missingMocks?.length
       && !result.result.applicationErrors?.length ? 0 : 1;
   }
+  if (command.action === 'scratchpad' && command.op === 'lesson') return result?.ready === true && result.position?.ready === true && result.autoRun === false && result.result === null && result.liveExecutionChanged === false ? 0 : 1;
   if (command.action === 'position') return result?.ready === true ? 0 : 1;
   const navigation = ['goto', 'step', 'line', 'start'].includes(command.action)
     || (command.action === 'say' && command.step !== undefined)

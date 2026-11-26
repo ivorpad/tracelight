@@ -473,7 +473,17 @@ shows something else.
 ### `tracelight_scratchpad`
 
 The page's scratchpad ([scratchpad.md](scratchpad.md)): a copied function run with copied inputs
-in a separate process, which never moves the live pause. `op` is `experiment` (prepare and run
+in a separate process, which never moves the live pause. For learning use `op: "lesson"` with
+expected absolute `file`, paused `line`, complete `code` containing that operation, required
+`explanation` (shown as comments), optional `inputs`, `mocks` and
+`mock_labels`. It focuses the live source, refuses missing/stale/mismatched pauses, copies
+provenance, forces Auto run off and leaves `result: null`. The reply includes confirmed
+`position`; both it and scratchpad `ready` must be true. A later `run` executes on request.
+The first lesson attempt activates the guard. Each prepared stage permits one agent move;
+movement consumes it before execution, even when the next pause is on the same line. Stop the
+debugger to leave lesson mode. Manual learner stepping remains available. Token inclusion and
+nonempty prose establish presence, not semantic correctness or teaching quality.
+`op` also accepts `experiment` (prepare and run
 in one call: `code`, `inputs`, `mocks`, `mock_labels`, `auto_run`), `open` (the function at the
 pause, or at `line`), `close`, `state`, `update`, `run`, `restore`, `create` (`title`, `file`),
 `save`, `list`, `load` and `history` (`id`, `version`). `list` and `history` work with no tab open.

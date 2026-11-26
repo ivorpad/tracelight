@@ -18,6 +18,20 @@ small service. Use the one the current question needs.
 [example-agent-harness.md](example-agent-harness.md) is an optional example for LLM agent
 harnesses.
 
+## Learning starts with a pause and a stage
+
+For learning existing code, inspect its implementation and callers, choose a breakpoint inside
+the relevant function, then start or reuse the debugger and reach it. Automatically prepare one
+small staged scratchpad beside that live pause using `op: "lesson"`, expected absolute `file`,
+paused `line`, complete code containing the paused operation, `explanation` prose and labelled fixtures. No separate request for breakpoints or a
+scratchpad is needed. Keep Auto run off and the result empty until execution is requested.
+Only an explicit request for a standalone simulation uses detached `create` without a pause.
+
+Confirm the live rendered source and copied provenance before claiming readiness. For an agent
+loop, the source pane must show the loop decision being explored, not `main` calling `prompt`.
+If the runtime cannot reach that location, repair or report the blocker. A recording, fabricated
+reply, note or breakpoint that has not been hit cannot substitute for the live pause.
+
 ## From a first question to a paused session
 
 Choose live execution or an existing recording from the request. Locate the target with
@@ -52,8 +66,9 @@ learner asked to stop at a plan.
 When the question is how a transformation works (what state outlives a call, what a delimiter
 or decoder retains, what completion settles) and the learner wants to build the model rather
 than watch it, teach by reconstruction ([scratchpad-lessons.md](scratchpad-lessons.md)). Its
-first reply leads to the first stage's executed result instead of a pause, and it ends in the
-original code paused or recorded. Which implementation runs, who wires it and when async work
+first reply leads to a prepared, unrun first stage beside the matching live pause. Run on the learner's word,
+unless they already asked for execution or skipped predictions. Eventually map the reconstruction
+onto the original code paused or recorded. Which implementation runs, who wires it and when async work
 fires start from the real run, since a reconstruction cannot show them.
 
 Use the real entry point or test. `examples/js/checkout` starts from `main.ts --country de`, and
@@ -158,8 +173,13 @@ may take several control calls; reach it without narrating routine guards. An ex
 still means one step. Before stepping over a loop or compound guard, check whether that would also
 run the call being inspected, since a destination breakpoint is often clearer.
 
-When a guided walkthrough was requested, keep moving along its route with a short explanation at
-each relevant transition. "Stop", "wait" or a question about the current state suspends movement.
+When a guided walkthrough was requested, pair every teaching stop with its own visible scratchpad
+before explaining it or moving again. Put the explanation beside the faithful source excerpt in
+scratchpad comments while speaking; chat summaries do not replace a stage. Prepare one small
+operation at a time. MCP lesson mode rejects another agent move until the current stage is open,
+ready and tied to the exact pause. A move makes that stage stale, including another iteration at
+the same line. Refresh it with `op: "lesson"` at the new pause. Manual learner steps remain available.
+Keep moving along the requested route only through this pause, prepare, explain, move cycle. "Stop", "wait" or a question about the current state suspends movement.
 A named destination redirects the route, and concepts the learner has understood stay settled.
 Without a walkthrough, answer at the destination and leave the pause for inspection or a new
 direction. Do not continue through the rest of the plan on your own.

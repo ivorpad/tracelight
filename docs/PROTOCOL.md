@@ -1414,7 +1414,10 @@ Nothing a recording leaves out is dropped silently.
   prints `note: truncated recording: ...` first and its `--json` gets the same object as
   `recording`. The bridge's `state` reply carries `recording` for a capped live run, and the
   Time Machine shows the sentence under its timeline.
-- **Leaving code out.** `config.exclude` and `config.only` are lists of patterns: a dotted module
+- **Leaving code out.** Local sources imported from selected project code are included even
+  outside the workspace or entry directory, transitively, on Node and Bun. This does not include
+  unrelated runtime/plugin loads or override the `node_modules` library setting.
+  `config.exclude` and `config.only` are lists of patterns: a dotted module
   name or glob (`pkg.flash` also covers `pkg.flash.parser`), or a path glob, absolute or relative to
   the workspace root, where a directory covers what is under it (`pkg/flash`, `*/parser.py`); a
   bare file or directory name matches anywhere. An excluded module is not instrumented: it runs at

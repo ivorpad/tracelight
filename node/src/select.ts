@@ -28,6 +28,8 @@ export interface Selection {
   libraryPackages: string[];
   exclude: string[];
   only: string[];
+  /** Local source resolved from selected project code, not an arbitrary process load. */
+  imported?: boolean;
 }
 
 function globRe(glob: string): RegExp {
@@ -87,7 +89,7 @@ export function kindOf(path: string, sel: Selection): Kind | null {
   const inProject = path.startsWith(sel.root + sep) || path.startsWith(resolve(sel.mainPath, '..') + sep);
   if (sel.exclude.some((p) => matches(p, path, sel.root))) return null;
   if (sel.only.length) return sel.only.some((p) => matches(p, path, sel.root)) ? (library ? 'library' : 'project') : null;
-  if (!library && !inProject) return null;
+  if (!library && !inProject && !sel.imported) return null;
   if (!library) return 'project';
   if (!sel.libraryCode) return null;
   if (sel.libraryPackages.length && !sel.libraryPackages.some((p) => matches(p, path, sel.root))) return null;

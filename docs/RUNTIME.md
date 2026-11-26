@@ -70,7 +70,8 @@ breakpoints or a local/global/all scope selector.
    `process.exit` drops nothing), and an IPC channel for requests to the child.
 2. The child installs `globalThis.__tk`, patches `process.stdout.write` and `stderr.write` (each
    becomes an `output` event with its `step`), and registers a synchronous `load` hook. Every
-   project file (under the workspace root or the main file's directory, not `node_modules`) is
+   project file (under the workspace or entry directory, plus local sources imported from
+   selected project code, excluding `node_modules`) is
    instrumented when it is first required or imported; its format comes from the extension, then
    `package.json` `type`, then syntax detection, as Node decides it.
 3. `import()` of the main file runs the program. The IPC channel is unref'd, so `beforeExit`

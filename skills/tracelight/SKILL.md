@@ -42,6 +42,13 @@ prediction questions unless they ask for them. A scratchpad lesson is the except
 states one prediction question, runs on the person's word and is never graded
 ([scratchpad-lessons.md](references/scratchpad-lessons.md#predictions-without-a-quiz)).
 
+## Discover MCP first
+
+Use Tracelight MCP before the CLI. If native Tracelight tools are not exposed in your tool list,
+start with `mcporter list tracelight`, then inspect and call the tool for the task. CLI examples
+in this skill describe equivalent operations; they do not make CLI the preferred route. Fall
+back to CLI only when MCP is unavailable or lacks the required operation.
+
 ## Pick the mode
 
 The first word after the skill name is the mode: `/tracelight ask why is Ben's total NaN`,
@@ -64,10 +71,24 @@ me through", or "explain as I step" asks for interactive learning through `expla
 factual question can stay in `ask`; do not route interactive learning into a prerequisite
 recording. "Show me", "make me a page", "something I can send" is `show`. Honor an explicit mode.
 
-Learning does not require a guided lesson. In `explain`, inspect relevant source, make a short
-plan in memory, propose the breakpoints with the question each answers, then start the session
-at the first useful stop. Do not wait for plan approval unless requested. Voice or chat can
-direct jumps, and the person can step by hand while you explain the pauses the host lets you hear.
+For a request to learn or understand existing code, automatically pair real execution with
+one small scratchpad stage. Read [explain.md](references/explain.md) and
+[scratchpad-lessons.md](references/scratchpad-lessons.md), inspect the implementation and callers,
+set a breakpoint inside the relevant function, and start or reuse the debugger at that stop.
+Then use MCP scratchpad `op: "lesson"` with the expected absolute `file`, paused `line`, complete
+`code` containing the paused operation, and `explanation` prose displayed above it. It focuses the live source, verifies alignment, copies paused inputs, and leaves
+Auto run off with no result. Do this in the same turn without asking the person to request each
+step. An open page, a planned breakpoint or a source-based note is not a pause.
+
+For "inspect the agent loop", stop inside the actual loop, not just its entry-point caller.
+Before handoff, require `position.ready`, matching source/provenance and a ready, unrun stage.
+If the pause cannot be reached, report and repair the actual blocker. Never quietly substitute a
+detached fixture. Detached `create` is for explicitly requested standalone simulations only.
+A learning request authorizes the debugger setup. Keep the stage unrun until execution is requested.
+Do not restart or advance a pause the person is controlling without their direction.
+
+Voice or chat can direct jumps, and the person can step by hand while you explain the pauses the
+host lets you hear.
 Guided teaching is optional. A debugging request does not imply a lesson. In `debug`, inspect source to
 choose a stop that tests a hypothesis. Neither needs a preliminary recording. Source inspection
 guides the next observation; claims about what executed still need runtime evidence.
@@ -152,11 +173,11 @@ Reach Tracelight through its MCP tools before the shell CLI. Check once per sess
 first route that works:
 
 1. Tools named `tracelight_run`, `tracelight_debug` and so on are in your tool list: call them.
-2. `mcporter list tracelight --brief` prints 18 signatures (about 3.4 KB): the server is
-   registered in mcporter. Call a tool with `mcporter call tracelight.TOOL key=value ...`, with
-   arrays as JSON (`'at=["placeOrder"]'`), or the whole object as `--args '{...}'`. Before the
-   first call to a tool, `mcporter list tracelight.TOOL` prints its parameters. Skip the full
-   listing without `--brief`: it is every tool's docs at once, about 29 KB.
+2. Run `mcporter list tracelight` to discover the registered MCP server and its tools.
+   Call a tool with `mcporter call tracelight.TOOL key=value ...`, with arrays as JSON
+   (`'at=["placeOrder"]'`), or the whole object as `--args '{...}'`. Before the first call to
+   a tool, `mcporter list tracelight.TOOL` prints its parameters. For later compact checks,
+   use `mcporter list tracelight --brief`.
 3. Neither works: use the CLI, resolved in the next section. `tracelight mcp service status` tells
    a server that is installed but down from one that was never installed.
 

@@ -8,6 +8,17 @@ const file = path.join(dir, 'main.ts');
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 fs.writeFileSync(file, 'const ignored = (() => { throw Error("module initialized"); })();\nfunction twice(n: number) { return n * 2; }\nfunction target(x: number) { return twice(x); }');
 describe('isolated scratchpad', () => {
+  it('requires the paused operation as code tokens, rather than a comment, string or rewritten helper', () => {
+    const operation = 'if (!reply.toolCalls?.length) return reply;';
+    expect(formatScratchCode(`// No calls ends the prompt.\n(() => { ${operation} })();`, operation)).toContain('return reply;');
+    for (const code of [
+      `// ${operation}\nconsole.log(reply);`,
+      `console.log(${JSON.stringify(operation)});`,
+      'const next = reply.toolCalls?.length ? "tools" : "finish";',
+    ]) expect(() => formatScratchCode(code, operation)).toThrow('include the paused source operation');
+    // Inclusion is deliberately not a semantic check: this wrapper suppresses the operation.
+    expect(() => formatScratchCode(`if (false) { ${operation} }`, operation)).not.toThrow();
+  });
   it('extracts the containing function', () => { expect(scratchFunction(fs.readFileSync(file, 'utf8'), 3)).toMatchObject({ name: 'target', parameters: ['x'] }); });
   it('copies a static async factory as a valid standalone function and executes Class.create()', async () => {
     const source = `interface ModelRuntimeInterface { value: number }

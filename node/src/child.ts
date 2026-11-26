@@ -79,6 +79,7 @@ export class RunChild {
   config!: RunConfig;
   readonly registry = new Registry();
   readonly overrides = new Map<string, string>();
+  readonly projectImports = new Set<string>();
   /** the file Node's load hook saw last: the one a module SyntaxError with no frames is in */
   lastLoaded: string | null = null;
   readonly sources = new Map<number, string>();
@@ -322,7 +323,12 @@ export class RunChild {
   /** `project`, `library` (libraryCode) or null (run as is), after `exclude` and `only` */
   kindOf(path: string): Kind | null {
     const c = this.config;
-    return kindOf(path, { root: this.root, mainPath: this.mainPath, libraryCode: c.libraryCode, libraryPackages: c.libraryPackages, exclude: c.exclude, only: c.only });
+    return kindOf(path, { root: this.root, mainPath: this.mainPath, libraryCode: c.libraryCode, libraryPackages: c.libraryPackages, exclude: c.exclude, only: c.only, imported: this.projectImports.has(path) });
+  }
+
+  /** Follow imports from selected project code without admitting unrelated runtime/plugin loads. */
+  selectImport(path: string, parent: string | null): void {
+    if (parent && this.kindOf(parent) === 'project') this.projectImports.add(path);
   }
 
   /** `module` or `commonjs` the way Node decides it: extension, then package.json `type`, then syntax (no path: syntax) */
@@ -370,6 +376,7 @@ export class RunChild {
             filename = realpathSync(bun.resolveSync(args.path, args.importer ? dirname(args.importer) : this.root));
           } catch { return undefined; }
           finally { resolving = false; }
+          this.selectImport(filename, args.importer ? realpathSync(args.importer) : null);
           const kind = this.kindOf(filename);
           if (!kind) return undefined;
           if (!hooked.has(filename)) {
@@ -392,7 +399,14 @@ export class RunChild {
       return;
     }
     nodeModule.registerHooks({
-      resolve: resolveTypeScript,
+      resolve: (specifier, context, nextResolve) => {
+        const resolved = resolveTypeScript(specifier, context, nextResolve);
+        if (resolved.url.startsWith('file:')) {
+          const parent = context.parentURL?.startsWith('file:') ? fileURLToPath(context.parentURL) : null;
+          this.selectImport(fileURLToPath(resolved.url), parent);
+        }
+        return resolved;
+      },
       load: (url, context, nextLoad) => {
         if (!url.startsWith('file:')) return nextLoad(url, context);
         let path: string;

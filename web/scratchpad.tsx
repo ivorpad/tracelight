@@ -8,7 +8,7 @@ import type { ScratchResult } from './scratchpadRuntime';
 
 import type { ScratchBaseline, ScratchCommand, ScratchEntry, ScratchState, ScratchSummary } from './scratchpadProtocol';
 import { scratchInput } from './scratchpadValues';
-import { scratchExperiment, validateScratchUpdate } from './scratchpadExperiment';
+import { scratchExperiment, requireLessonPosition, requireLessonProvenance, validateScratchUpdate } from './scratchpadExperiment';
 import { checkModel, registerRuntimeLibraries } from './languageService';
 import type { ScratchCompatibility } from './scratchpadCompatibility';
 function valueNode(value: unknown, id = 'scratch'): ValueNode {
@@ -41,6 +41,7 @@ export class Scratchpad {
   private inputs: monaco.editor.IStandaloneCodeEditor;
   private mocks: monaco.editor.IStandaloneCodeEditor;
   private file = '';
+  private lesson = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private revision = 0;
   private auto: HTMLInputElement;
@@ -138,7 +139,7 @@ export class Scratchpad {
     this.updating = true;
     try {
       this.id = id; this.loadedVersion = entry.version; this.title = entry.title; this.versions.set(id, latest.version); this.saveError = null;
-      this.file = entry.state.file; this.provenance = entry.state.provenance; this.requiresReceiver = entry.baseline.requiresReceiver ?? entry.state.preparation?.requiresReceiver ?? false;
+      this.file = entry.state.file; this.lesson = entry.state.lesson ?? false; this.provenance = entry.state.provenance; this.requiresReceiver = entry.baseline.requiresReceiver ?? entry.state.preparation?.requiresReceiver ?? false;
       this.original = entry.baseline.code; this.initialInputs = entry.baseline.inputsText; this.initialMocks = entry.baseline.mocksText;
       this.initialMockLabels = entry.baseline.mockLabels; this.helperNames = entry.baseline.helperNames;
       this.model.setValue(entry.state.code); this.inputs.setValue(entry.state.inputsText); this.mocks.setValue(entry.state.mocksText);
@@ -163,7 +164,7 @@ export class Scratchpad {
     this.updating = true;
     try {
       this.id = crypto.randomUUID(); this.title = command.title?.trim() || 'Untitled experiment'; this.saveError = null;
-      this.file = file; this.provenance = null; this.helperNames = []; this.requiresReceiver = false;
+      this.file = file; this.lesson = false; this.provenance = null; this.helperNames = []; this.requiresReceiver = false;
       this.original = command.code ?? '// Write your experiment here.\nexport {};';
       this.initialInputs = JSON.stringify(command.inputs ?? {}, null, 2); this.initialMocks = JSON.stringify(command.mocks ?? {}, null, 2);
       this.initialMockLabels = command.mockLabels ?? {}; this.mockLabels = { ...this.initialMockLabels };
@@ -182,7 +183,7 @@ export class Scratchpad {
   state(): ScratchState {
     const parse = (text: string): Record<string, unknown> | null => { try { const value = JSON.parse(text); return value && typeof value === 'object' && !Array.isArray(value) ? value : null; } catch { return null; } };
     const mocks = parse(this.mocks.getValue());
-    return { diagnostics:monaco.editor.getModelMarkers({resource:this.model.uri}).map(m=>({code:typeof m.code==='string'?m.code:m.code?.value,message:m.message,line:m.startLineNumber,severity:m.severity})), id: this.id, title: this.title, loadedVersion: this.loadedVersion, saving: Boolean(this.saveTimer || this.pendingSaves), savedVersion: this.id ? this.versions.get(this.id) ?? 0 : 0, saveError: this.saveError, open: !this.pane.hidden, file: this.file, code: this.model.getValue(), inputs: parse(this.inputs.getValue()), mocks, inputsText: this.inputs.getValue(), mocksText: this.mocks.getValue(), mockLabels: Object.fromEntries(Object.keys(mocks ?? {}).map(path => [path, this.mockLabels[path] ?? 'manual synthetic fixture'])), autoRun: this.auto.checked, revision: this.revision, status: this.runStatus, preparation: this.provenance ? { requiresReceiver: this.requiresReceiver } : null, result: this.result, error: this.error, provenance: this.provenance, liveExecutionChanged: false };
+    return { diagnostics:monaco.editor.getModelMarkers({resource:this.model.uri}).map(m=>({code:typeof m.code==='string'?m.code:m.code?.value,message:m.message,line:m.startLineNumber,severity:m.severity})), id: this.id, title: this.title, lesson: this.lesson, loadedVersion: this.loadedVersion, saving: Boolean(this.saveTimer || this.pendingSaves), savedVersion: this.id ? this.versions.get(this.id) ?? 0 : 0, saveError: this.saveError, open: !this.pane.hidden, file: this.file, code: this.model.getValue(), inputs: parse(this.inputs.getValue()), mocks, inputsText: this.inputs.getValue(), mocksText: this.mocks.getValue(), mockLabels: Object.fromEntries(Object.keys(mocks ?? {}).map(path => [path, this.mockLabels[path] ?? 'manual synthetic fixture'])), autoRun: this.auto.checked, revision: this.revision, status: this.runStatus, preparation: this.provenance ? { requiresReceiver: this.requiresReceiver } : null, result: this.result, error: this.error, provenance: this.provenance, liveExecutionChanged: false };
   }
   /** Every control reply carries diagnostics the TypeScript worker computed for the code in that reply. */
   async control(command: ScratchCommand): Promise<ScratchState> {
@@ -193,27 +194,39 @@ export class Scratchpad {
     const diagnostics = await checkModel(this.model);
     if (this.model.getValue() !== code) throw new Error('Scratchpad code changed while it was being checked; read state again');
     const errors = diagnostics.filter(d => d.severity === monaco.MarkerSeverity.Error);
-    return { ...state, diagnostics, ready: errors.length === 0 && state.status !== 'error' && state.status !== 'needsPreparation' };
+    let position = state.lesson ? await this.host.confirmPosition('live', command.op === 'lesson') : undefined;
+    if (position) {
+      try {
+        if (command.op === 'lesson') requireLessonPosition(command, position);
+        requireLessonProvenance(state.provenance, position, this.host.debug.run?.startedAt);
+      } catch (error) {
+        if (command.op === 'lesson') throw error;
+        position = { ...position, ready: false, blockers: [...position.blockers, error instanceof Error ? error.message : String(error)] };
+      }
+    }
+    return { ...state, diagnostics, ...(position ? { position } : {}), ready: (!position || position.ready) && errors.length === 0 && state.status !== 'error' && state.status !== 'needsPreparation' };
   }
   private async apply(command: ScratchCommand): Promise<ScratchState> {
     await this.environment;
     const op = command.op ?? (typeof command.open === 'boolean' ? command.open ? 'open' : 'close' : 'state');
-    if (!['experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'].includes(op)) throw new Error('Unknown scratchpad operation');
-    if (op === 'experiment') {
+    if (!['lesson', 'experiment', 'open', 'close', 'state', 'update', 'run', 'restore', 'create', 'save', 'list', 'load', 'history'].includes(op)) throw new Error('Unknown scratchpad operation');
+    if (op === 'experiment' || op === 'lesson') {
       this.validateEdit(command);
       await this.flushSave();
+      let published = false;
       return scratchExperiment(command, {
-      format: async code => {
-        const response = await fetch('/api/scratchpad/format', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) });
+      align: () => this.host.confirmPosition('live', true),
+      format: async (code, operation) => {
+        const response = await fetch('/api/scratchpad/format', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code, operation }) });
         const value = await response.json() as { code?: string; error?: string };
         if (!response.ok || value.error || typeof value.code !== 'string') throw new Error(value.error ?? 'Cannot format scratchpad code');
         return value.code;
       },
       begin: () => { this.updating = true; this.activeRequest?.abort(); if (this.timer) clearTimeout(this.timer); this.pane.hidden = true; },
       open: (line, publish) => this.open(line, publish),
-      replace: update => this.replace(update),
-      publish: () => this.publish(),
-      finish: () => { this.updating = false; },
+      replace: update => { this.replace(update); this.lesson = op === 'lesson'; },
+      publish: () => { this.publish(); this.editor.setScrollTop(0); published = true; },
+      finish: () => { this.updating = false; if (op === 'lesson' && published) this.schedule('lesson'); },
       run: () => this.run(), state: () => this.state(),
     });
     }
@@ -347,6 +360,7 @@ export class Scratchpad {
     const inputs: Record<string, unknown> = {};
     for (const v of state.locals.filter(v => this.inputNames.includes(v.name))) { remaining = 80; inputs[v.name] = v.valueBag ? scratchInput(await copy(v.valueBag.data)) : { __scratchUnavailable: 'not captured' }; }
     if (this.host.debug.paused !== paused) throw new Error('Pause changed while copying scratchpad inputs.');
+    this.lesson = false;
     this.id = crypto.randomUUID(); this.title = fn.name ?? `${this.file.split('/').pop()} experiment`; this.saveError = null;
     const wasUpdating = this.updating;
     this.updating = true;
@@ -355,7 +369,7 @@ export class Scratchpad {
     this.initialMocks = '{}';
     this.requiresReceiver = fn.requiresReceiver === true;
     this.mockLabels = {};
-    this.provenance = { file: this.file, line: frame?.line ?? paused.line, runId: this.host.state().live?.runId ?? null, frame: this.host.debug.selectedFrame, capturedInputs: JSON.parse(this.initialInputs) };
+    this.provenance = { file: this.file, line: frame?.line ?? paused.line, runId: this.host.state().live?.runId ?? null, frame: this.host.debug.selectedFrame, step: paused.step, runStartedAt: this.host.debug.run?.startedAt, capturedInputs: JSON.parse(this.initialInputs) };
     this.inputs.setValue(this.initialInputs); this.mocks.setValue(this.initialMocks);
     this.original = (fn.name ? `${fn.code}\n\nconst result = await ${fn.name}(${fn.parameters.join(', ')});` : this.code.selectedText() || `// Use the copied variables below.\n`) + '\n\nexport {};';
     this.model.setValue(this.original);
@@ -414,6 +428,7 @@ export class Scratchpad {
     this.status('Running…');
     try {
       await this.environment;
+      if (this.lesson) requireLessonProvenance(this.provenance, await this.host.confirmPosition('live', true), this.host.debug.run?.startedAt);
       if (this.environmentError) throw new Error(this.environmentError);
       this.declareContext();
       const inputs = JSON.parse(this.inputs.getValue()), mocks = JSON.parse(this.mocks.getValue());

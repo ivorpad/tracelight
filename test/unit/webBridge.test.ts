@@ -554,6 +554,7 @@ it('parses complete scratch controls and atomic JSON updates', () => {
     fs.writeFileSync(file, JSON.stringify({ code: 'const result = x;', inputs: { x: 2 }, mocks: {}, autoRun: false, action: 'debug', op: 'start' }));
     expect(parseCtl(['scratchpad', 'update', '--data', file])).toEqual({ action: 'scratchpad', op: 'update', code: 'const result = x;', inputs: { x: 2 }, mocks: {}, autoRun: false });
     expect(parseCtl(['scratchpad', 'experiment', '--data', file])).toEqual({ action: 'scratchpad', op: 'experiment', code: 'const result = x;', inputs: { x: 2 }, mocks: {}, autoRun: false });
+    expect(parseCtl(['scratchpad', 'lesson', '--data', file])).toEqual({ action: 'scratchpad', op: 'lesson', code: 'const result = x;', inputs: { x: 2 }, mocks: {}, autoRun: false });
   expect(parseCtl(['scratchpad', 'history', '--id', 'saved-1', '--version', '2'])).toEqual({ action: 'scratchpad', op: 'history', id: 'saved-1', version: 2 });
   expect(parseCtl(['scratchpad', 'create', '--title', 'Filter calls'])).toEqual({ action: 'scratchpad', op: 'create', title: 'Filter calls' });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
